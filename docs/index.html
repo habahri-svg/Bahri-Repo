@@ -107,6 +107,13 @@ ol.steps li::marker{color:var(--gold);font-weight:700}
 .status{font-size:13px;color:var(--soft)}
 .status.err{color:var(--d-reply);font-weight:600}
 .status:empty{display:none}
+.onb{position:fixed;inset:0;z-index:20;background:rgba(14,34,56,.6);display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto}
+.onbbox{width:100%;max-width:520px;max-height:100%;overflow:auto;box-shadow:0 12px 40px rgba(14,34,56,.35)}
+.onbrow{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-top:1px solid var(--line)}
+.onbrow:first-child{border-top:0}
+.onbdots{display:flex;gap:6px}
+.onbdots i{width:22px;height:4px;border-radius:99px;background:var(--line)}
+.onbdots i.on{background:var(--gold)}
 .spin{display:inline-block;width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--navy);border-radius:50%;animation:sp 1s linear infinite;vertical-align:-2px;margin-right:6px}
 @keyframes sp{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion: reduce){.spin{animation:none}}
@@ -180,8 +187,9 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
         <p class="sub"><b>Set up Google sign-in (about 5 minutes, one time).</b></p>
         <ol class="steps">
           <li><a class="btn small" href="https://console.cloud.google.com/flows/enableapi?apiid=gmail.googleapis.com,calendar-json.googleapis.com,drive.googleapis.com" target="_blank" rel="noopener">Turn on Gmail, Calendar and Drive</a> Pick or create a project and tap Enable.</li>
-          <li><a class="btn small" href="https://console.cloud.google.com/auth/overview" target="_blank" rel="noopener">Set up the consent screen</a> Choose External, add an app name and your email, then add your Google address as a Test user. On the Data access page add these scopes: <button class="btn small ghost" type="button" id="wCopyScopes">Copy scopes</button></li>
+          <li><a class="btn small" href="https://console.cloud.google.com/auth/overview" target="_blank" rel="noopener">Set up the consent screen</a> Choose External, add an app name and your email. On the Data access page add these scopes: <button class="btn small ghost" type="button" id="wCopyScopes">Copy scopes</button></li>
           <li><a class="btn small" href="https://console.cloud.google.com/auth/clients/create" target="_blank" rel="noopener">Create the Client ID</a> Choose Web application and add this address under Authorized JavaScript origins: <button class="btn small ghost" type="button" id="wCopyOrigin">Copy address</button> <code id="wOrigin"></code></li>
+          <li>On the Audience page tap <b>Publish app</b> so anyone with a Google account can sign in (no test-user list).</li>
           <li>Paste the Client ID Google shows you below. That's the last step.</li>
         </ol>
         <div class="ask"><input class="in" id="wClient" placeholder="123456789-abc.apps.googleusercontent.com" aria-label="Google Client ID" autocomplete="off"><button class="btn solid" type="button" id="wSave">Save Client ID</button></div>
@@ -300,7 +308,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
         <div class="right"><button class="btn small ghost" type="button" id="wipeRes">Delete my research data</button></div>
       </div>
     </div>
-    <div class="headrow"><button class="btn ghost" type="button" id="manage">Sign out and disconnect Google</button></div>
+    <div class="headrow"><button class="btn solid" type="button" id="onbAgain">Connect Claude, Todoist and research</button> <button class="btn ghost" type="button" id="manage">Sign out and disconnect Google</button></div>
   </section>
 
   <!-- INSTALL -->
@@ -351,6 +359,16 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
 </div>
 
 
+<div id="onb" class="onb" hidden role="dialog" aria-modal="true" aria-labelledby="onbTitle">
+  <div class="onbbox card"><div class="pad">
+    <div class="onbdots" id="onbDots" aria-hidden="true"></div>
+    <span class="eyebrow" id="onbStep"></span>
+    <h2 id="onbTitle"></h2>
+    <div id="onbBody" class="pad" style="padding:0"></div>
+    <p class="status err" id="onbMsg"></p>
+    <div class="headrow" id="onbActs"></div>
+  </div></div>
+</div>
 <noscript><p style="padding:16px">This page needs JavaScript.</p></noscript>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="config.js"></script>

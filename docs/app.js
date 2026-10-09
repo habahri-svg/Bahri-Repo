@@ -127,7 +127,79 @@ function renderSetup(){
       r.append(go,el("span","ds",s.desc));host.append(r);
     });
   });
+  try{if(!$("onb").hidden&&ONB[onbI]==="research")onbRender()}catch(e){}
 }
+/* ---------- guided connect: Claude, Todoist, research (shown right after Google sign-in) ---------- */
+const ONB=["claude","todoist","research","done"];
+let onbI=0;
+const firstName=()=>(myName||"").split(" ")[0]||"there";
+function onbOpen(){onbI=0;$("onb").hidden=false;$("onbMsg").textContent="";onbRender()}
+function onbClose(finished){$("onb").hidden=true;if(finished){state.onboarded=1;persist()}renderSetup()}
+function onbGo(n){onbI=Math.min(n,ONB.length-1);$("onbMsg").textContent="";onbRender()}
+function onbLink(href,text){const a=el("a","btn small",text);a.href=href;a.target="_blank";a.rel="noopener";return a}
+function onbBtn(text,fn,cls){const b=el("button","btn "+(cls||""),text);b.type="button";b.onclick=fn;return b}
+function onbRender(){
+  const k=ONB[onbI],body=$("onbBody"),acts=$("onbActs");body.replaceChildren();acts.replaceChildren();
+  $("onbStep").textContent=k==="done"?"All done":"Step "+(onbI+1)+" of "+(ONB.length-1);
+  const dots=$("onbDots");dots.replaceChildren();ONB.forEach((_,i)=>dots.append(el("i",i<=onbI?"on":"")));
+  const p=(t,c)=>body.append(el("p",c||"sub",t));
+  if(k==="claude"){
+    $("onbTitle").textContent="Connect Claude";
+    if(sample){p("Claude is connected. Your inbox is sorted smartly and drafts are written for you.");acts.append(onbBtn("Next",()=>onbGo(onbI+1),"solid"));return}
+    p("Welcome, "+firstName()+". Google is connected. Next, connect Claude so your inbox is sorted by what needs you, replies are drafted for you and your research gets follow-ups.");
+    p("Claude has no sign-in button for other websites, so it connects with your own API key. It is stored on this device only and sent only to Anthropic.");
+    body.append(onbLink("https://console.anthropic.com/settings/keys","Get my Claude key"));
+    const inp=el("input","in");inp.id="onbKey";inp.type="password";inp.placeholder="sk-ant-...";inp.autocomplete="off";inp.setAttribute("aria-label","Claude API key");body.append(inp);
+    acts.append(onbBtn("Connect Claude",async function(){
+      const v=inp.value.trim(),b=this;
+      if(!/^sk-ant-/.test(v)){$("onbMsg").textContent="Claude keys start with sk-ant-. Copy the key again.";return}
+      b.disabled=true;b.textContent="Checking your key...";$("onbMsg").textContent="";
+      Connectors.ai.set(v);sample=Connectors.makeSample();
+      try{await sample("Reply with the single word OK.",{modelTier:"quick",cache:false});state.claudeOk=1;persist();renderSetup();
+        if(threads.length)triage(board&&board.sig||"",true);followups(true);onbGo(onbI+1)}
+      catch(e){Connectors.ai.clear();sample=null;b.disabled=false;b.textContent="Connect Claude";
+        $("onbMsg").textContent=e&&e.code==="not_granted"?"Claude rejected that key. Check it and try again.":e&&e.code==="rate_limited"?"Claude is busy. Try again in a minute.":"Couldn't reach Claude. Check your connection and try again."}
+    },"solid"),onbBtn("Skip for now",()=>{state.skipAi=1;persist();onbGo(onbI+1)},"ghost"));
+  }else if(k==="todoist"){
+    $("onbTitle").textContent="Connect Todoist";
+    if(todo.state==="ok"){p("Todoist is connected. Today's tasks show next to your email.");acts.append(onbBtn("Next",()=>onbGo(onbI+1),"solid"));return}
+    p("Use Todoist? Connect it to see today's tasks beside your email and tick them off here. In Todoist open Settings, Integrations, Developer, copy your API token and paste it below.");
+    body.append(onbLink("https://app.todoist.com/app/settings/integrations/developer","Open Todoist settings"));
+    const inp=el("input","in");inp.id="onbTodo";inp.type="password";inp.placeholder="Todoist API token";inp.autocomplete="off";inp.setAttribute("aria-label","Todoist API token");body.append(inp);
+    acts.append(onbBtn("Connect Todoist",async function(){
+      const v=inp.value.trim(),b=this;if(!v){$("onbMsg").textContent="Paste your Todoist token first.";return}
+      b.disabled=true;b.textContent="Checking...";$("onbMsg").textContent="";
+      Connectors.todoist.set(v);todo.state="unknown";await loadTodoist();
+      if(todo.state==="ok"){onbGo(onbI+1);return}
+      b.disabled=false;b.textContent="Connect Todoist";
+      if(todo.state==="reauth"||todo.state==="denied"){Connectors.todoist.clear();todo.state="missing";renderSetup();$("onbMsg").textContent="Todoist rejected that token. Copy it again from Todoist."}
+      else $("onbMsg").textContent="Todoist didn't answer ("+clip(todo.note,100)+"). You can skip this and try again later."
+    },"solid"),onbBtn("I don't use Todoist",()=>{state.skipTodo=1;persist();onbGo(onbI+1)},"ghost"));
+  }else if(k==="research"){
+    $("onbTitle").textContent="Bring in your ChatGPT and Claude research";
+    p("Optional. Export your chats from each service, then import the file here. The page then suggests a follow-up for each piece of unfinished research. ChatGPT and Claude only share chats through an export file, so this part takes a few minutes.");
+    [["chatgpt","ChatGPT",GPT_EXPORT,"f-chatgpt"],["claude","Claude",CLAUDE_EXPORT,"f-claude"]].forEach(([key,label,url,fid])=>{
+      const r=research[key],row=el("div","onbrow");
+      row.append(el("b","",label+(r&&r.at?" ✓":"")));
+      row.append(el("span","status",r&&r.at?(r.convs||[]).length+" conversations imported.":"Open the export page, request your data, then import the .zip from the email."));
+      const a=el("div","acts");a.append(onbLink(url,"Open "+label+" export page"),onbBtn(r&&r.at?"Import again":"Import file",()=>$(fid).click()));row.append(a);body.append(row)});
+    acts.append(onbBtn("Continue",()=>onbGo(onbI+1),"solid"));
+  }else{
+    $("onbTitle").textContent="You're all set, "+firstName();
+    const line=(ok,t)=>body.append(el("p","sub",(ok?"✓ ":"○ ")+t));
+    line(true,"Google: Gmail, Calendar and Drive ("+(email||"signed in")+")");
+    line(!!sample,sample?"Claude: smart sorting and drafts on":"Claude: not connected, simple sorting for now");
+    line(todo.state==="ok",todo.state==="ok"?"Todoist: connected":"Todoist: not connected");
+    const n=((research.chatgpt&&research.chatgpt.convs)||[]).length+((research.claude&&research.claude.convs)||[]).length;
+    line(n>0,n?"Research: "+n+" conversations imported":"Research: not imported yet");
+    p("You can connect anything left from the Connections tab at any time.");
+    acts.append(onbBtn("Open my page",()=>onbClose(true),"solid"));
+  }
+  const f=body.querySelector("input")||acts.querySelector("button");if(f)setTimeout(()=>f.focus(),30);
+}
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("onb").hidden)onbClose(true)});
+$("onbAgain").onclick=()=>{show("t-today");onbOpen()};
+
 /* ---------- connect, personalise, sign out ---------- */
 const niceErr=e=>{const c=e&&e.code;
   if(c==="popup_closed")return "The Google window was closed. Tap Continue with Google to try again.";
@@ -158,6 +230,7 @@ async function afterConnect(){
   $("welcome").hidden=true;renderHello();
   const snap=lsGet();if(snap&&snap.state)restore(snap);
   await loadResearch();renderTasks();renderSetup();
+  if(!state.onboarded)onbOpen();
   await refreshAll(false);
   if(!loopOn){loopOn=true;
     setInterval(()=>{if(!document.hidden)refreshAll(false)},600000);

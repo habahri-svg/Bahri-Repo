@@ -29,7 +29,7 @@ Without this the page can't log anyone in. It shows "One-time setup needed" unti
    - `.../auth/gmail.compose`
    - `.../auth/calendar.readonly`
    - `.../auth/drive.metadata.readonly`
-5. While the app is in **Testing**, add each person's Google address under **Test users** (up to 100). Only listed people can sign in. See "Going beyond test users" below.
+5. On the **Audience** page tap **Publish app**. This lets anyone with a Google account sign in, with no test-user list and no 7-day expiry. Until Google verifies the app (see "Going beyond 100 people" below) it shows an "unverified app" warning (Advanced, Go to app) and is capped at 100 people in total.
 6. **APIs and Services, Credentials, Create credentials, OAuth client ID**:
    - Application type: **Web application**
    - **Authorized JavaScript origins**: your site address with no path and no trailing slash, for example `https://habahri-svg.github.io`
@@ -51,7 +51,8 @@ Open the site address in Chrome or Safari. You should see "Connect your accounts
 1. First visit: a "Connect your accounts" card with one **Continue with Google** button. Nothing opens until they tap it.
 2. After they approve: it hides the card, greets them by name (Good morning, Name), shows their email and avatar, and loads Gmail, Calendar and Drive.
 3. Next visits: it reconnects quietly, and if the browser blocks that it shows "Welcome back, Name" with one tap to continue.
-4. **Sign out** (top of the page or the Connections tab) revokes access.
+4. Straight after Google, a guided screen asks them to connect the rest, one step at a time, each with a Skip button: **Claude** (their own API key, checked on the spot), **Todoist** (their own token) and **ChatGPT / Claude research** (export files). It shows once per person per browser and can be reopened from the Connections tab.
+5. **Sign out** (top of the page or the Connections tab) revokes access.
 
 Each person's board (done, snoozed, tasks, links) is stored in their own browser under their own Google ID, so two people on one computer don't mix.
 
@@ -60,8 +61,8 @@ Each person's board (done, snoozed, tasks, links) is stored in their own browser
 - **Todoist token**: paste a personal API token from Todoist (Settings, Integrations, Developer) to show today's tasks and complete them.
 - **ChatGPT and Claude research**: import the `.zip` from each service's data export. Neither offers a live connection.
 
-## Going beyond test users (read this)
-Gmail permissions are classed by Google as **restricted**. While the Google app is in Testing, up to 100 listed test users can sign in. Google shows them an "unverified app" warning (Advanced, Go to app). To let anyone sign in without that limit you must publish the app and pass Google's OAuth verification, which for restricted Gmail scopes includes a paid third-party security assessment. For a team or family, stay in Testing and list everyone. Testing-mode sign-ins can also expire after 7 days, so people may need to tap Continue with Google again weekly.
+## Going beyond 100 people (read this)
+Gmail permissions are classed by Google as **restricted**. A published but unverified app works for anyone, but only the first 100 people can ever sign in, and each sees an "unverified app" warning. To lift the cap and remove the warning you must submit the app for Google's OAuth verification. For restricted Gmail scopes that includes an annual paid third-party security assessment (CASA). Nothing in this repository can do that for you. A team or family under 100 people never needs it.
 
 ## Privacy
 - No server, no analytics, no tracking. The page talks only to Google, and optionally Todoist and Anthropic.
