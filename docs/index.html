@@ -179,11 +179,10 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       <div id="wSetup" hidden>
         <p class="sub"><b>Set up Google sign-in (about 5 minutes, one time).</b></p>
         <ol class="steps">
-          <li>Open <a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener">Google Cloud</a> and create a project.</li>
-          <li>Under APIs and Services, Library, turn on <b>Gmail API</b>, <b>Google Calendar API</b> and <b>Google Drive API</b>.</li>
-          <li>Under OAuth consent screen choose External, add the app name and your email, add the four scopes listed in EXECUTION-PAGE.md, and add your Google address as a Test user.</li>
-          <li>Under Credentials choose Create credentials, OAuth client ID, Web application. Add this exact address under Authorized JavaScript origins: <code id="wOrigin"></code></li>
-          <li>Paste the Client ID Google gives you below.</li>
+          <li><a class="btn small" href="https://console.cloud.google.com/flows/enableapi?apiid=gmail.googleapis.com,calendar-json.googleapis.com,drive.googleapis.com" target="_blank" rel="noopener">Turn on Gmail, Calendar and Drive</a> Pick or create a project and tap Enable.</li>
+          <li><a class="btn small" href="https://console.cloud.google.com/auth/overview" target="_blank" rel="noopener">Set up the consent screen</a> Choose External, add an app name and your email, then add your Google address as a Test user. On the Data access page add these scopes: <button class="btn small ghost" type="button" id="wCopyScopes">Copy scopes</button></li>
+          <li><a class="btn small" href="https://console.cloud.google.com/auth/clients/create" target="_blank" rel="noopener">Create the Client ID</a> Choose Web application and add this address under Authorized JavaScript origins: <button class="btn small ghost" type="button" id="wCopyOrigin">Copy address</button> <code id="wOrigin"></code></li>
+          <li>Paste the Client ID Google shows you below. That's the last step.</li>
         </ol>
         <div class="ask"><input class="in" id="wClient" placeholder="123456789-abc.apps.googleusercontent.com" aria-label="Google Client ID" autocomplete="off"><button class="btn solid" type="button" id="wSave">Save Client ID</button></div>
         <p class="status">Saved in this browser only. To make it work for everyone, also paste it into docs/config.js in the repository.</p>
