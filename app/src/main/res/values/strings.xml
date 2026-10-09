@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">CallVault</string>
+    <string name="a11y_desc">Detects when a WhatsApp call screen opens so CallVault can start recording automatically. It does not read or store any chat content.</string>
+</resources>
