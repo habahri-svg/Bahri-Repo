@@ -93,7 +93,7 @@ function stepDefs(){
     {name:"Signed in with Google",done:!!uid,desc:uid?"You're signed in as "+email+". Your board is private to you.":"Tap Continue with Google at the top of the page.",btn:uid?null:["Continue with Google",()=>connectGoogle()]},
     Object.assign({name:"Gmail"},mailStep("Gmail","Reads your inbox and sent mail, and saves reply drafts you approve.")),
     Object.assign({name:"Google Calendar"},mailStep("Google Calendar","Shows your meetings for today and tomorrow.")),
-    {name:"Claude for smarter sorting (optional)",done:!!sample||!!state.skipAi,desc:sample?"Claude is on. Your key is stored on this device only.":"Without a key, your inbox is sorted by simple rules. Add a Claude API key for smarter sorting, drafts and research follow-ups. It stays on this device.",btn:sample?["Remove key",removeAiKey]:["Add key",setAiKey],btn2:sample||state.skipAi?null:skip("skipAi")},
+    {name:"Claude for smarter sorting (optional)",done:!!sample||!!state.skipAi,desc:sample?(Connectors.ai.mode()==="shared"?"Claude is on automatically with your Google sign-in. Nothing to connect.":"Claude is on. Your key is stored on this device only."):"Without a key, your inbox is sorted by simple rules. Add a Claude API key for smarter sorting, drafts and research follow-ups. It stays on this device.",btn:sample?(Connectors.ai.mode()==="key"?["Remove key",removeAiKey]:null):["Add key",setAiKey],btn2:sample||state.skipAi?null:skip("skipAi")},
     Object.assign({name:"Your Claude research"},imp("claude","Claude",CLAUDE_EXPORT,"f-claude","1. Tap Open Claude export page. 2. Under Your data, tap Export data and confirm. 3. Claude emails you a download link (usually within minutes). 4. Download the .zip from that email, no need to unzip it. 5. Come back here, tap Import file and choose it.")),
     Object.assign({name:"Your ChatGPT research"},imp("chatgpt","ChatGPT",GPT_EXPORT,"f-chatgpt","1. Tap Open ChatGPT export page and sign in if asked. 2. In Data controls, tap Export data, then Confirm export. 3. OpenAI emails you a download link. 4. Download the .zip from that email, no need to unzip it. 5. Come back here, tap Import file and choose it. Repeat weekly to keep it current.")),
     optional("Google Drive (optional)",drive.state,"Connected. Your recent documents show under Documents.","skipDrive","Shows the documents you've been working on. Uses the same Google sign-in as Gmail.",["Connect Google",()=>connectGoogle(drive.state==="denied")],"Google didn't give this page access to Drive. Tap Allow and tick every box on Google's screen.",{note:drive.note,fn:loadDrive}),
@@ -130,10 +130,10 @@ function renderSetup(){
   try{if(!$("onb").hidden&&ONB[onbI]==="research")onbRender()}catch(e){}
 }
 /* ---------- guided connect: Claude, Todoist, research (shown right after Google sign-in) ---------- */
-const ONB=["claude","todoist","research","done"];
+let ONB=["claude","todoist","research","done"];
 let onbI=0;
 const firstName=()=>(myName||"").split(" ")[0]||"there";
-function onbOpen(){onbI=0;$("onb").hidden=false;$("onbMsg").textContent="";onbRender()}
+function onbOpen(){ONB=Connectors.ai.mode()==="shared"?["todoist","research","done"]:["claude","todoist","research","done"];onbI=0;$("onb").hidden=false;$("onbMsg").textContent="";onbRender()}
 function onbClose(finished){$("onb").hidden=true;if(finished){state.onboarded=1;persist()}renderSetup()}
 function onbGo(n){onbI=Math.min(n,ONB.length-1);$("onbMsg").textContent="";onbRender()}
 function onbLink(href,text){const a=el("a","btn small",text);a.href=href;a.target="_blank";a.rel="noopener";return a}
@@ -163,6 +163,7 @@ function onbRender(){
   }else if(k==="todoist"){
     $("onbTitle").textContent="Connect Todoist";
     if(todo.state==="ok"){p("Todoist is connected. Today's tasks show next to your email.");acts.append(onbBtn("Next",()=>onbGo(onbI+1),"solid"));return}
+    if(onbI===0)p("Welcome, "+firstName()+". Google and Claude are connected, so your inbox is already being sorted for you. Two optional connections left.");
     p("Use Todoist? Connect it to see today's tasks beside your email and tick them off here. In Todoist open Settings, Integrations, Developer, copy your API token and paste it below.");
     body.append(onbLink("https://app.todoist.com/app/settings/integrations/developer","Open Todoist settings"));
     const inp=el("input","in");inp.id="onbTodo";inp.type="password";inp.placeholder="Todoist API token";inp.autocomplete="off";inp.setAttribute("aria-label","Todoist API token");body.append(inp);
@@ -188,7 +189,7 @@ function onbRender(){
     $("onbTitle").textContent="You're all set, "+firstName();
     const line=(ok,t)=>body.append(el("p","sub",(ok?"✓ ":"○ ")+t));
     line(true,"Google: Gmail, Calendar and Drive ("+(email||"signed in")+")");
-    line(!!sample,sample?"Claude: smart sorting and drafts on":"Claude: not connected, simple sorting for now");
+    line(!!sample,sample?"Claude: connected, smart sorting and drafts on":"Claude: not connected, simple sorting for now");
     line(todo.state==="ok",todo.state==="ok"?"Todoist: connected":"Todoist: not connected");
     const n=((research.chatgpt&&research.chatgpt.convs)||[]).length+((research.claude&&research.claude.convs)||[]).length;
     line(n>0,n?"Research: "+n+" conversations imported":"Research: not imported yet");
@@ -254,7 +255,7 @@ function setAiKey(){
   Connectors.ai.set(k);sample=Connectors.makeSample();state.claudeOk=1;persist();renderSetup();
   if(threads.length)triage(board&&board.sig||"",true);followups(true);
 }
-function removeAiKey(){Connectors.ai.clear();sample=null;renderSetup();if(threads.length)triage(board&&board.sig||"",true)}
+function removeAiKey(){Connectors.ai.clear();sample=Connectors.makeSample();renderSetup();if(threads.length)triage(board&&board.sig||"",true)}
 const gateUi=()=>{};
 $("wBtn").onclick=()=>connectGoogle();
 const copyBtn=(id,text,label)=>{$(id).onclick=()=>navigator.clipboard.writeText(text()).then(()=>{$(id).textContent="Copied";setTimeout(()=>$(id).textContent=label,1500)}).catch(()=>{$(id).textContent="Copy by hand"})};
@@ -722,7 +723,7 @@ $("refresh").onclick=()=>refreshAll(false);
 (async()=>{
   collapsed.delete("c-inbox");collapsed.delete("setupCard");ORDER.forEach(k=>collapsed.delete("g-"+k));saveCol();
   try{applyOrder();applyCol();renderLinks();renderSetup();renderTasks();renderResearch()}catch(e){}
-  mcp=Connectors.mcp;perms=Connectors.perms;sample=Connectors.makeSample();
+  mcp=Connectors.mcp;perms=Connectors.perms;await Connectors.ai.detect();sample=Connectors.makeSample();
   renderHello();
   if(!G.configured()){showWelcome();setFresh("err","Google sign-in isn't set up yet.");return}
   if(G.wasConnected()){

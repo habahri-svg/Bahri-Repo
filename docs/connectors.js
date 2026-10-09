@@ -302,11 +302,30 @@
     if (a >= 0 && b > a) return JSON.parse(s.slice(a, b + 1));
     throw cerr("tool_error", "Claude's answer wasn't readable");
   }
+  /* Shared Claude: the site owner's key sits on the server (api/claude.js). Signed-in people use it with no key of their own. */
+  var shared = false;
+  function detectShared() {
+    return fetch("/api/claude", { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : { ok: false }; }).then(function (j) { shared = !!(j && j.ok); return shared; }, function () { shared = false; return false; });
+  }
+  async function callShared(messages, opts) {
+    var t = await ensure();
+    var r = await fetch("/api/claude", {
+      method: "POST",
+      headers: { "content-type": "application/json", Authorization: "Bearer " + t },
+      body: JSON.stringify({ tier: (opts && opts.modelTier) || "default", messages: messages, max_tokens: 8000 })
+    });
+    if (r.status === 429) throw cerr("rate_limited", "Claude is busy or the daily limit was reached");
+    if (r.status === 401 || r.status === 403) throw cerr("tool_error", "Claude isn't available for this account");
+    if (!r.ok) throw cerr("tool_error", "Claude answered " + r.status);
+    var j = await r.json();
+    return { text: (j.content || []).filter(function (b) { return b.type === "text"; }).map(function (b) { return b.text; }).join("") };
+  }
   function makeSample() {
     var key = ls.get(KEY.ai);
-    if (!key) return null;
+    if (!key && !shared) return null;
     async function call(input, opts) {
       var messages = typeof input === "string" ? [{ role: "user", content: input }] : input;
+      if (!key) return callShared(messages, opts);
       var r = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
@@ -336,6 +355,6 @@
     google: google_,
     makeSample: makeSample,
     todoist: { has: function () { return !!ls.get(KEY.todo); }, set: function (t) { ls.set(KEY.todo, String(t || "").trim()); }, clear: function () { ls.del(KEY.todo); } },
-    ai: { has: function () { return !!ls.get(KEY.ai); }, set: function (k) { ls.set(KEY.ai, String(k || "").trim()); }, clear: function () { ls.del(KEY.ai); } }
+    ai: { detect: detectShared, mode: function () { return ls.get(KEY.ai) ? "key" : shared ? "shared" : ""; }, has: function () { return !!ls.get(KEY.ai); }, set: function (k) { ls.set(KEY.ai, String(k || "").trim()); }, clear: function () { ls.del(KEY.ai); } }
   };
 })();

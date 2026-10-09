@@ -47,11 +47,27 @@ Repository **Settings, Pages**: Source **Deploy from a branch**, branch `main`, 
 ### 4. Open it and test
 Open the site address in Chrome or Safari. You should see "Connect your accounts to start". Tap **Continue with Google**, tick every box on Google's screen, and the page loads your inbox, meetings and files and greets you by name.
 
+## Claude for everyone, with no keys (Vercel)
+Anthropic doesn't offer a "Sign in with Claude" for other websites, and using someone's Claude subscription outside claude.ai is against its terms. So the page connects Claude one of two ways:
+
+1. **Shared Claude (recommended, Vercel only).** You add your own Claude API key once on the server. Everyone who signs in with Google then gets smart sorting, drafts and follow-ups automatically, with nothing to paste. The key never reaches the browser. In Vercel open **Settings, Environment Variables** and add:
+
+   | Name | Value |
+   | --- | --- |
+   | `ANTHROPIC_API_KEY` | your key from https://console.anthropic.com/settings/keys |
+   | `GOOGLE_CLIENT_ID` | the same Client ID as in `docs/config.js` |
+   | `ALLOWED_EMAILS` | optional, comma-separated Google addresses allowed to use Claude |
+   | `ALLOWED_DOMAINS` | optional, for example `wyzrent.com` |
+   | `DAILY_LIMIT` | optional, calls per person per day (default 150) |
+
+   Then redeploy. You pay for the usage, so set a spending limit in the Anthropic console and use `ALLOWED_EMAILS` or `ALLOWED_DOMAINS` so only your team can use it. The function (`api/claude.js`) checks every request against the person's Google sign-in and refuses tokens issued to any other app.
+2. **Their own key (fallback).** On GitHub Pages there is no server, and on Vercel the function stays off until you add the variables. In both cases the guided screen asks each person for their own key instead.
+
 ## What happens when someone opens it
 1. First visit: a "Connect your accounts" card with one **Continue with Google** button. Nothing opens until they tap it.
 2. After they approve: it hides the card, greets them by name (Good morning, Name), shows their email and avatar, and loads Gmail, Calendar and Drive.
 3. Next visits: it reconnects quietly, and if the browser blocks that it shows "Welcome back, Name" with one tap to continue.
-4. Straight after Google, a guided screen asks them to connect the rest, one step at a time, each with a Skip button: **Claude** (their own API key, checked on the spot), **Todoist** (their own token) and **ChatGPT / Claude research** (export files). It shows once per person per browser and can be reopened from the Connections tab.
+4. Straight after Google, a guided screen asks them to connect the rest, one step at a time, each with a Skip button: **Claude** (skipped automatically when shared Claude is on, otherwise their own key, checked on the spot), **Todoist** (their own token) and **ChatGPT / Claude research** (export files). It shows once per person per browser and can be reopened from the Connections tab.
 5. **Sign out** (top of the page or the Connections tab) revokes access.
 
 Each person's board (done, snoozed, tasks, links) is stored in their own browser under their own Google ID, so two people on one computer don't mix.
