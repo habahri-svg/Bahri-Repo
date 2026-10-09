@@ -139,7 +139,7 @@ const niceErr=e=>{const c=e&&e.code;
 const lastName=()=>{try{return localStorage.getItem("wyz-last-name")||""}catch(e){return ""}};
 function showWelcome(){
   const w=$("welcome");w.hidden=false;
-  if(!G.configured()){$("wTitle").textContent="One-time setup needed";$("wText").textContent="The site owner still needs to add a Google Client ID in config.js. The steps are in EXECUTION-PAGE.md. Until then nobody can sign in.";$("wBtn").disabled=true;return}
+  if(!G.configured()){$("wTitle").textContent="One-time setup needed";$("wText").textContent="Google needs to know this site before anyone can sign in. Follow the steps below once, paste the Client ID, and the Continue with Google button turns on.";$("wBtn").disabled=true;$("wSetup").hidden=false;$("wOrigin").textContent=location.origin;return}
   $("wBtn").disabled=false;
   const n=lastName();if(n){$("wTitle").textContent="Welcome back, "+n.split(" ")[0];$("wText").textContent="Tap Continue with Google to reconnect. Your board loads straight away."}
 }
@@ -184,6 +184,7 @@ function setAiKey(){
 function removeAiKey(){Connectors.ai.clear();sample=null;renderSetup();if(threads.length)triage(board&&board.sig||"",true)}
 const gateUi=()=>{};
 $("wBtn").onclick=()=>connectGoogle();
+$("wSave").onclick=()=>{const v=$("wClient").value.trim();if(!/\.apps\.googleusercontent\.com$/.test(v)){$("wMsg").textContent="That doesn't look like a Client ID. It ends in .apps.googleusercontent.com";return}G.setClientId(v);location.reload()};
 $("signOut").onclick=$("manage").onclick=async()=>{await G.signOut();try{localStorage.removeItem("wyz-last-name")}catch(e){}location.reload()};
 
 /* ---------- calendar ---------- */

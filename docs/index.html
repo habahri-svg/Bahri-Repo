@@ -176,6 +176,18 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       <p class="sub" id="wText">Sign in with Google once. Your inbox, meetings and recent documents load straight away, and the page is then set up just for you. Nobody else can see your data.</p>
       <div class="headrow"><button class="btn solid" type="button" id="wBtn">Continue with Google</button></div>
       <p class="status err" id="wMsg"></p>
+      <div id="wSetup" hidden>
+        <p class="sub"><b>Set up Google sign-in (about 5 minutes, one time).</b></p>
+        <ol class="steps">
+          <li>Open <a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener">Google Cloud</a> and create a project.</li>
+          <li>Under APIs and Services, Library, turn on <b>Gmail API</b>, <b>Google Calendar API</b> and <b>Google Drive API</b>.</li>
+          <li>Under OAuth consent screen choose External, add the app name and your email, add the four scopes listed in EXECUTION-PAGE.md, and add your Google address as a Test user.</li>
+          <li>Under Credentials choose Create credentials, OAuth client ID, Web application. Add this exact address under Authorized JavaScript origins: <code id="wOrigin"></code></li>
+          <li>Paste the Client ID Google gives you below.</li>
+        </ol>
+        <div class="ask"><input class="in" id="wClient" placeholder="123456789-abc.apps.googleusercontent.com" aria-label="Google Client ID" autocomplete="off"><button class="btn solid" type="button" id="wSave">Save Client ID</button></div>
+        <p class="status">Saved in this browser only. To make it work for everyone, also paste it into docs/config.js in the repository.</p>
+      </div>
       <p class="status">This page runs in your browser only and has no server. Your email, calendar and files go from Google to this page and nowhere else. On the Google screen, tick every box so everything can load.</p>
     </div></div>
     <div class="card note" id="setupCard">

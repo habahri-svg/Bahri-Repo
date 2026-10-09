@@ -13,7 +13,7 @@
     drive: "https://www.googleapis.com/auth/drive.metadata.readonly"
   };
   var SCOPES = ["openid", "email", "profile", SC.gmailRead, SC.gmailDraft, SC.cal, SC.drive].join(" ");
-  var KEY = { flag: "wyz-google-flag", hint: "wyz-google-hint", todo: "wyz-todoist-token", ai: "wyz-claude-key" };
+  var KEY = { flag: "wyz-google-flag", hint: "wyz-google-hint", todo: "wyz-todoist-token", ai: "wyz-claude-key", cid: "wyz-google-client-id" };
 
   var ls = {
     get: function (k) { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } },
@@ -22,7 +22,8 @@
   };
   var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
   var cerr = function (code, message) { var e = new Error(message || code); e.code = code; return e; };
-  var configured = function () { return /\.apps\.googleusercontent\.com$/.test(String(CFG.GOOGLE_CLIENT_ID || "")); };
+  var clientId = function () { return String(CFG.GOOGLE_CLIENT_ID || ls.get(KEY.cid) || "").trim(); };
+  var configured = function () { return /\.apps\.googleusercontent\.com$/.test(clientId()); };
 
   /* ---------- Google sign-in (token model) ---------- */
   var tok = { access: "", exp: 0, scope: "" };
@@ -43,7 +44,7 @@
     return gisReady().then(function () {
       return new Promise(function (resolve, reject) {
         var c = google.accounts.oauth2.initTokenClient({
-          client_id: CFG.GOOGLE_CLIENT_ID,
+          client_id: clientId(),
           scope: SCOPES,
           include_granted_scopes: true,
           callback: function (r) {
@@ -269,6 +270,7 @@
 
   var google_ = {
     configured: configured,
+    setClientId: function (v) { ls.set(KEY.cid, String(v || "").trim()); },
     connected: connected,
     wasConnected: function () { return !!ls.get(KEY.flag); },
     /* interactive=true opens Google's window (needs a tap). false tries silently. consent=true forces the permission screen. */
