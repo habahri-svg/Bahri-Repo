@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>WYZ Rent Execution Page</title>
+<meta name="theme-color" content="#104b70">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Execution Page">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23104b70'/%3E%3Cpath d='M18 34l10 10 18-22' fill='none' stroke='%23d8a23c' stroke-width='7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: one column run sheet. Header, three tabs (Today, Connections, Install). Colour lives in status dots only. WYZ navy, gold, sky. */
+:root{
+  --bg:#f4f8fc; --panel:#ffffff; --fg:#0e2238; --soft:#56697c; --line:#dbe5ee;
+  --navy:#104b70; --gold:#b8923c; --sky:#e8f2fa; --onnavy:#ffffff;
+  --d-reply:#d6453d; --d-follow:#e08a2e; --d-work:#2f6fd6; --d-wait:#d9b21f; --d-fyi:#45a843; --d-off:#9aa8b5;
+  --font:"IBM Plex Sans","Segoe UI",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0b1a2b; --panel:#0e2238; --fg:#e8f2fa; --soft:#9db2c6; --line:#22405c;
+  --navy:#9cc9e8; --gold:#d8a23c; --sky:#16324e; --onnavy:#0b1a2b; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0b1a2b; --panel:#0e2238; --fg:#e8f2fa; --soft:#9db2c6; --line:#22405c;
+  --navy:#9cc9e8; --gold:#d8a23c; --sky:#16324e; --onnavy:#0b1a2b; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+.toolbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);display:flex;flex-wrap:nowrap;gap:6px;align-items:center;overflow-x:auto;padding-block:8px;scrollbar-width:thin}
+.toolbar .btn{white-space:nowrap;flex:none}
+.secnav{display:flex;gap:6px;flex:none}
+.tsep{width:1px;align-self:stretch;background:var(--line);flex:none;margin-inline:2px}
+.navchip{white-space:nowrap;flex:none;font-size:13px;font-weight:600;padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--fg)}
+.navchip:hover{border-color:var(--navy);color:var(--navy)}
+details.askdd{position:relative;display:inline-block}
+details.askdd > summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:4px;height:30px;min-width:30px;padding:0 8px;border:1px solid var(--navy);border-radius:6px;background:var(--sky);color:var(--navy);font-size:12px;font-weight:700}
+details.askdd > summary::-webkit-details-marker{display:none}
+details.askdd[open] > summary{background:var(--navy);color:var(--onnavy)}
+.askmenu{position:absolute;z-index:6;top:calc(100% + 4px);left:0;min-width:170px;background:var(--panel);border:1px solid var(--navy);border-radius:8px;display:flex;flex-direction:column;padding:4px;box-shadow:0 6px 18px rgba(14,34,56,.18)}
+.askmenu a{padding:8px 10px;border-radius:5px;color:var(--fg);text-decoration:none;font-size:14px;font-weight:500}
+.askmenu a:hover,.askmenu a:focus-visible{background:var(--sky)}
+@media (pointer:coarse){details.askdd > summary{height:40px;min-width:40px}}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.45;padding-inline:16px;padding-block:20px 64px}
+.wrap{max-width:900px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.wrap .wrap{width:100%;max-width:none}
+header{display:flex;flex-direction:column;gap:6px}
+.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);font-weight:700}
+h1{margin:0;font-size:26px;color:var(--navy);text-wrap:balance}
+h2{margin:0;font-size:17px;color:var(--fg)}
+.sub{margin:0;color:var(--soft);font-size:14px}
+.headrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button{font:inherit;cursor:pointer}
+.btn{font-size:14px;font-weight:600;padding:7px 13px;border:1px solid var(--navy);border-radius:6px;background:var(--panel);color:var(--navy)}
+.btn.solid{background:var(--navy);color:var(--onnavy)}
+.btn.small{font-size:13px;padding:5px 10px}
+.btn.ghost{border-color:var(--line);color:var(--fg);font-weight:500}
+.btn:disabled{opacity:.5;cursor:default}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tab{border:0;background:none;padding:10px 14px;color:var(--soft);font-weight:600;border-bottom:3px solid transparent;white-space:nowrap}
+.tab[aria-selected="true"]{color:var(--navy);border-bottom-color:var(--gold)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.pad{padding:14px;display:flex;flex-direction:column;gap:10px}
+.note{border-left:4px solid var(--gold)}
+.warn{border-left:4px solid var(--d-reply)}
+.ask{display:flex;gap:8px;flex-wrap:wrap}
+.ask input{flex:1 1 240px;min-width:0}
+input.in,textarea{font:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);width:100%}
+textarea{min-height:180px;resize:vertical}
+.out{white-space:pre-wrap;font-size:14px;line-height:1.55;overflow-wrap:anywhere}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--fg);font-size:13px;font-weight:500}
+.chip b{font-variant-numeric:tabular-nums}
+.chip[aria-pressed="true"]{background:var(--sky);border-color:var(--navy);color:var(--navy)}
+.dot{width:11px;height:11px;border-radius:50%;flex:none;display:inline-block}
+.reply{background:var(--d-reply)}.follow{background:var(--d-follow)}.work{background:var(--d-work)}.wait{background:var(--d-wait)}.fyi{background:var(--d-fyi)}.none{background:var(--d-off)}
+.group h3{margin:0;padding:11px 14px;font-size:14px;display:flex;align-items:center;gap:9px;background:var(--sky);border-radius:9px 9px 0 0}
+.group h3 .n{margin-left:auto;color:var(--soft);font-weight:600;font-size:13px}
+.item{display:grid;grid-template-columns:12px minmax(0,1fr);gap:4px 12px;padding:13px 14px;border-top:1px solid var(--line)}
+.item .dot{margin-top:6px}
+.item .main{min-width:0;display:flex;flex-direction:column;gap:3px}
+.item .t{font-weight:600}
+.item .s{color:var(--fg);font-size:14px;overflow-wrap:anywhere}
+.item .m{color:var(--soft);font-size:13px}
+.urg{font-weight:700}.u4{color:var(--d-reply)}.u3{color:var(--d-follow)}
+.acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.acts a{text-decoration:none}
+.draftbox{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.ev{display:grid;grid-template-columns:88px minmax(0,1fr);gap:4px 10px;padding:7px 0;border-top:1px solid var(--line);font-size:14px}
+.ev:first-child{border-top:0}
+.ev b{font-family:var(--mono);font-size:13px;color:var(--navy);font-variant-numeric:tabular-nums}
+.ev span{min-width:0;overflow-wrap:anywhere}
+.daylbl{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--soft);font-weight:700;margin-top:6px}
+.conn{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;align-items:center;padding:14px;border-top:1px solid var(--line)}
+.conn:first-child{border-top:0}
+.conn .nm{font-weight:600}
+.conn .ds{color:var(--soft);font-size:13px;grid-column:1}
+.pill{font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;border:1px solid var(--line);white-space:nowrap}
+.pill.ok{color:var(--d-fyi);border-color:var(--d-fyi)}
+.pill.todo{color:var(--d-follow);border-color:var(--d-follow)}
+.pill.bad{color:var(--d-reply);border-color:var(--d-reply)}
+.pill.later{color:var(--soft)}
+.conn .right{grid-row:1 / span 2;grid-column:2;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+ol.steps{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:8px}
+ol.steps li::marker{color:var(--gold);font-weight:700}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.status{font-size:13px;color:var(--soft)}
+.status.err{color:var(--d-reply);font-weight:600}
+.status:empty{display:none}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--navy);border-radius:50%;animation:sp 1s linear infinite;vertical-align:-2px;margin-right:6px}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){.spin{animation:none}}
+.prog{height:6px;background:var(--line);border-radius:999px;overflow:hidden}
+.prog i{display:block;height:100%;background:var(--gold);border-radius:999px;transition:width .3s}
+.stp{display:grid;grid-template-columns:26px minmax(0,1fr) auto;gap:4px 10px;align-items:center;padding:11px 0;border-top:1px solid var(--line)}
+.stp:first-child{border-top:0}
+.stp .num{width:24px;height:24px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-size:12px;font-weight:700;color:var(--soft)}
+.stp.done .num{background:var(--d-fyi);border-color:var(--d-fyi);color:#fff}
+.stp .nm{font-weight:600}
+.stp .ds{grid-column:2;color:var(--soft);font-size:13px}
+.stp .go{grid-row:1 / span 2;grid-column:3;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.stp .go a{text-decoration:none}
+.src{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:4px;border:1px solid var(--line);color:var(--soft)}
+.rs{display:flex;flex-direction:column;gap:4px;padding:13px 0;border-top:1px solid var(--line)}
+.rs:first-child{border-top:0}
+.rs .t{font-weight:600;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.rs .f{font-size:14px}
+.rs .q{font-size:13px;color:var(--soft);font-style:italic;overflow-wrap:anywhere}
+.rs .acts a{text-decoration:none}
+.hdr{cursor:pointer;user-select:none}
+h2.hdr{display:flex;align-items:center;gap:8px}
+h2.hdr::after,.group h3.hdr::after{content:"\25BE";color:var(--soft);font-size:14px;transition:transform .2s}
+h2.hdr::after{margin-left:8px}
+.mv{margin-left:auto;display:flex;gap:4px}
+.mvb{padding:2px 9px;font-size:14px;line-height:1.2;min-height:0}
+.mvb:disabled{opacity:.3}
+.group h3.hdr::after{margin-left:8px}
+.collapsed > .pad > h2.hdr::after,.group.collapsed h3.hdr::after{transform:rotate(-90deg)}
+.card.collapsed:not(.group) > .pad > :not(h2){display:none}
+.card.collapsed:not(.group) > :not(.pad){display:none}
+.group.collapsed .item{display:none}
+.group.collapsed h3{border-radius:9px}
+@media (prefers-reduced-motion: reduce){h2.hdr::after,.group h3.hdr::after{transition:none}}
+code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+@media (pointer:coarse){.btn{min-height:40px}.chip{min-height:36px}input.in,textarea{font-size:16px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="eyebrow">WYZ Rent · Execution Page</span>
+    <h1 id="hello">Your execution page</h1>
+    <p class="sub" id="today"></p>
+    <div class="headrow" id="who" hidden>
+      <img id="avatar" alt="" width="28" height="28" style="border-radius:50%" referrerpolicy="no-referrer">
+      <span class="status" id="whoName"></span>
+      <button class="btn small ghost" type="button" id="signOut">Sign out</button>
+    </div>
+    <div class="headrow">
+      <button class="btn solid" type="button" id="refresh">Refresh now</button>
+      <span class="status" id="fresh">Not loaded yet</span>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button class="tab" role="tab" id="t-today" aria-selected="true" aria-controls="p-today" type="button">Today</button>
+    <button class="tab" role="tab" id="t-conn" aria-selected="false" aria-controls="p-conn" type="button">Connections</button>
+    <button class="tab" role="tab" id="t-inst" aria-selected="false" aria-controls="p-inst" type="button">Install on phone or computer</button>
+  </nav>
+
+  <!-- TODAY -->
+  <section id="p-today" role="tabpanel" aria-labelledby="t-today" class="wrap" style="gap:16px">
+    <div class="toolbar" id="toolbar" role="toolbar" aria-label="Sections"><button class="btn ghost small" type="button" id="expAll">Expand all</button><button class="btn ghost small" type="button" id="colAll">Collapse all</button><span class="tsep" aria-hidden="true"></span><span id="secNav" class="secnav"></span></div>
+    <div class="card note" id="welcome" hidden><div class="pad">
+      <h2 id="wTitle">Connect your accounts to start</h2>
+      <p class="sub" id="wText">Sign in with Google once. Your inbox, meetings and recent documents load straight away, and the page is then set up just for you. Nobody else can see your data.</p>
+      <div class="headrow"><button class="btn solid" type="button" id="wBtn">Continue with Google</button></div>
+      <p class="status err" id="wMsg"></p>
+      <p class="status">This page runs in your browser only and has no server. Your email, calendar and files go from Google to this page and nowhere else. On the Google screen, tick every box so everything can load.</p>
+    </div></div>
+    <div class="card note" id="setupCard">
+      <div class="pad">
+        <h2>Finish setting up your page</h2>
+        <p class="sub" id="setupTxt">Connect each item below, one time. Everything uses your own accounts and nobody else sees your board.</p>
+        <div class="prog" aria-hidden="true"><i id="progBar" style="width:0%"></i></div>
+        <div id="setupList"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="pad">
+        <div class="ask">
+          <input class="in" id="askQ" placeholder="Ask Claude about your day, a person, or a draft" aria-label="Ask Claude">
+          <button class="btn solid" type="button" id="askGo">Ask</button>
+        </div>
+        <div class="out" id="askOut" hidden></div>
+      </div>
+    </div>
+
+    <div id="secs" class="wrap" style="gap:16px">
+    <div class="sec wrap" data-sec="inbox" style="gap:14px">
+    <div class="card" id="c-inbox">
+      <div class="pad">
+        <h2>Inbox, sorted by what it needs from you</h2>
+        <p class="sub" id="headline">Your email shows here once Gmail is connected.</p>
+        <div class="chips" id="filters"></div>
+      </div>
+    </div>
+    <div id="board" class="wrap" style="gap:14px"></div>
+    <div class="headrow"><button class="btn ghost small" type="button" id="showOff">Show done and snoozed (0)</button></div>
+    </div>
+    <div class="sec wrap" data-sec="cal" style="gap:14px">
+    <div class="card" id="c-cal">
+      <div class="pad">
+        <h2>Today and tomorrow</h2>
+        <div id="cal"><p class="sub">Your meetings show here once Google Calendar is connected.</p></div>
+      </div>
+    </div>
+    </div>
+    <div class="sec wrap" data-sec="tasks" style="gap:14px">
+    <div class="card" id="c-tasks">
+      <div class="pad">
+        <h2>My tasks</h2>
+        <div class="ask">
+          <input class="in" id="taskIn" placeholder="Add a task" aria-label="New task">
+          <input class="in" id="taskDue" type="date" aria-label="Due date" style="flex:0 1 170px">
+          <button class="btn solid" type="button" id="taskAdd">Add</button>
+        </div>
+        <label class="status" id="todoWrap" hidden><input type="checkbox" id="toTodoist" checked> Also add new tasks to Todoist</label>
+        <p class="status" id="taskNote"></p>
+      </div>
+      <div id="tasks"></div>
+    </div>
+    </div>
+    <div class="sec wrap" data-sec="research" style="gap:14px">
+    <div class="card" id="c-res">
+      <div class="pad">
+        <h2>What you've been researching</h2>
+        <p class="sub" id="resHead">Your recent Claude and ChatGPT research shows here, each with a suggested follow-up, once you connect them in the setup steps above.</p>
+        <div id="research"></div>
+      </div>
+    </div>
+    </div>
+    <div class="sec wrap" data-sec="docs" style="gap:14px">
+    <div class="card" id="c-docs">
+      <div class="pad">
+        <h2>Recent documents</h2>
+        <p class="sub" id="docsHead">The Google Drive files you've been working on show here once Google Drive is connected in the setup steps.</p>
+      </div>
+      <div id="docs"></div>
+    </div>
+    </div>
+    <div class="sec wrap" data-sec="links" style="gap:14px">
+    <div class="card" id="c-links">
+      <div class="pad">
+        <h2>Quick links</h2>
+        <div class="chips" id="links"></div>
+        <details id="addLinkBox">
+          <summary class="status" style="cursor:pointer">Add your own link</summary>
+          <div class="ask" style="margin-top:8px">
+            <input class="in" id="lnName" placeholder="Name, e.g. Booking.com extranet" aria-label="Link name" style="flex:1 1 160px">
+            <input class="in" id="lnUrl" placeholder="https://" aria-label="Link address" style="flex:2 1 220px">
+            <button class="btn" type="button" id="lnAdd">Add</button>
+          </div>
+          <p class="status" id="lnNote"></p>
+        </details>
+      </div>
+    </div>
+    </div>
+    </div>
+  </section>
+
+  <!-- CONNECTIONS -->
+  <section id="p-conn" role="tabpanel" aria-labelledby="t-conn" hidden class="wrap" style="gap:16px">
+    <div class="card note"><div class="pad">
+      <h2>Your data sources</h2>
+      <p class="sub">Work through the list from the top. Gmail, Calendar and Drive all connect with one Google sign-in. Everything uses your own accounts and stays in your browser. Nothing is sent to anyone else.</p>
+      <div id="setupList2"></div>
+    </div></div>
+    <input type="file" id="f-chatgpt" accept=".zip,.json,application/zip,application/json" hidden>
+    <input type="file" id="f-claude" accept=".zip,.json,application/zip,application/json" hidden>
+    <div class="card">
+      <div class="conn">
+        <span class="nm">WhatsApp</span><span class="ds">Ready to use, nothing to connect. Every draft has Send on WhatsApp, and every email and task has Share on WhatsApp in its Ask menu. WhatsApp opens with the text filled in and you pick the chat. Reading your WhatsApp chats isn't possible: WhatsApp doesn't let other apps read personal chats.</span>
+        <div class="right"><span class="pill ok">Ready</span></div>
+      </div>
+      <div class="conn">
+        <span class="nm">How your research is kept</span><span class="ds">Only titles, your questions and short summaries are kept, on this device only. Delete them any time.</span>
+        <div class="right"><button class="btn small ghost" type="button" id="wipeRes">Delete my research data</button></div>
+      </div>
+    </div>
+    <div class="headrow"><button class="btn ghost" type="button" id="manage">Sign out and disconnect Google</button></div>
+  </section>
+
+  <!-- INSTALL -->
+  <section id="p-inst" role="tabpanel" aria-labelledby="t-inst" hidden class="wrap" style="gap:16px">
+    <div class="card note"><div class="pad">
+      <h2>Put your execution page on your home screen</h2>
+      <p class="sub">There's nothing to download. It's this page, pinned so it opens like an app. Everyone uses the same link and each person sees only their own email and calendar.</p>
+      <div class="ask"><input class="in" id="link" readonly aria-label="Link to this page"><button class="btn" type="button" id="copy">Copy link</button></div>
+    </div></div>
+    <div class="two">
+      <div class="card"><div class="pad">
+        <h2>iPhone</h2>
+        <ol class="steps">
+          <li>Open the page in Safari and sign in with Google.</li>
+          <li>Tap the Share button at the bottom.</li>
+          <li>Scroll down and tap Add to Home Screen.</li>
+          <li>Keep the name Owner Execution Pages and tap Add.</li>
+        </ol>
+      </div></div>
+      <div class="card"><div class="pad">
+        <h2>Android</h2>
+        <ol class="steps">
+          <li>Open the page in Chrome and sign in with Google.</li>
+          <li>Tap the three-dot menu at the top right.</li>
+          <li>Tap Add to Home screen (or Install app).</li>
+          <li>Keep the name and tap Add.</li>
+        </ol>
+      </div></div>
+      <div class="card"><div class="pad">
+        <h2>Computer</h2>
+        <ol class="steps">
+          <li>Open the page in Chrome or Edge and sign in with Google.</li>
+          <li>Click the install icon at the right end of the address bar, or open the three-dot menu and choose Cast, save and share, then Install page as app (Edge: Apps, then Install this site as an app).</li>
+          <li>It opens in its own window. Right-click its icon to pin it to the taskbar or dock.</li>
+        </ol>
+      </div></div>
+    </div>
+    <div class="card"><div class="pad">
+      <h2>Good to know</h2>
+      <ol class="steps">
+        <li>Your Google sign-in lasts about an hour at a time. The page renews it by itself. If it asks you to sign in again, tap Continue with Google.</li>
+        <li>The page refreshes itself each time you open it and every 10 minutes while it's open.</li>
+        <li>Without a Claude API key, your inbox is sorted by simple rules. Adding a key (optional) turns on smarter sorting, drafts and follow-ups.</li>
+        <li>Each person signs in with their own Google account and only ever sees their own email, calendar and files.</li>
+      </ol>
+    </div></div>
+  </section>
+</div>
+
+
+<noscript><p style="padding:16px">This page needs JavaScript.</p></noscript>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="config.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="connectors.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
