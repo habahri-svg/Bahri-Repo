@@ -9,6 +9,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import org.json.JSONArray
+import org.json.JSONObject
 
 class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, i: Intent) {
@@ -27,13 +29,37 @@ class ReminderReceiver : BroadcastReceiver() {
 
     companion object {
         /** Inexact alarms avoid the exact-alarm permission. Reminders are lost after a reboot. */
-        fun schedule(ctx: Context, title: String, text: String, at: Long) {
+        fun schedule(ctx: Context, title: String, text: String, at: Long, persist: Boolean = true) {
+            if (persist) save(ctx, title, text, at)
             val id = (title + text + at).hashCode()
             val i = Intent(ctx, ReminderReceiver::class.java)
                 .putExtra("title", title).putExtra("text", text).putExtra("id", id)
             val pi = PendingIntent.getBroadcast(ctx, id, i, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+        }
+    }
+
+        private fun store(ctx: Context) = ctx.getSharedPreferences("reminders", Context.MODE_PRIVATE)
+
+        private fun save(ctx: Context, title: String, text: String, at: Long) {
+            val arr = JSONArray(store(ctx).getString("list", "[]"))
+            arr.put(JSONObject().put("t", title).put("x", text).put("at", at))
+            store(ctx).edit().putString("list", arr.toString()).apply()
+        }
+
+        /** Called after a reboot. Future reminders are re-armed, overdue ones fire right away. */
+        fun restoreAll(ctx: Context) {
+            val now = System.currentTimeMillis()
+            val arr = JSONArray(store(ctx).getString("list", "[]"))
+            val keep = JSONArray()
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                val at = o.getLong("at")
+                schedule(ctx, o.getString("t"), o.getString("x"), maxOf(at, now + 5000), persist = false)
+                if (at > now) keep.put(o)
+            }
+            store(ctx).edit().putString("list", keep.toString()).apply()
         }
     }
 }

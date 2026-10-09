@@ -22,6 +22,8 @@ Reply in the same language as the transcript. Return ONLY a JSON object with the
 "sentiment": one of "positive","neutral","negative","tense".
 Never invent details that are not in the transcript."""
 
+    fun hasAi(f: File) = Store.readMeta(f).has("ai")
+
     fun process(ctx: Context, audio: File): Result<Unit> = runCatching {
         val s = AppSettings(ctx)
         require(s.openAiKey.isNotBlank()) { "Add your OpenAI key in Settings" }
@@ -50,6 +52,7 @@ Never invent details that are not in the transcript."""
     }
 
     private fun transcribe(f: File, key: String): String {
+        if (f.length() > 24_000_000) error("Recording is over the 25 MB transcription limit")
         val b = "----callvault${System.currentTimeMillis()}"
         val c = URL("https://api.openai.com/v1/audio/transcriptions").openConnection() as HttpURLConnection
         c.requestMethod = "POST"
@@ -72,13 +75,34 @@ Never invent details that are not in the transcript."""
     }
 
     private fun analyse(transcript: String, contact: String, key: String): JSONObject {
+        val text = claude(SYSTEM, "Contact: ${contact.ifBlank { "unknown" }}\n\nTranscript:\n$transcript", key, 1500)
+        return JSONObject(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1))
+    }
+
+    /** Free-form question answered from the user's saved call notes. */
+    fun ask(ctx: Context, question: String): Result<String> = runCatching {
+        val key = AppSettings(ctx).anthropicKey
+        require(key.isNotBlank()) { "Add your Anthropic key in Settings" }
+        val sb = StringBuilder()
+        Store.audioFiles(ctx).take(40).forEach { f ->
+            val m = Store.readMeta(f)
+            val a = m.optJSONObject("ai")
+            sb.append("--- Call with ").append(m.optString("contact").ifBlank { "unknown" })
+                .append(" on ").append(fmtDate(f.lastModified())).append("\n")
+            if (a != null) sb.append(a.optString("summary")).append("\nActions: ").append(a.optJSONArray("action_items") ?: "[]")
+                .append("\nFacts: ").append(a.optJSONArray("key_facts") ?: "[]").append("\n")
+            sb.append(m.optString("transcript").take(3000)).append("\n")
+        }
+        claude("You answer questions about the user's recorded phone calls using only the call notes provided. Say when the notes do not contain the answer. Reply in the language of the question.",
+            "CALL NOTES:\n$sb\n\nQUESTION: $question", key, 1200)
+    }
+
+    private fun claude(system: String, user: String, key: String, maxTokens: Int): String {
         val body = JSONObject()
             .put("model", CLAUDE_MODEL)
-            .put("max_tokens", 1500)
-            .put("system", SYSTEM)
-            .put("messages", JSONArray().put(JSONObject()
-                .put("role", "user")
-                .put("content", "Contact: ${contact.ifBlank { "unknown" }}\n\nTranscript:\n$transcript")))
+            .put("max_tokens", maxTokens)
+            .put("system", system)
+            .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", user)))
         val c = URL("https://api.anthropic.com/v1/messages").openConnection() as HttpURLConnection
         c.requestMethod = "POST"
         c.doOutput = true
@@ -88,8 +112,7 @@ Never invent details that are not in the transcript."""
         c.setRequestProperty("anthropic-version", "2023-06-01")
         c.setRequestProperty("content-type", "application/json")
         c.outputStream.use { it.write(body.toString().toByteArray()) }
-        val text = JSONObject(readBody(c)).getJSONArray("content").getJSONObject(0).getString("text")
-        return JSONObject(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1))
+        return JSONObject(readBody(c)).getJSONArray("content").getJSONObject(0).getString("text")
     }
 
     private fun readBody(c: HttpURLConnection): String {

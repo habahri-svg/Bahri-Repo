@@ -36,6 +36,7 @@ class MainActivity : Activity() {
         val row2 = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             addView(button("3. Battery") { batterySettings() })
+            addView(button("Ask AI") { startActivity(Intent(this@MainActivity, ChatActivity::class.java)) })
             addView(button("Settings") { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) })
         }
         search = EditText(this).apply {
@@ -53,6 +54,7 @@ class MainActivity : Activity() {
         listOf(status, row1, row2, search, list).forEach { root.addView(it) }
         setContentView(root)
 
+        lockIfNeeded()
         if (!AppSettings(this).consented) {
             AlertDialog.Builder(this)
                 .setTitle("Before you record")
@@ -67,6 +69,36 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         refresh()
+        retryPendingAi()
+    }
+
+    private var unlocked = false
+
+    private fun lockIfNeeded() {
+        val pin = AppSettings(this).pin
+        if (pin.isEmpty() || unlocked) return
+        val box = EditText(this).apply {
+            hint = "PIN"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
+        }
+        AlertDialog.Builder(this).setTitle("CallVault is locked").setView(box).setCancelable(false)
+            .setPositiveButton("Unlock") { _, _ ->
+                if (box.text.toString() == pin) unlocked = true else { lockIfNeeded(); finish() }
+            }
+            .setNegativeButton("Exit") { _, _ -> finish() }.show()
+    }
+
+    /** Calls recorded while offline (or before keys were added) get analysed when the app opens. */
+    private fun retryPendingAi() {
+        val s = AppSettings(this)
+        if (!s.autoAi || s.openAiKey.isBlank() || s.anthropicKey.isBlank()) return
+        val pending = Store.audioFiles(this).filter { !Ai.hasAi(it) }.take(3)
+        if (pending.isEmpty()) return
+        val ctx = applicationContext
+        Thread {
+            pending.forEach { Ai.process(ctx, it) }
+            runOnUiThread { refresh() }
+        }.start()
     }
 
     private fun accessibilityOn(): Boolean {

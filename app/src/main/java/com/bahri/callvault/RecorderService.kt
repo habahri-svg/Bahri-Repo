@@ -86,7 +86,7 @@ class RecorderService : Service() {
         val f = File(Store.dir(this), "call_$stamp.m4a")
         val r = if (Build.VERSION.SDK_INT >= 31) MediaRecorder(this) else MediaRecorder()
         // Some devices refuse VOICE_RECOGNITION while another app holds the mic, so fall back to MIC.
-        val ok = listOf(MediaRecorder.AudioSource.VOICE_RECOGNITION, MediaRecorder.AudioSource.MIC).any { src ->
+        val ok = listOf(MediaRecorder.AudioSource.VOICE_RECOGNITION, MediaRecorder.AudioSource.MIC, MediaRecorder.AudioSource.CAMCORDER, MediaRecorder.AudioSource.UNPROCESSED).any { src ->
             try {
                 r.reset()
                 r.setAudioSource(src)

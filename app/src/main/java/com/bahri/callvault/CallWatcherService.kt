@@ -12,13 +12,28 @@ import android.view.accessibility.AccessibilityNodeInfo
  */
 class CallWatcherService : AccessibilityService() {
 
+    private var lastArm = 0L
+
     override fun onAccessibilityEvent(e: AccessibilityEvent) {
-        if (e.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
-        val cls = e.className?.toString() ?: return
-        if (!cls.contains("voip", ignoreCase = true)) return
         if (!AppSettings(this).autoRecord) return
+        val pkg = e.packageName?.toString() ?: return
+        if (pkg != "com.whatsapp" && pkg != "com.whatsapp.w4b") return
+
+        val cls = e.className?.toString().orEmpty()
+        val voipScreen = e.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
+            cls.contains("voip", ignoreCase = true)
+        // Fallback that survives WhatsApp renaming its screens: any WhatsApp window or
+        // notification event while the system is in a VoIP call.
+        val audio = getSystemService(AUDIO_SERVICE) as android.media.AudioManager
+        val liveCall = audio.mode == android.media.AudioManager.MODE_IN_COMMUNICATION
+        if (!voipScreen && !liveCall) return
+
+        val now = System.currentTimeMillis()
+        if (now - lastArm < 5000) return
+        lastArm = now
 
         val name = findContactName(rootInActiveWindow)
+            ?: e.text?.firstOrNull()?.toString()?.takeIf { e.eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED && it.length < 60 }
         val i = Intent(this, RecorderService::class.java)
             .setAction(RecorderService.ACTION_ARM)
             .putExtra(RecorderService.EXTRA_CONTACT, name)

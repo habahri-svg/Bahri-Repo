@@ -12,6 +12,7 @@ class SettingsActivity : Activity() {
     private lateinit var openAi: EditText
     private lateinit var claude: EditText
     private lateinit var retention: EditText
+    private lateinit var pin: EditText
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
@@ -32,6 +33,7 @@ class SettingsActivity : Activity() {
         claude = field("Anthropic API key (summaries)", s.anthropicKey, true)
         retention = field("Delete recordings after N days (0 = never)", s.retentionDays.toString())
 
+        pin = field("App lock PIN (leave empty for none)", s.pin, true)
         col.addView(sw("Record WhatsApp calls automatically", s.autoRecord) { s.autoRecord = it })
         col.addView(sw("Use speakerphone while recording (needed to capture the other side)", s.speaker) { s.speaker = it })
         col.addView(sw("Run AI after every call", s.autoAi) { s.autoAi = it })
@@ -40,6 +42,8 @@ class SettingsActivity : Activity() {
         col.addView(claude)
         col.addView(label("Storage", 16f, true))
         col.addView(retention)
+        col.addView(label("Privacy", 16f, true))
+        col.addView(pin)
         col.addView(label("Keys stay on this phone and are sent only to OpenAI and Anthropic. Audio is uploaded to OpenAI for transcription, the text goes to Anthropic.", 12f))
         setContentView(ScrollView(this).apply { addView(col) })
     }
@@ -47,6 +51,7 @@ class SettingsActivity : Activity() {
     override fun onPause() {
         s.openAiKey = openAi.text.toString()
         s.anthropicKey = claude.text.toString()
+        s.pin = pin.text.toString()
         s.retentionDays = retention.text.toString().toIntOrNull() ?: 0
         super.onPause()
     }

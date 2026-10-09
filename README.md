@@ -21,13 +21,15 @@ Android app that records WhatsApp calls automatically, then uses AI to transcrib
 - `ReminderReceiver` turns each follow-up into a notification at the due date.
 - Everything lives in the app's private folder `Android/data/com.bahri.callvault/files/recordings` (m4a plus a json sidecar).
 
-## Honest limitations
-- **Android blocks direct capture of VoIP audio.** There is no supported way to grab WhatsApp's call stream. CallVault records the microphone, so the other person is only audible through the speaker. That's why speakerphone is forced on by default. Quality depends on the phone and Android version, and some devices silence the mic while WhatsApp is using it. Test with a short call first.
-- Call-screen detection matches WhatsApp's class names. A WhatsApp update could break it, in which case detection needs a small tweak.
+## Limitations that remain
+- **Android blocks direct capture of VoIP audio.** Without root there is no supported way to grab WhatsApp's call stream, so CallVault records the microphone and forces speakerphone on. Quality depends on the phone, and some phones silence the mic while WhatsApp is using it. Test with a short call first.
+- Call detection has two layers (WhatsApp call screen names, plus a system audio-mode fallback), but a future WhatsApp redesign could still need a small tweak.
 - Contact name capture is best effort and may show "Unknown contact".
-- Reminders are not restored after a reboot.
-- API keys are stored in plain app-private preferences.
+- Transcription is capped at about 100 minutes per call (25 MB Whisper limit).
 - This code has not been compiled or run on a device yet.
+
+## Added in v1.1
+Reminders survive reboots, API keys and the PIN are encrypted on-device, calls recorded offline are analysed automatically when you next open the app, extra microphone-source fallbacks, and an "Ask AI" screen that answers questions across all your calls.
 
 ## Legal
 Recording calls without consent is illegal in many places. You are responsible for following local law and informing the other party where required.
