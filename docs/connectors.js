@@ -22,6 +22,14 @@
   };
   var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
   var cerr = function (code, message) { var e = new Error(message || code); e.code = code; return e; };
+  /* A family link like https://site/#cid=123.apps.googleusercontent.com sets the Client ID on that person's device, once. */
+  try {
+    var hm = location.hash.match(/[#&]cid=([^&]+)/);
+    if (hm && /\.apps\.googleusercontent\.com$/.test(decodeURIComponent(hm[1]))) {
+      ls.set(KEY.cid, decodeURIComponent(hm[1]));
+      history.replaceState(null, "", location.pathname + location.search);
+    }
+  } catch (e) {}
   var clientId = function () { return String(CFG.GOOGLE_CLIENT_ID || ls.get(KEY.cid) || "").trim(); };
   var configured = function () { return /\.apps\.googleusercontent\.com$/.test(clientId()); };
 
@@ -270,6 +278,8 @@
 
   var google_ = {
     configured: configured,
+    clientId: clientId,
+    fromConfigFile: function () { return !!String(CFG.GOOGLE_CLIENT_ID || "").trim(); },
     setClientId: function (v) { ls.set(KEY.cid, String(v || "").trim()); },
     connected: connected,
     wasConnected: function () { return !!ls.get(KEY.flag); },

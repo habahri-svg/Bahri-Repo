@@ -215,6 +215,7 @@ function showWelcome(){
   const w=$("welcome");w.hidden=false;
   if(!G.configured()){$("wTitle").textContent="One-time setup needed";$("wText").textContent="Google needs to know this site before anyone can sign in. Follow the steps below once, paste the Client ID, and the Continue with Google button turns on.";$("wBtn").disabled=true;$("wSetup").hidden=false;$("wOrigin").textContent=location.origin;return}
   $("wBtn").disabled=false;
+  if(!G.fromConfigFile()){$("wFamily").hidden=false;$("wFamLink").value=location.origin+location.pathname+"#cid="+encodeURIComponent(G.clientId())}
   const n=lastName();if(n){$("wTitle").textContent="Welcome back, "+n.split(" ")[0];$("wText").textContent="Tap Continue with Google to reconnect. Your board loads straight away."}
 }
 function renderHello(){
@@ -260,6 +261,7 @@ function removeAiKey(){Connectors.ai.clear();sample=Connectors.makeSample();rend
 const gateUi=()=>{};
 $("wBtn").onclick=()=>connectGoogle();
 const copyBtn=(id,text,label)=>{$(id).onclick=()=>navigator.clipboard.writeText(text()).then(()=>{$(id).textContent="Copied";setTimeout(()=>$(id).textContent=label,1500)}).catch(()=>{$(id).textContent="Copy by hand"})};
+copyBtn("wFamCopy",()=>$("wFamLink").value,"Copy link");
 copyBtn("wCopyOrigin",()=>location.origin,"Copy address");
 copyBtn("wCopyScopes",()=>["https://www.googleapis.com/auth/gmail.readonly","https://www.googleapis.com/auth/gmail.compose","https://www.googleapis.com/auth/calendar.readonly","https://www.googleapis.com/auth/drive.metadata.readonly"].join("\n"),"Copy scopes");
 $("wSave").onclick=()=>{const v=$("wClient").value.trim();if(!/\.apps\.googleusercontent\.com$/.test(v)){$("wMsg").textContent="That doesn't look like a Client ID. It ends in .apps.googleusercontent.com";return}G.setClientId(v);location.reload()};

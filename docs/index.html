@@ -183,6 +183,11 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       <p class="sub" id="wText">Sign in with Google once. Your inbox, meetings and recent documents load straight away, and the page is then set up just for you. Nobody else can see your data.</p>
       <div class="headrow"><button class="btn solid" type="button" id="wBtn">Continue with Google</button></div>
       <p class="status err" id="wMsg"></p>
+      <div id="wFamily" hidden>
+        <p class="sub"><b>Sharing this with family or staff?</b> Send them this link. It carries the sign-in setting, so they only tap Continue with Google.</p>
+        <div class="ask"><input class="in" id="wFamLink" readonly aria-label="Family link"><button class="btn" type="button" id="wFamCopy">Copy link</button></div>
+      </div>
+      <p class="sub" id="wAskOwner" hidden>This site isn't set up for sign-in on this device yet. Ask the person who sent you the link to send you their family link, or use the owner's steps below.</p>
       <div id="wSetup" hidden>
         <p class="sub"><b>Set up Google sign-in (about 5 minutes, one time).</b></p>
         <ol class="steps">
