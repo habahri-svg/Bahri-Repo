@@ -44,6 +44,29 @@ body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px
 .wrap{max-width:900px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
 .wrap .wrap{width:100%;max-width:none}
 header{display:flex;flex-direction:column;gap:6px}
+.hero{gap:10px;padding:18px 18px 16px;border-radius:14px;color:#fff;background:linear-gradient(135deg,#104b70 0%,#0b3350 100%);box-shadow:0 6px 20px rgba(11,51,80,.25)}
+.hero .eyebrow{color:#e5c06a}
+.hero h1{color:#fff;font-size:30px;line-height:1.15}
+.herotop{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:9px}
+.herouser{display:flex;align-items:center;gap:8px;font-size:13px;color:rgba(255,255,255,.85);overflow-wrap:anywhere}
+.herodate{margin:0;color:rgba(255,255,255,.78);font-size:14px}
+.herosum{margin:0;font-size:16px;font-weight:500;color:#fff}
+.herosum:empty{display:none}
+.herostats{display:flex;flex-wrap:wrap;gap:8px}
+.herostats:empty{display:none}
+.hstat{display:flex;flex-direction:column;align-items:flex-start;gap:0;min-width:92px;padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.1);color:#fff;text-align:left}
+.hstat:hover,.hstat:focus-visible{background:rgba(255,255,255,.2)}
+.hstat b{font-size:24px;line-height:1.1;font-variant-numeric:tabular-nums}
+.hstat span{font-size:12px;color:rgba(255,255,255,.82)}
+.hstat i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.herorefresh{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.hero .btn{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.45)}
+.hero .btn:hover{background:rgba(255,255,255,.22)}
+.hero .status{color:rgba(255,255,255,.82)}
+.hero .status.err{color:#ffd0cc}
+.hero .spin{border-color:rgba(255,255,255,.3);border-top-color:#fff}
+@media (max-width:480px){.hero h1{font-size:26px}.hstat{min-width:calc(50% - 4px)}}
 .eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);font-weight:700}
 h1{margin:0;font-size:26px;color:var(--navy);text-wrap:balance}
 h2{margin:0;font-size:17px;color:var(--fg)}
@@ -163,17 +186,21 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <span class="eyebrow">WYZ Rent · Execution Page</span>
-    <h1 id="hello">Your execution page</h1>
-    <p class="sub" id="today"></p>
-    <div class="headrow" id="who" hidden>
-      <img id="avatar" alt="" width="28" height="28" style="border-radius:50%" referrerpolicy="no-referrer">
-      <span class="status" id="whoName"></span>
-      <button class="btn small ghost" type="button" id="signOut">Sign out</button>
+  <header class="hero">
+    <div class="herotop">
+      <span class="brand"><svg class="logo" viewBox="0 0 64 64" width="26" height="26" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#d8a23c"/><path d="M18 34l10 10 18-22" fill="none" stroke="#0b3350" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="eyebrow">WYZ Rent · Execution Page</span></span>
+      <div class="herouser" id="who" hidden>
+        <img id="avatar" alt="" width="28" height="28" style="border-radius:50%" referrerpolicy="no-referrer">
+        <span id="whoName"></span>
+        <button class="btn small" type="button" id="signOut">Sign out</button>
+      </div>
     </div>
-    <div class="headrow">
-      <button class="btn solid" type="button" id="refresh">Refresh now</button>
+    <h1 id="hello">Your execution page</h1>
+    <p class="herodate" id="today"></p>
+    <p class="herosum" id="heroSum"></p>
+    <div class="herostats" id="heroStats"></div>
+    <div class="herorefresh">
+      <button class="btn" type="button" id="refresh">Refresh now</button>
       <span class="status" id="fresh">Not loaded yet</span>
     </div>
   </header>

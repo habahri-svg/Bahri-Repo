@@ -253,9 +253,33 @@ function showWelcome(){
   if(!G.fromConfigFile()){$("wFamily").hidden=false;$("wFamLink").value=location.origin+location.pathname+"#cid="+encodeURIComponent(G.clientId())}
   const n=lastName();if(n){$("wTitle").textContent="Welcome back, "+n.split(" ")[0];$("wText").textContent="Tap Continue with Google to reconnect. Your board loads straight away."}
 }
+function goSec(k){
+  collapsed.delete(SEC_CARD[k]);saveCol();applyCol();
+  const e=document.querySelector('[data-sec="'+k+'"]');
+  if(e){const y=e.getBoundingClientRect().top+window.scrollY-$("toolbar").offsetHeight-8;window.scrollTo({top:y,behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"})}
+}
+/* the banner: a one-line read on the day, plus counts that jump to the right section */
+function updateHero(){
+  const box=$("heroStats"),sum=$("heroSum");
+  if(!uid||!G.connected()){box.replaceChildren();sum.textContent="";return}
+  const s=summaryPayload();
+  const now=Date.now();
+  const next=(events||[]).filter(x=>x.start&&x.start.dateTime&&Date.parse(x.start.dateTime)>now).sort((a,b)=>Date.parse(a.start.dateTime)-Date.parse(b.start.dateTime))[0];
+  const parts=[];
+  if(s.emails_to_reply)parts.push(s.emails_to_reply+" email"+(s.emails_to_reply>1?"s":"")+" to reply to");
+  if(s.follow_ups)parts.push(s.follow_ups+" to chase");
+  if(s.meetings_today)parts.push(s.meetings_today+" meeting"+(s.meetings_today>1?"s":""));
+  let line=parts.length?"Today: "+parts.join(", ")+".":(board?"You're clear for now. Nothing urgent is waiting.":"");
+  if(next)line+=" Next up at "+fmtTime(next.start.dateTime)+": "+clip(next.summary||"Meeting",50)+".";
+  sum.textContent=line;
+  const defs=[["Reply today",s.emails_to_reply,"#d6453d",()=>{flt="reply";renderBoard();goSec("inbox")}],["Follow up",s.follow_ups,"#e08a2e",()=>{flt="follow";renderBoard();goSec("inbox")}],["Meetings today",s.meetings_today,"#9cc9e8",()=>goSec("cal")],["Open tasks",s.tasks_open,"#45a843",()=>goSec("tasks")]];
+  box.replaceChildren();
+  defs.forEach(([label,n,color,fn])=>{const b=el("button","hstat");b.type="button";b.append(el("b","",String(n)));const l=el("span");const dot=el("i");dot.style.background=color;l.append(dot,label);b.append(l);b.onclick=fn;b.setAttribute("aria-label",n+" "+label);box.append(b)});
+}
 function renderHello(){
   const h=new Date().getHours();
   $("hello").textContent=myName?(h<12?"Good morning, ":h<18?"Good afternoon, ":"Good evening, ")+myName.split(" ")[0]:"Your execution page";
+  try{updateHero()}catch(e){}
   $("who").hidden=!uid;
   if(uid){$("whoName").textContent=email||myName;const a=$("avatar");if(pic){a.src=pic;a.hidden=false}else a.hidden=true}
 }
@@ -313,6 +337,7 @@ async function loadCal(){
   }catch(err){if(!errToConn("Google Calendar",err)){$("cal").replaceChildren(el("p","status err","Couldn't read your calendar just now: "+(err&&err.message||"try Refresh now")))}else renderCal()}
 }
 function renderCal(){
+  try{updateHero()}catch(e){}
   const host=$("cal");host.replaceChildren();
   if(connState["Google Calendar"]!=="ok"){host.append(el("p","sub","Your meetings show here once Google Calendar is connected."));return}
   const t=new Date(),tm=new Date();tm.setDate(tm.getDate()+1);
@@ -528,6 +553,7 @@ const tById=id=>threads.find(t=>t.id===id)||found.find(t=>t.id===id);
 const todayKey=()=>ymd(new Date());
 const isOff=i=>!!state.done[i.id]||(state.snooze[i.id]&&state.snooze[i.id]>todayKey());
 function renderBoard(){
+  try{updateHero()}catch(e){}
   const host=$("board");host.replaceChildren();
   if(!board){return}
   $("headline").textContent=board.headline||"";
@@ -751,6 +777,7 @@ async function pushTodoist(text,due){
   try{await mcp.callTool(TODO,"add-tasks",{tasks:[Object.assign({content:text},due?{dueString:due}:{})]});loadTodoist()}catch(e){$("taskNote").textContent="Saved here. Couldn't also add it to Todoist just now."}
 }
 function renderTasks(){
+  try{updateHero()}catch(e){}
   const host=$("tasks");if(!host)return;host.replaceChildren();
   const mine=(state.tasks||[]).filter(t=>!t.done);
   const rows=[...mine.map(t=>({k:"me",t})),...(todo.state==="ok"?todo.tasks.map(t=>({k:"td",t})):[])];
