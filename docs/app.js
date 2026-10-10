@@ -114,7 +114,8 @@ function renderSetup(){
   const steps=stepDefs();try{reportStatus(steps)}catch(e){}const n=steps.filter(s=>s.done).length;
   $("progBar").style.width=Math.round(n/steps.length*100)+"%";
   $("setupTxt").textContent=n===steps.length?"All set. Everything below runs on your own accounts.":n+" of "+steps.length+" done. Sign in to each account below, one time. Everything uses your own accounts and nobody else sees your board.";
-  $("setupCard").hidden=n===steps.length;
+  const allDone=n===steps.length;
+  if(allDone!==setupComplete){setupComplete=allDone;if(allDone)collapsed.add("setupCard");else collapsed.delete("setupCard");saveCol();try{applyOrder();applyCol()}catch(e){}}
   try{gateUi()}catch(e){}
   ["setupList","setupList2"].forEach(id=>{
     const host=$(id);host.replaceChildren();
@@ -695,16 +696,19 @@ function makeCollapsible(card,key,hdr){card.dataset.col=key;hdr.classList.add("h
 $("colAll").onclick=()=>{document.querySelectorAll("#p-today [data-col]").forEach(c=>collapsed.add(c.dataset.col));ORDER.forEach(k=>collapsed.add("g-"+k));saveCol();applyCol()};
 $("expAll").onclick=()=>{collapsed.clear();saveCol();applyCol()};
 /* ---------- move sections up and down ---------- */
-const SEC_DEFAULT=["inbox","cal","tasks","research","docs","links"];
-function secOrder(){const o=((state&&state.order)||[]).filter(k=>SEC_DEFAULT.includes(k));SEC_DEFAULT.forEach(k=>{if(!o.includes(k))o.push(k)});return o}
-function updMoveBtns(){const o=secOrder();o.forEach((k,ix)=>{const e=document.querySelector('[data-sec="'+k+'"]');if(!e)return;e.querySelectorAll(".mv button").forEach(b=>{b.disabled=(b.dataset.d==="-1"&&ix===0)||(b.dataset.d==="1"&&ix===o.length-1)})})}
-const SEC_LABEL={inbox:"Inbox",cal:"Today and tomorrow",tasks:"My tasks",research:"Research",docs:"Documents",links:"Quick links"};
-const SEC_CARD={inbox:"c-inbox",cal:"c-cal",tasks:"c-tasks",research:"c-res",docs:"c-docs",links:"c-links"};
+const SEC_DEFAULT=["setup","inbox","cal","tasks","research","docs","links"];
+let setupComplete=false;   /* once every setup step is done or skipped, the setup card drops to the last row */
+function secOrder(){let o=((state&&state.order)||[]).filter(k=>SEC_DEFAULT.includes(k));if(!setupComplete&&!o.includes("setup"))o.unshift("setup");SEC_DEFAULT.forEach(k=>{if(!o.includes(k))o.push(k)});
+  if(setupComplete)o=o.filter(k=>k!=="setup").concat("setup");return o}
+const movableKeys=()=>secOrder().filter(k=>!(setupComplete&&k==="setup"));
+function updMoveBtns(){const o=secOrder(),m=movableKeys();o.forEach(k=>{const ix=m.indexOf(k);const e=document.querySelector('[data-sec="'+k+'"]');if(!e)return;e.querySelectorAll(".mv button").forEach(b=>{b.disabled=ix<0||(b.dataset.d==="-1"&&ix===0)||(b.dataset.d==="1"&&ix===m.length-1)})})}
+const SEC_LABEL={setup:"Setup",inbox:"Inbox",cal:"Today and tomorrow",tasks:"My tasks",research:"Research",docs:"Documents",links:"Quick links"};
+const SEC_CARD={setup:"setupCard",inbox:"c-inbox",cal:"c-cal",tasks:"c-tasks",research:"c-res",docs:"c-docs",links:"c-links"};
 function renderNav(){const n=$("secNav");n.replaceChildren();secOrder().forEach(k=>{const b=el("button","navchip",SEC_LABEL[k]);b.type="button";
   b.onclick=()=>{collapsed.delete(SEC_CARD[k]);if(k==="inbox")ORDER.forEach(x=>collapsed.delete("g-"+x));saveCol();applyCol();
     const e=document.querySelector('[data-sec="'+k+'"]');if(e){const y=e.getBoundingClientRect().top+window.scrollY-$("toolbar").offsetHeight-8;window.scrollTo({top:y,behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"})}};n.append(b)})}
 function applyOrder(){const host=$("secs");secOrder().forEach(k=>{const e=host.querySelector('[data-sec="'+k+'"]');if(e)host.append(e)});updMoveBtns();renderNav()}
-function moveSec(k,d){const o=secOrder();const a=o.indexOf(k),b=a+d;if(a<0||b<0||b>=o.length)return;[o[a],o[b]]=[o[b],o[a]];state.order=o;persist();applyOrder();
+function moveSec(k,d){const o=movableKeys();const a=o.indexOf(k),b=a+d;if(a<0||b<0||b>=o.length)return;[o[a],o[b]]=[o[b],o[a]];state.order=o;persist();applyOrder();
   const btn=document.querySelector('[data-sec="'+k+'"] .mv button[data-d="'+d+'"]');if(btn&&!btn.disabled)btn.focus();}
 document.querySelectorAll("[data-sec]").forEach(sec=>{const h=sec.querySelector(".pad > h2");if(!h)return;const name=h.textContent;const mv=el("span","mv");
   [["-1","\u2191","Move up"],["1","\u2193","Move down"]].forEach(([d,t,l])=>{const b=el("button","btn small ghost mvb",t);b.type="button";b.dataset.d=d;b.setAttribute("aria-label",l+": "+name);b.title=l;
