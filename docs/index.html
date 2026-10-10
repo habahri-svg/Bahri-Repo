@@ -107,6 +107,15 @@ ol.steps li::marker{color:var(--gold);font-weight:700}
 .status{font-size:13px;color:var(--soft)}
 .status.err{color:var(--d-reply);font-weight:600}
 .status:empty{display:none}
+.thr{position:fixed;inset:0;z-index:15;background:rgba(14,34,56,.6);display:flex;justify-content:flex-end}
+.thrbox{width:min(780px,100%);height:100%;overflow:auto;border-radius:0}
+.msg{border-top:1px solid var(--line);padding:8px 0}
+.msg:first-child{border-top:0}
+.msg summary{cursor:pointer;font-weight:600;overflow-wrap:anywhere}
+.msg pre{white-space:pre-wrap;font:inherit;overflow-wrap:anywhere;margin:8px 0 4px}
+.msg .meta{font-size:13px;color:var(--soft);font-weight:400}
+.found{display:flex;flex-direction:column}
+label.chk{display:flex;gap:6px;align-items:center}
 .onb{position:fixed;inset:0;z-index:20;background:rgba(14,34,56,.6);display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto}
 .onbbox{width:100%;max-width:520px;max-height:100%;overflow:auto;box-shadow:0 12px 40px rgba(14,34,56,.35)}
 .onbrow{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-top:1px solid var(--line)}
@@ -229,6 +238,11 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
         <h2>Inbox, sorted by what it needs from you</h2>
         <p class="sub" id="headline">Your email shows here once Gmail is connected.</p>
         <div class="chips" id="filters"></div>
+        <div class="ask">
+          <input class="in" id="mailQ" placeholder="Search your mail, for example from:ali or subject:invoice" aria-label="Search your mail">
+          <button class="btn" type="button" id="mailGo">Search</button>
+        </div>
+        <div id="mailRes" class="found"></div>
       </div>
     </div>
     <div id="board" class="wrap" style="gap:14px"></div>
@@ -373,6 +387,21 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
     <div id="onbBody" class="pad" style="padding:0"></div>
     <p class="status err" id="onbMsg"></p>
     <div class="headrow" id="onbActs"></div>
+  </div></div>
+</div>
+<div id="thr" class="thr" hidden role="dialog" aria-modal="true" aria-labelledby="thrTitle">
+  <div class="thrbox card"><div class="pad">
+    <div class="headrow"><h2 id="thrTitle" style="flex:1 1 200px;overflow-wrap:anywhere"></h2><a id="thrGmail" class="btn small" target="_blank" rel="noopener">Open in Gmail</a><button class="btn small" type="button" id="thrClose">Close</button></div>
+    <div id="thrBody"></div>
+    <div id="thrReply" hidden>
+      <h2>Reply</h2>
+      <span class="status">To</span><input class="in" id="thrTo" aria-label="To" autocomplete="off">
+      <label class="status chk"><input type="checkbox" id="thrAll"> Reply all</label>
+      <div id="thrCcWrap" hidden><span class="status">Cc</span><input class="in" id="thrCc" aria-label="Cc" autocomplete="off"></div>
+      <textarea id="thrText" aria-label="Your reply"></textarea>
+      <p class="status" id="thrSt"></p>
+      <div class="headrow"><button class="btn small" type="button" id="thrAI">Write it for me</button><button class="btn solid" type="button" id="thrSend">Send</button><button class="btn" type="button" id="thrSave">Save to Gmail drafts</button><button class="btn ghost" type="button" id="thrWA">Send on WhatsApp</button></div>
+    </div>
   </div></div>
 </div>
 <noscript><p style="padding:16px">This page needs JavaScript.</p></noscript>

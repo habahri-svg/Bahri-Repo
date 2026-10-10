@@ -144,11 +144,23 @@
     for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
     return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   }
-  function bodyOf(p) {
+  function findPart(p, type) {
     if (!p) return "";
-    if (p.mimeType === "text/plain" && p.body && p.body.data) return b64decode(p.body.data);
-    for (var i = 0; i < (p.parts || []).length; i++) { var t = bodyOf(p.parts[i]); if (t) return t; }
+    if (p.mimeType === type && p.body && p.body.data) return b64decode(p.body.data);
+    for (var i = 0; i < (p.parts || []).length; i++) { var t = findPart(p.parts[i], type); if (t) return t; }
     return "";
+  }
+  function htmlText(h) {
+    return h.replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/gi, "").replace(/<br\s*\/?>|<\/p>|<\/div>|<\/tr>|<\/li>/gi, "\n")
+      .replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\n{3,}/g, "\n\n").trim();
+  }
+  function bodyOf(p) { return findPart(p, "text/plain") || htmlText(findPart(p, "text/html")); }
+  function attachmentsOf(p, out) {
+    out = out || [];
+    if (!p) return out;
+    if (p.filename) out.push(p.filename);
+    (p.parts || []).forEach(function (c) { attachmentsOf(c, out); });
+    return out;
   }
   function slimMsg(m, withBody) {
     var o = {
@@ -157,10 +169,33 @@
       date: m.internalDate ? new Date(+m.internalDate).toISOString() : hdr(m, "Date"),
       viewUrl: threadUrl(m.threadId)
     };
-    if (withBody) o.plaintextBody = bodyOf(m.payload);
+    if (withBody) {
+      o.plaintextBody = bodyOf(m.payload);
+      o.ccRecipients = splitAddrs(hdr(m, "Cc"));
+      o.replyTo = hdr(m, "Reply-To");
+      o.attachments = attachmentsOf(m.payload);
+    }
     return o;
   }
   var META = "format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date";
+
+  async function buildMessage(a) {
+    var threadId = "", inReply = "", refs = "";
+    if (a.replyToMessageId) {
+      var o = await gfetch(GM + "/messages/" + encodeURIComponent(a.replyToMessageId) + "?format=metadata&metadataHeaders=Message-ID&metadataHeaders=References", null, SC.gmailDraft);
+      threadId = o.threadId; inReply = hdr(o, "Message-ID"); refs = hdr(o, "References");
+    }
+    var enc = function (s) { return /^[\x20-\x7e]*$/.test(s) ? s : "=?UTF-8?B?" + btoa(unescape(encodeURIComponent(s))) + "?="; };
+    var lines = ["To: " + (a.to || []).join(", ")];
+    if (a.cc && a.cc.length) lines.push("Cc: " + a.cc.join(", "));
+    lines.push("Subject: " + enc(a.subject || ""));
+    if (inReply) { lines.push("In-Reply-To: " + inReply); lines.push("References: " + (refs ? refs + " " : "") + inReply); }
+    lines.push("MIME-Version: 1.0", 'Content-Type: text/plain; charset="UTF-8"', "Content-Transfer-Encoding: base64", "");
+    var bodyB64 = btoa(unescape(encodeURIComponent(a.body || ""))).replace(/(.{76})/g, "$1\r\n");
+    var msg = { raw: b64url(lines.join("\r\n") + "\r\n" + bodyB64) };
+    if (threadId) msg.threadId = threadId;
+    return msg;
+  }
 
   var TOOLS = {
     "Gmail": {
@@ -184,20 +219,15 @@
       },
       create_draft: async function (a) {
         await profile();
-        var threadId = "", inReply = "", refs = "";
-        if (a.replyToMessageId) {
-          var o = await gfetch(GM + "/messages/" + encodeURIComponent(a.replyToMessageId) + "?format=metadata&metadataHeaders=Message-ID&metadataHeaders=References", null, SC.gmailDraft);
-          threadId = o.threadId; inReply = hdr(o, "Message-ID"); refs = hdr(o, "References");
-        }
-        var enc = function (s) { return /^[\x20-\x7e]*$/.test(s) ? s : "=?UTF-8?B?" + btoa(unescape(encodeURIComponent(s))) + "?="; };
-        var lines = ["To: " + (a.to || []).join(", "), "Subject: " + enc(a.subject || "")];
-        if (inReply) { lines.push("In-Reply-To: " + inReply); lines.push("References: " + (refs ? refs + " " : "") + inReply); }
-        lines.push("MIME-Version: 1.0", 'Content-Type: text/plain; charset="UTF-8"', "Content-Transfer-Encoding: base64", "");
-        var bodyB64 = btoa(unescape(encodeURIComponent(a.body || ""))).replace(/(.{76})/g, "$1\r\n");
-        var raw = b64url(lines.join("\r\n") + "\r\n" + bodyB64);
-        var msg = { raw: raw }; if (threadId) msg.threadId = threadId;
+        var msg = await buildMessage(a);
         var d = await gfetch(GM + "/drafts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: msg }) }, SC.gmailDraft);
         return { id: d.id, viewUrl: "https://mail.google.com/mail/?authuser=" + encodeURIComponent(mailTo()) + "#drafts" };
+      },
+      send_message: async function (a) {
+        await profile();
+        var msg = await buildMessage(a);
+        var m = await gfetch(GM + "/messages/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(msg) }, SC.gmailDraft);
+        return { id: m.id, threadId: m.threadId };
       }
     },
     "Google Calendar": {
@@ -325,9 +355,11 @@
       headers: { "content-type": "application/json", Authorization: "Bearer " + t },
       body: JSON.stringify({ tier: (opts && opts.modelTier) || "default", messages: messages, max_tokens: 8000 })
     });
-    if (r.status === 429) throw cerr("rate_limited", "Claude is busy or the daily limit was reached");
-    if (r.status === 401 || r.status === 403) throw cerr("tool_error", "Claude isn't available for this account");
-    if (!r.ok) throw cerr("tool_error", "Claude answered " + r.status);
+    var detail = "";
+    if (!r.ok) { try { detail = (await r.json()).error || ""; } catch (e) {} }
+    if (r.status === 429) throw cerr("rate_limited", detail || "Claude is busy or the daily limit was reached");
+    if (r.status === 401 || r.status === 403) throw cerr("tool_error", detail || "Claude isn't available for this account");
+    if (!r.ok) throw cerr("tool_error", detail || "Claude answered " + r.status);
     var j = await r.json();
     return { text: (j.content || []).filter(function (b) { return b.type === "text"; }).map(function (b) { return b.text; }).join("") };
   }

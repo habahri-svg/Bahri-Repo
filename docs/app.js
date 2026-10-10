@@ -374,7 +374,7 @@ async function triage(sig,force){
     state.claudeOk=1;board={sig,v2:1,items,headline:String(r&&r.headline||""),at:Date.now()};persist();renderSetup();renderBoard();setFresh("ok");
   }catch(err){
     const c=err&&err.code;
-    {const hb=heuristicBoard(sig,false);hb.headline=(c==="not_granted"?"Your Claude API key was rejected, so your inbox is sorted by simple rules. ":c==="rate_limited"?"Claude is busy, so your inbox is sorted by simple rules for now. ":"Couldn't use Claude just now, so your inbox is sorted by simple rules. ")+hb.headline;board=hb}
+    {const hb=heuristicBoard(sig,false);hb.headline=(c==="not_granted"?"Your Claude API key was rejected, so your inbox is sorted by simple rules. ":c==="rate_limited"?"Claude is busy, so your inbox is sorted by simple rules for now. ":"Couldn't use Claude just now ("+clip((err&&err.message)||"unknown reason",110)+"), so your inbox is sorted by simple rules. ")+hb.headline;board=hb}
     renderBoard();setFresh("ok");
   }
 }
@@ -407,8 +407,124 @@ function templateDraft(i,chase){
   return "Hi "+(first||"there")+",\n\n"+(chase?"Just following up on \""+(t.subject||"my last email")+"\". Could you let me know where this stands? [DETAIL]":"Thanks for your message about \""+(t.subject||"this")+"\". [DETAIL]")+"\n\nBest,\n"+me;
 }
 
+/* ---------- thread view: read the whole conversation and reply from the page ---------- */
+let found=[];
+let thr={id:"",msgs:[],item:null,armed:0,done:false};
+const addrs=l=>(l||[]).map(addrOf).filter(Boolean);
+const myAddr=()=>String(email||"").toLowerCase();
+function lastMsg(){return thr.msgs[thr.msgs.length-1]||{}}
+function replyTargets(all){
+  const last=lastMsg(),mine=myAddr();
+  const fromMe=addrOf(last.sender).toLowerCase()===mine;
+  const to=fromMe?addrs(last.toRecipients):[addrOf(last.replyTo||last.sender)];
+  const cc=all?addrs(last.ccRecipients).concat(fromMe?[]:addrs(last.toRecipients)):[];
+  const seen=new Set([mine]);
+  const clean=a=>a.filter(x=>x&&!seen.has(x.toLowerCase())&&seen.add(x.toLowerCase()));
+  const t=clean(to);
+  return {to:t.length?t:to,cc:clean(cc)};
+}
+function quoteOf(m){
+  const when=m.date?new Date(m.date).toLocaleString("en-GB",{dateStyle:"medium",timeStyle:"short"}):"";
+  const body=String(m.plaintextBody||m.snippet||"").split("\n").slice(0,40).join("\n").slice(0,3000).split("\n").map(l=>"> "+l).join("\n");
+  return "\n\nOn "+when+", "+(nameOf(m.sender)||m.sender)+" wrote:\n"+body;
+}
+function fillTargets(){
+  const all=$("thrAll").checked,t=replyTargets(all);
+  $("thrTo").value=t.to.join(", ");$("thrCc").value=t.cc.join(", ");$("thrCcWrap").hidden=!all;
+}
+function renderThread(){
+  const body=$("thrBody");body.replaceChildren();
+  if(!thr.msgs.length){body.append(el("p","status err","Couldn't load this conversation. Try Open in Gmail."));return}
+  thr.msgs.forEach((m,ix)=>{
+    const d=el("details","msg");if(ix>=thr.msgs.length-2)d.open=true;
+    const s=el("summary");s.append(document.createTextNode((nameOf(m.sender)||m.sender||"Unknown")+" "),el("span","meta","· "+(m.date?fmtWhen(m.date):"")+(addrOf(m.sender).toLowerCase()===myAddr()?" · you":"")));
+    d.append(s);
+    const to=(m.toRecipients||[]).map(x=>nameOf(x)||x).join(", ");
+    if(to)d.append(el("div","meta","To: "+to+((m.ccRecipients||[]).length?" · Cc: "+m.ccRecipients.map(x=>nameOf(x)||x).join(", "):"")));
+    d.append(el("pre","",String(m.plaintextBody||m.snippet||"(No text in this message)").trim()));
+    if((m.attachments||[]).length)d.append(el("div","meta","Attachments: "+m.attachments.join(", ")+" (open in Gmail to download)"));
+    body.append(d);
+  });
+}
+async function openThread(id,o){
+  o=o||{};const t=tById(id)||{};
+  thr={id,msgs:[],item:o.item||{id,st:"reply",title:t.subject||"",summary:t.snippet||""},armed:0,done:false};
+  $("thr").hidden=false;$("thrTitle").textContent=t.subject||"Conversation";
+  $("thrGmail").href=t.url||"https://mail.google.com/";
+  $("thrBody").replaceChildren(el("p","sub","Loading the conversation..."));
+  $("thrReply").hidden=true;$("thrSt").textContent="";$("thrSt").className="status";$("thrText").value="";$("thrAll").checked=false;
+  ["thrSend","thrSave","thrText","thrTo","thrCc"].forEach(k=>$(k).disabled=false);
+  $("thrSend").textContent="Send";$("thrAI").textContent=sample?"Write it with Claude":"Fill a template";
+  try{const r=await mcp.callTool("Gmail","get_thread",{threadId:id,messageFormat:"PLAIN_TEXT"},{cache:false});thr.msgs=(r.payload&&r.payload.messages)||[]}catch(e){thr.msgs=[]}
+  renderThread();
+  if(thr.msgs.length){$("thrReply").hidden=false;fillTargets();if(o.draft)thrDraft()}
+  $("thr").querySelector(".pad").scrollTop=0;
+}
+function thrChase(){const l=lastMsg();return thr.item.st==="follow"||thr.item.st==="wait"||addrOf(l.sender).toLowerCase()===myAddr()}
+async function thrDraft(){
+  const ta=$("thrText"),st=$("thrSt"),chase=thrChase();
+  st.className="status";st.textContent=sample?"Writing a draft with Claude...":"";ta.value="";
+  const text=thr.msgs.slice(-6).map(x=>"From: "+(x.sender||"")+"\nDate: "+(x.date||"")+"\n"+String(x.plaintextBody||x.snippet||"").slice(0,3000)).join("\n\n---\n\n");
+  try{
+    const r=!sample?{text:templateDraft(thr.item,chase)}:await sample((chase?"Write a short, polite follow-up email chasing an answer that is still owed, ":"Write a reply email ")+"for "+(myName||"me")+" at WYZ Rent. Plain text only, ready to edit, signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":"")+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject, no quoted text.\n\nWhat it's about: "+(thr.item.title||"")+". "+(thr.item.summary||"")+"\n\nThread (latest last):\n"+text,{cache:false,onText:u=>{ta.value=u.text}});
+    ta.value=r.text;st.textContent="Edit it, then send it or save it as a draft."
+  }catch(e){st.className="status err";st.textContent="Couldn't write a draft ("+clip((e&&e.message)||"unknown reason",110)+"). Write your own here."}
+}
+function thrArgs(){
+  const last=lastMsg(),subj=String(tById(thr.id)&&tById(thr.id).subject||$("thrTitle").textContent||"");
+  const split=v=>String(v||"").split(/[,;]/).map(x=>x.trim()).filter(Boolean);
+  return {to:split($("thrTo").value),cc:split($("thrCc").value),subject:/^re:/i.test(subj)?subj:"Re: "+subj,body:$("thrText").value.trimEnd()+quoteOf(last),replyToMessageId:last.id};
+}
+async function thrAct(kind){
+  const st=$("thrSt"),a=thrArgs();st.className="status";
+  if(!$("thrText").value.trim()){st.className="status err";st.textContent="Write your reply first.";return}
+  if(!a.to.length||a.to.some(x=>!/^\S+@\S+\.\S+$/.test(x))){st.className="status err";st.textContent="Check the To address.";return}
+  const btn=$(kind==="send"?"thrSend":"thrSave");
+  if(kind==="send"&&!thr.armed){thr.armed=1;btn.textContent="Tap again to send to "+a.to[0]+(a.to.length>1?" +"+(a.to.length-1):"");setTimeout(()=>{if(thr.armed&&!thr.done){thr.armed=0;btn.textContent="Send"}},6000);return}
+  thr.armed=0;btn.disabled=true;const old=btn.textContent;btn.textContent=kind==="send"?"Sending...":"Saving...";
+  try{
+    const r=await mcp.callTool("Gmail",kind==="send"?"send_message":"create_draft",a);
+    thr.done=true;["thrSend","thrSave","thrText","thrTo","thrCc"].forEach(k=>$(k).disabled=true);
+    btn.textContent=kind==="send"?"Sent":"Saved";
+    st.className="status";st.textContent=kind==="send"?"Sent to "+a.to.join(", ")+". Marked as done.":"Saved to your Gmail drafts.";
+    if(kind==="send"){state.done[thr.id]=1;persist();renderBoard()}
+    else if(r.payload&&r.payload.viewUrl){const l=el("a","btn small","Open draft");l.href=r.payload.viewUrl;l.target="_blank";l.rel="noopener";$("thrSt").append(" ",l)}
+  }catch(e){
+    btn.disabled=false;btn.textContent=old==="Sending..."?"Send":"Save to Gmail drafts";st.className="status err";
+    st.textContent=e&&e.code==="consent_required"?"Google didn't allow sending. Sign out and back in, and tick every box.":"Couldn't "+(kind==="send"?"send":"save")+" it ("+clip((e&&e.message)||"unknown reason",100)+"). Check Gmail before trying again."
+  }
+}
+function thrClose(){$("thr").hidden=true}
+$("thrClose").onclick=thrClose;$("thrAI").onclick=thrDraft;$("thrAll").onchange=fillTargets;
+$("thrSend").onclick=()=>thrAct("send");$("thrSave").onclick=()=>thrAct("save");
+$("thrWA").onclick=()=>window.open(waLink($("thrText").value),"_blank","noopener");
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("thr").hidden)thrClose()});
+$("thr").addEventListener("click",e=>{if(e.target===$("thr"))thrClose()});
+
+/* ---------- search all mail ---------- */
+async function searchMail(){
+  const q=$("mailQ").value.trim(),host=$("mailRes");host.replaceChildren();
+  if(!q)return;
+  if(!G.connected()){host.append(el("p","status err","Connect Google first."));return}
+  host.append(el("p","status","Searching..."));
+  try{
+    const g=await mcp.server("Gmail");const r=await g.search_threads({query:q,pageSize:20});
+    found=(r.threads||[]).map(slimThread);host.replaceChildren();
+    if(!found.length){host.append(el("p","status","Nothing found."));return}
+    host.append(el("p","status",found.length+" conversation"+(found.length>1?"s":"")+" found."));
+    found.forEach(t=>{
+      const row=el("div","item");row.append(el("span","dot none"));const m=el("div","main");
+      m.append(el("span","t",t.subject),el("span","s",t.snippet),el("span","m",(t.lastFromMe?"You wrote to "+(nameOf((t.lastTo||[])[0])||"them"):nameOf(t.from))+(t.date?" · "+fmtWhen(t.date):"")+(t.count>1?" · "+t.count+" messages":"")));
+      const a=el("div","acts");
+      a.append(onbBtn("Read thread",()=>openThread(t.id),"small"),onbBtn("Reply",()=>openThread(t.id,{draft:true}),"small solid"));
+      m.append(a);row.append(m);host.append(row);
+    });
+  }catch(e){host.replaceChildren(el("p","status err","Couldn't search just now ("+clip((e&&e.message)||"unknown reason",100)+")."))}
+}
+$("mailGo").onclick=searchMail;$("mailQ").addEventListener("keydown",e=>{if(e.key==="Enter")searchMail()});
+
 /* ---------- board ---------- */
-const tById=id=>threads.find(t=>t.id===id);
+const tById=id=>threads.find(t=>t.id===id)||found.find(t=>t.id===id);
 const todayKey=()=>ymd(new Date());
 const isOff=i=>!!state.done[i.id]||(state.snooze[i.id]&&state.snooze[i.id]>todayKey());
 function renderBoard(){
@@ -437,7 +553,8 @@ function itemRow(i){
   const meta=el("span","m");const u=el("span","urg u"+i.g,UR[i.g]||"");meta.append(u," · "+(t.lastFromMe?"You wrote to "+(nameOf((t.lastTo||[])[0])||"them"):(nameOf(t.from)||""))+(i.when?" · "+i.when:t.date?" · "+fmtWhen(t.date):""));m.append(meta);
   const a=el("div","acts");
   if(t.url){const o=el("a","btn small","Open in Gmail");o.href=t.url;o.target="_blank";o.rel="noopener";a.append(o)}
-  if(i.st==="reply"||i.st==="follow"||i.st==="work"||i.st==="wait"){const d=el("button","btn small solid",i.st==="follow"||i.st==="wait"?"Draft a chaser":"Draft a reply");d.type="button";d.onclick=()=>draftFor(i,m,d);a.append(d)}
+  {const rd=el("button","btn small","Read thread");rd.type="button";rd.onclick=()=>openThread(i.id,{item:i});a.append(rd)}
+  if(i.st==="reply"||i.st==="follow"||i.st==="work"||i.st==="wait"){const d=el("button","btn small solid",i.st==="follow"||i.st==="wait"?"Draft a chaser":"Draft a reply");d.type="button";d.onclick=()=>openThread(i.id,{item:i,draft:true});a.append(d)}
   const dn=el("button","btn small ghost",state.done[i.id]?"Undo done":"Done");dn.type="button";dn.onclick=()=>{if(state.done[i.id])delete state.done[i.id];else state.done[i.id]=1;persist();renderBoard()};
   const sz=el("button","btn small ghost",state.snooze[i.id]?"Unsnooze":"Snooze to tomorrow");sz.type="button";sz.onclick=()=>{if(state.snooze[i.id])delete state.snooze[i.id];else{const d=new Date();d.setDate(d.getDate()+1);state.snooze[i.id]=ymd(d)}persist();renderBoard()};
   const at=el("button","btn small ghost","Add to tasks");at.type="button";at.onclick=()=>{addTask(i.title||t.subject,"Email from "+nameOf(t.from));at.textContent="Added";at.disabled=true};
@@ -453,7 +570,7 @@ async function draftFor(i,host,btn){
   try{
     const chase=(i.st==="follow"||i.st==="wait");const r=!sample?{text:templateDraft(i,chase)}:await sample((chase?"Write a short, polite follow-up email chasing an answer that is still owed, ":"Write a reply email ")+"for "+(myName||"me")+" at WYZ Rent. Plain text only, ready to edit, signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":"")+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject.\n\nWhat it's about: "+(i.title||"")+". "+(i.summary||"")+"\n\nThread (latest last):\n"+(text||tById(i.id)?.snippet||""),{cache:false,onText:u=>{ta.value=u.text}});
     ta.value=r.text;st.textContent="Edit it, then save it to your Gmail drafts.";
-  }catch(e){st.textContent="Couldn't write a draft just now. Write your own here, then save it.";st.className="status err"}
+  }catch(e){st.textContent="Couldn't write a draft just now ("+clip((e&&e.message)||"unknown reason",110)+"). Write your own here, then save it.";st.className="status err"}
   btn.remove();
   const acts=el("div","acts");const sv=el("button","btn small solid","Save to Gmail drafts");sv.type="button";
   sv.onclick=async()=>{
