@@ -289,6 +289,7 @@
       return requestToken(interactive ? (consent ? "consent" : "") : "none");
     },
     profile: profile,
+    token: ensure,
     hasAllScopes: function () { var have = tok.scope.split(" "); return [SC.gmailRead, SC.gmailDraft, SC.cal, SC.drive].every(function (s) { return have.indexOf(s) >= 0; }); },
     signOut: async function () {
       try { if (tok.access && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(tok.access, function () {}); } catch (e) {}

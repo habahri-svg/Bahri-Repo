@@ -98,6 +98,10 @@ function stepDefs(){
     Object.assign({name:"Your ChatGPT research"},imp("chatgpt","ChatGPT",GPT_EXPORT,"f-chatgpt","1. Tap Open ChatGPT export page and sign in if asked. 2. In Data controls, tap Export data, then Confirm export. 3. OpenAI emails you a download link. 4. Download the .zip from that email, no need to unzip it. 5. Come back here, tap Import file and choose it. Repeat weekly to keep it current.")),
     optional("Google Drive (optional)",drive.state,"Connected. Your recent documents show under Documents.","skipDrive","Shows the documents you've been working on. Uses the same Google sign-in as Gmail.",["Connect Google",()=>connectGoogle(drive.state==="denied")],"Google didn't give this page access to Drive. Tap Allow and tick every box on Google's screen.",{note:drive.note,fn:loadDrive}),
     optional("Todoist (optional)",todo.state,"Connected. Your Todoist tasks for today show under My tasks.","skipTodo","Use Todoist? In Todoist open Settings, Integrations, Developer and copy your API token, then tap Add token. No Todoist? Tap Skip, the built-in task list already works.",["Add token",setTodoToken],"Todoist didn't accept the token. Tap Replace token and paste it again.",{note:todo.note,fn:loadTodoist}),
+    ...(DASH?[{name:"WYZ Rent dashboard (optional)",done:!!state.shareDash||!!state.skipDash,
+      desc:state.shareDash?(state.dashErr?"Couldn't share: "+state.dashErr:"Sharing is on. Only counts and your research topics and ideas go to the company dashboard, never email text."+(state.dashAt?" Last shared "+fmtWhen(state.dashAt)+".":"")):"Optional. Share a daily summary with the company dashboard. Only counts and research topics and ideas are sent, never email text. You can turn it off any time.",
+      btn:state.shareDash?["Share now",()=>shareSummary()]:["Turn on sharing",()=>setShare(true)],
+      btn2:state.shareDash?["Turn off",()=>setShare(false)]:(state.skipDash?null:["Not now",()=>{state.skipDash=1;persist();renderSetup()}])}]:[]),
     {name:"Installed on your phone or computer",done:!!state.installed,desc:state.installed?"Done.":"Pin the page so it opens like an app. Steps are in the Install tab.",btn:state.installed?null:["Show me how",()=>show("t-inst")],btn2:state.installed?null:["I've done it",()=>{state.installed=1;persist();renderSetup()}]}
   ];
 }
@@ -134,7 +138,7 @@ function renderSetup(){
 let ONB=["claude","todoist","research","done"];
 let onbI=0;
 const firstName=()=>(myName||"").split(" ")[0]||"there";
-function onbOpen(){ONB=Connectors.ai.mode()==="shared"?["todoist","research","done"]:["claude","todoist","research","done"];onbI=0;$("onb").hidden=false;$("onbMsg").textContent="";onbRender()}
+function onbOpen(){ONB=(Connectors.ai.mode()==="shared"?["todoist","research"]:["claude","todoist","research"]).concat(DASH?["dash"]:[],["done"]);onbI=0;$("onb").hidden=false;$("onbMsg").textContent="";onbRender()}
 function onbClose(finished){$("onb").hidden=true;if(finished){state.onboarded=1;persist()}renderSetup()}
 function onbGo(n){onbI=Math.min(n,ONB.length-1);$("onbMsg").textContent="";onbRender()}
 function onbLink(href,text){const a=el("a","btn small",text);a.href=href;a.target="_blank";a.rel="noopener";return a}
@@ -186,6 +190,11 @@ function onbRender(){
       row.append(el("span","status",r&&r.at?(r.convs||[]).length+" conversations imported.":"Open the export page, request your data, then import the .zip from the email."));
       const a=el("div","acts");a.append(onbLink(url,"Open "+label+" export page"),onbBtn(r&&r.at?"Import again":"Import file",()=>$(fid).click()));row.append(a);body.append(row)});
     acts.append(onbBtn("Continue",()=>onbGo(onbI+1),"solid"));
+  }else if(k==="dash"){
+    $("onbTitle").textContent="Share a daily summary with the company";
+    p("Optional. Turn this on to send a short daily summary to the WYZ Rent dashboard, so the team can see how the day is going.");
+    p("What is sent: counts only (emails to reply, follow-ups, meetings today, open tasks) and your research topics and ideas. Never email text, names or files. You can turn it off at any time.");
+    acts.append(onbBtn("Turn on sharing",()=>{setShare(true);onbGo(onbI+1)},"solid"),onbBtn("Not now",()=>{state.skipDash=1;persist();onbGo(onbI+1)},"ghost"));
   }else{
     $("onbTitle").textContent="You're all set, "+firstName();
     const line=(ok,t)=>body.append(el("p","sub",(ok?"✓ ":"○ ")+t));
@@ -194,6 +203,7 @@ function onbRender(){
     line(todo.state==="ok",todo.state==="ok"?"Todoist: connected":"Todoist: not connected");
     const n=((research.chatgpt&&research.chatgpt.convs)||[]).length+((research.claude&&research.claude.convs)||[]).length;
     line(n>0,n?"Research: "+n+" conversations imported":"Research: not imported yet");
+    if(DASH)line(!!state.shareDash,state.shareDash?"Company dashboard: sharing a daily summary":"Company dashboard: not sharing");
     p("You can connect anything left from the Connections tab at any time.");
     acts.append(onbBtn("Open my page",()=>onbClose(true),"solid"));
   }
@@ -201,6 +211,31 @@ function onbRender(){
 }
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("onb").hidden)onbClose(true)});
 $("onbAgain").onclick=()=>{show("t-today");onbOpen()};
+
+/* ---------- share a daily summary with the company dashboard (optional, off until the person turns it on) ---------- */
+const DASH=(window.WYZ_CONFIG&&window.WYZ_CONFIG.DASHBOARD_URL)||"";
+const dubaiDay=()=>new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Dubai"});
+function summaryPayload(){
+  const items=(board&&board.items||[]).filter(i=>!isOff(i));
+  const n=k=>items.filter(i=>i.st===k).length;
+  const today=ymd(new Date());
+  const meet=(events||[]).filter(x=>{const s=x.start&&(x.start.dateTime||x.start.date);return s&&(x.start.date?x.start.date===today:ymd(new Date(s))===today)}).length;
+  const open=(state.tasks||[]).filter(t=>!t.done).length+(todo.state==="ok"?todo.tasks.length:0);
+  const byKey={};allConvs().forEach(c=>byKey[c.src+":"+c.id]=c);
+  const rs=((research.fu&&research.fu.items)||[]).slice(0,10).map(f=>{const c=byKey[f.key];return {topic:clip(f.topic||"",200),idea:clip(f.next||"",200),source:c&&c.src==="chatgpt"?"chatgpt":"claude"}}).filter(x=>x.topic);
+  return {date:dubaiDay(),emails_to_reply:n("reply"),follow_ups:n("follow"),waiting:n("wait"),meetings_today:meet,tasks_open:Math.min(open,10000),research:rs};
+}
+async function shareSummary(){
+  if(!DASH||!G.connected())return;
+  try{
+    const t=await G.token();
+    const r=await fetch(DASH,{method:"POST",headers:{"content-type":"application/json",Authorization:"Bearer "+t},body:JSON.stringify(summaryPayload())});
+    if(!r.ok)throw new Error(r.status===403?"Your Google account isn't on the dashboard's approved list.":"The dashboard answered "+r.status+".");
+    state.dashAt=Date.now();state.dashErr="";
+  }catch(e){state.dashErr=(e&&e.message)||"Couldn't reach the dashboard."}
+  persist();renderSetup();
+}
+function setShare(on){state.shareDash=on?1:0;if(on)state.skipDash=0;persist();renderSetup();if(on)shareSummary()}
 
 /* ---------- connect, personalise, sign out ---------- */
 const niceErr=e=>{const c=e&&e.code;
@@ -726,6 +761,7 @@ async function refreshAll(force){
   if(!state.skipDrive||drive.state==="ok")loadDrive();
   if(!state.skipTodo||todo.state==="ok")loadTodoist();
   await loadMail(force);followups(false);
+  if(state.shareDash&&Date.now()-(state.dashAt||0)>1800000)shareSummary();
 }
 $("refresh").onclick=()=>refreshAll(false);
 (async()=>{
