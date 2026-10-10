@@ -138,6 +138,12 @@ ol.steps li::marker{color:var(--gold);font-weight:700}
 .msg pre{white-space:pre-wrap;font:inherit;overflow-wrap:anywhere;margin:8px 0 4px}
 .msg .meta{font-size:13px;color:var(--soft);font-weight:400}
 .found{display:flex;flex-direction:column}
+.chk-row{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:2px 10px;align-items:start;padding:9px 0;border-top:1px solid var(--line)}
+.chk-row:first-child{border-top:0}
+.chk-row .ic{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:700;color:#fff}
+.chk-row .ic.ok{background:var(--d-fyi)}.chk-row .ic.warn{background:var(--d-follow)}.chk-row .ic.bad{background:var(--d-reply)}.chk-row .ic.na{background:var(--d-off)}
+.chk-row .nm{font-weight:600}.chk-row .ds{grid-column:2;color:var(--soft);font-size:13px;overflow-wrap:anywhere}
+.chk-row .go{grid-row:1 / span 2;grid-column:3}
 .askmenu button{padding:8px 10px;border:0;border-radius:5px;background:none;color:var(--fg);font:500 14px inherit;text-align:left;cursor:pointer}
 .askmenu button:hover,.askmenu button:focus-visible{background:var(--sky)}
 .snzrow{display:flex;gap:6px;padding:4px;align-items:center}
@@ -211,6 +217,8 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
     <div class="herostats" id="heroStats"></div>
     <div class="herorefresh">
       <button class="btn" type="button" id="refresh">Refresh now</button>
+      <button class="btn" type="button" id="zoomBtn" title="Make the text bigger or smaller">Text size</button>
+      <button class="btn" type="button" id="inviteBtn" title="Send someone the link and steps on WhatsApp">Invite someone</button>
       <span class="status" id="fresh">Not loaded yet</span>
     </div>
   </header>
@@ -278,6 +286,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
         <div class="ask">
           <input class="in" id="mailQ" placeholder="Search your mail, for example from:ali or subject:invoice" aria-label="Search your mail">
           <button class="btn" type="button" id="mailGo">Search</button>
+          <button class="btn ghost" type="button" id="weekGo">Weekly review</button>
         </div>
         <div id="mailRes" class="found"></div>
       </div>
@@ -300,6 +309,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
         <div class="ask">
           <input class="in" id="taskIn" placeholder="Add a task" aria-label="New task">
           <input class="in" id="taskDue" type="date" aria-label="Due date" style="flex:0 1 170px">
+          <select class="in" id="taskPri" aria-label="Priority" style="flex:0 1 120px"><option value="1">Normal</option><option value="2">High</option></select>
           <button class="btn solid" type="button" id="taskAdd">Add</button>
         </div>
         <label class="status" id="todoWrap" hidden><input type="checkbox" id="toTodoist" checked> Also add new tasks to Todoist</label>
@@ -321,6 +331,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
     <div class="card" id="c-docs">
       <div class="pad">
         <h2>Recent documents</h2>
+        <div class="ask" style="padding:0 14px 8px"><input class="in" id="docQ" placeholder="Search all your Drive files by name" aria-label="Search Drive"><button class="btn" type="button" id="docGo">Search</button></div>
         <p class="sub" id="docsHead">The Google Drive files you've been working on show here once Google Drive is connected in the setup steps.</p>
       </div>
       <div id="docs"></div>
@@ -343,6 +354,15 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       </div>
     </div>
     </div>
+    </div>
+    <div class="card" id="c-test">
+      <div class="pad">
+        <h2>System check</h2>
+        <p class="sub">Tap the button to test every connection on this page. It only reads. It never sends an email or changes anything.</p>
+        <div class="headrow"><button class="btn solid" type="button" id="testGo">Test everything</button><button class="btn ghost" type="button" id="testCopy" hidden>Copy the report</button></div>
+        <p class="status" id="testSum"></p>
+        <div id="testOut"></div>
+      </div>
     </div>
   </section>
 
@@ -428,7 +448,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
 </div>
 <div id="thr" class="thr" hidden role="dialog" aria-modal="true" aria-labelledby="thrTitle">
   <div class="thrbox card"><div class="pad">
-    <div class="headrow"><h2 id="thrTitle" style="flex:1 1 200px;overflow-wrap:anywhere"></h2><span id="thrSnooze"></span><a id="thrGmail" class="btn small" target="_blank" rel="noopener">Open in Gmail</a><button class="btn small" type="button" id="thrClose">Close</button></div>
+    <div class="headrow"><h2 id="thrTitle" style="flex:1 1 200px;overflow-wrap:anywhere"></h2><span id="thrSnooze"></span><button class="btn small" type="button" id="thrArchive">Archive</button><a id="thrGmail" class="btn small" target="_blank" rel="noopener">Open in Gmail</a><button class="btn small" type="button" id="thrClose">Close</button></div>
     <div id="thrBody"></div>
     <details class="msg" id="thrAIbox" hidden><summary>Instruct AI about this email</summary><div id="thrInstruct" class="instr"></div></details>
     <div id="thrReply" hidden>
@@ -437,8 +457,11 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       <label class="status chk"><input type="checkbox" id="thrAll"> Reply all</label>
       <div id="thrCcWrap" hidden><span class="status">Cc</span><input class="in" id="thrCc" aria-label="Cc" autocomplete="off"></div>
       <textarea id="thrText" aria-label="Your reply"></textarea>
+      <div class="headrow"><label class="btn small ghost" style="cursor:pointer">Attach files<input type="file" id="thrFiles" multiple hidden></label><span class="status" id="thrFileList"></span></div>
+      <label class="status chk" id="thrSumWrap" hidden><input type="checkbox" id="thrSum"> Send a short AI summary instead of the full email</label>
+      <label class="status chk" id="thrRemWrap">Remind me if no reply in <select id="thrRemind"><option value="0">never</option><option value="2">2 days</option><option value="3" selected>3 days</option><option value="7">1 week</option></select></label>
       <p class="status" id="thrSt"></p>
-      <div class="headrow"><button class="btn small" type="button" id="thrAI">Write it for me</button><button class="btn solid" type="button" id="thrSend">Send</button><button class="btn" type="button" id="thrSave">Save to Gmail drafts</button><button class="btn ghost" type="button" id="thrWA">Send on WhatsApp</button></div>
+      <div class="headrow"><button class="btn small" type="button" id="thrAI">Write it for me</button><button class="btn solid" type="button" id="thrSend">Send</button><button class="btn" type="button" id="thrSave">Save to Gmail drafts</button><button class="btn ghost" type="button" id="thrFwd">Forward</button><button class="btn ghost" type="button" id="thrWA">Send on WhatsApp</button></div>
     </div>
   </div></div>
 </div>

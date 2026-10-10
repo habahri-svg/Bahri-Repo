@@ -27,6 +27,7 @@ Without this the page can't log anyone in. It shows "One-time setup needed" unti
 4. On the **Scopes** step add these four:
    - `.../auth/gmail.readonly`
    - `.../auth/gmail.compose`
+   - `.../auth/gmail.modify` (archive and mark as read)
    - `.../auth/calendar.readonly`
    - `.../auth/drive.metadata.readonly`
 5. On the **Audience** page tap **Publish app**. This lets anyone with a Google account sign in, with no test-user list and no 7-day expiry. Until Google verifies the app (see "Going beyond 100 people" below) it shows an "unverified app" warning (Advanced, Go to app) and is capped at 100 people in total.

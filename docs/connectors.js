@@ -9,10 +9,11 @@
   var SC = {
     gmailRead: "https://www.googleapis.com/auth/gmail.readonly",
     gmailDraft: "https://www.googleapis.com/auth/gmail.compose",
+    gmailModify: "https://www.googleapis.com/auth/gmail.modify",
     cal: "https://www.googleapis.com/auth/calendar.readonly",
     drive: "https://www.googleapis.com/auth/drive.metadata.readonly"
   };
-  var SCOPES = ["openid", "email", "profile", SC.gmailRead, SC.gmailDraft, SC.cal, SC.drive].join(" ");
+  var SCOPES = ["openid", "email", "profile", SC.gmailRead, SC.gmailDraft, SC.gmailModify, SC.cal, SC.drive].join(" ");
   var KEY = { flag: "wyz-google-flag", hint: "wyz-google-hint", todo: "wyz-todoist-token", ai: "wyz-claude-key", cid: "wyz-google-client-id" };
 
   var ls = {
@@ -190,9 +191,23 @@
     if (a.cc && a.cc.length) lines.push("Cc: " + a.cc.join(", "));
     lines.push("Subject: " + enc(a.subject || ""));
     if (inReply) { lines.push("In-Reply-To: " + inReply); lines.push("References: " + (refs ? refs + " " : "") + inReply); }
-    lines.push("MIME-Version: 1.0", 'Content-Type: text/plain; charset="UTF-8"', "Content-Transfer-Encoding: base64", "");
     var bodyB64 = btoa(unescape(encodeURIComponent(a.body || ""))).replace(/(.{76})/g, "$1\r\n");
-    var msg = { raw: b64url(lines.join("\r\n") + "\r\n" + bodyB64) };
+    var out;
+    if (a.attachments && a.attachments.length) {
+      var bnd = "wyz_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      lines.push("MIME-Version: 1.0", 'Content-Type: multipart/mixed; boundary="' + bnd + '"', "");
+      var parts = ["--" + bnd, 'Content-Type: text/plain; charset="UTF-8"', "Content-Transfer-Encoding: base64", "", bodyB64];
+      a.attachments.forEach(function (f) {
+        var nm = enc(String(f.name || "file").replace(/["\r\n]/g, "_"));
+        parts.push("--" + bnd, "Content-Type: " + (f.type || "application/octet-stream") + '; name="' + nm + '"', 'Content-Disposition: attachment; filename="' + nm + '"', "Content-Transfer-Encoding: base64", "", String(f.data).replace(/(.{76})/g, "$1\r\n"));
+      });
+      parts.push("--" + bnd + "--", "");
+      out = lines.join("\r\n") + "\r\n" + parts.join("\r\n");
+    } else {
+      lines.push("MIME-Version: 1.0", 'Content-Type: text/plain; charset="UTF-8"', "Content-Transfer-Encoding: base64", "");
+      out = lines.join("\r\n") + "\r\n" + bodyB64;
+    }
+    var msg = { raw: b64url(out) };
     if (threadId) msg.threadId = threadId;
     return msg;
   }
@@ -223,6 +238,16 @@
         var d = await gfetch(GM + "/drafts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: msg }) }, SC.gmailDraft);
         return { id: d.id, viewUrl: "https://mail.google.com/mail/?authuser=" + encodeURIComponent(mailTo()) + "#drafts" };
       },
+      archive_thread: async function (a) {
+        await profile();
+        await gfetch(GM + "/threads/" + encodeURIComponent(a.threadId) + "/modify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ removeLabelIds: ["INBOX"] }) }, SC.gmailModify);
+        return {};
+      },
+      mark_read: async function (a) {
+        await profile();
+        await gfetch(GM + "/threads/" + encodeURIComponent(a.threadId) + "/modify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ removeLabelIds: ["UNREAD"] }) }, SC.gmailModify);
+        return {};
+      },
       send_message: async function (a) {
         await profile();
         var msg = await buildMessage(a);
@@ -245,6 +270,13 @@
       }
     },
     "Google Drive": {
+      search_files: async function (a) {
+        var term = String(a.query || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+        var q = "pageSize=" + (a.pageSize || 15) + "&orderBy=" + encodeURIComponent("modifiedTime desc") +
+          "&q=" + encodeURIComponent("trashed=false and name contains '" + term + "'") + "&fields=" + encodeURIComponent("files(id,name,modifiedTime,mimeType,fileExtension)");
+        var j = await gfetch("https://www.googleapis.com/drive/v3/files?" + q, null, SC.drive);
+        return { files: (j.files || []).map(function (f) { return { id: f.id, title: f.name, modifiedTime: f.modifiedTime, mimeType: f.mimeType, fileExtension: f.fileExtension }; }) };
+      },
       list_recent_files: async function (a) {
         var q = "pageSize=" + (a.pageSize || 10) + "&orderBy=" + encodeURIComponent("modifiedByMeTime desc") +
           "&q=" + encodeURIComponent("trashed=false") + "&fields=" + encodeURIComponent("files(id,name,modifiedTime,mimeType,fileExtension)");
@@ -320,6 +352,8 @@
     },
     profile: profile,
     token: ensure,
+    hasScope: function (name) { return tok.scope.split(" ").indexOf(SC[name]) >= 0; },
+    scopeNames: function () { return Object.keys(SC); },
     hasAllScopes: function () { var have = tok.scope.split(" "); return [SC.gmailRead, SC.gmailDraft, SC.cal, SC.drive].every(function (s) { return have.indexOf(s) >= 0; }); },
     signOut: async function () {
       try { if (tok.access && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(tok.access, function () {}); } catch (e) {}
