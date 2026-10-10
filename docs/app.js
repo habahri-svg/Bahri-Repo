@@ -297,7 +297,7 @@ const addrOf=s=>{s=String(s||"");const m=s.match(/<([^>]+)>/);return (m?m[1]:s).
 function slimThread(t){const ms=t.messages||[];const last=ms[ms.length-1]||{};const first=ms[0]||{};
   const mine=(last.labelIds||[]).includes("SENT");const lastOther=[...ms].reverse().find(m=>!(m.labelIds||[]).includes("SENT"))||{};
   const days=last.date?Math.floor((Date.now()-Date.parse(last.date))/86400000):null;
-  return {id:t.id,from:mine?(lastOther.sender||first.sender||""):(last.sender||first.sender||""),subject:first.subject||last.subject||"(No subject)",snippet:(last.snippet||"").replace(/&#39;/g,"'").replace(/&quot;/g,'"').replace(/&amp;/g,"&").slice(0,280),date:last.date||first.date||"",count:t.messageCount||ms.length,unread:(last.labelIds||[]).includes("UNREAD"),important:(last.labelIds||[]).includes("IMPORTANT"),url:t.viewUrl||last.viewUrl||"",lastId:last.id||t.id,lastFromMe:mine,lastTo:mine?(last.toRecipients||[]).slice(0,3):[],daysSinceLast:days}}
+  return {id:t.id,from:mine?(lastOther.sender||first.sender||""):(last.sender||first.sender||""),subject:first.subject||last.subject||"(No subject)",snippet:(last.snippet||"").replace(/&#39;/g,"'").replace(/&quot;/g,'"').replace(/&amp;/g,"&").slice(0,280),date:last.date||first.date||"",count:t.messageCount||ms.length,unread:(last.labelIds||[]).includes("UNREAD"),important:(last.labelIds||[]).includes("IMPORTANT"),url:t.viewUrl||last.viewUrl||"",lastId:last.id||t.id,lastFromMe:mine,lastTo:mine?(last.toRecipients||[]).slice(0,3):[],daysSinceLast:days,auto:(last.labelIds||[]).some(l=>/^CATEGORY_(PROMOTIONS|SOCIAL|UPDATES|FORUMS)$/.test(l))}}
 async function loadMail(force){
   if(!mcp||busy)return;busy=true;setFresh("load","Reading your inbox and sent mail");
   try{
@@ -346,19 +346,21 @@ async function triage(sig,force){
 
 /* ---------- simple sorting rules, used when no Claude key is set ---------- */
 function heuristicBoard(sig,final){
-  const auto=/no-?reply|noreply|do-?not-?reply|notification|newsletter|mailer-daemon|updates@|news@|marketing|billing@|invoice@/i;
+  const auto=/no-?reply|noreply|do-?not-?reply|notifications?@|newsletter|mailer-daemon|updates?@|news@|marketing|billing@|invoice@|orders?@|alerts?@|security@|support@|account@/i;
+  const autoSubj=/dispatched|shipped|out for delivery|your order|order #|receipt|invoice|statement|verification code|one-time|otp|password|security alert|sign-?in|payout|booking confirmation/i;
+  const asks=/\?|please|kindly|could you|can you|let me know|confirm|send|share|update|waiting|asap|urgent|quote|follow/i;
   const items=[];let nReply=0,nFollow=0;
   threads.forEach(t=>{
     const who=nameOf(t.lastFromMe?(t.lastTo||[])[0]:t.from)||"them";
     const d=t.daysSinceLast==null?0:t.daysSinceLast;
     if(t.lastFromMe){
-      if(d>21)return;
+      if(d>21||t.auto||!asks.test(t.snippet+" "+t.subject))return;
       if(t.snippet.length<90&&/^(thanks|thank you|ok|okay|noted|great|perfect|received|sounds good)\b/i.test(t.snippet))return;
       const chase=d>=3;if(chase)nFollow++;
       items.push({id:t.id,st:chase?"follow":"wait",g:d>=7?3:2,title:(chase?"Chase ":"Waiting on ")+who+": "+t.subject,summary:"You wrote "+(d===0?"today":d+" day"+(d>1?"s":"")+" ago")+" and there's no reply yet.",when:d===0?"You wrote today":"You wrote "+d+" day"+(d>1?"s":"")+" ago"});
       return}
     if(!t.inInbox)return;
-    if(auto.test(t.from)){items.push({id:t.id,st:"fyi",g:1,title:t.subject,summary:t.snippet});return}
+    if(t.auto||auto.test(t.from)||autoSubj.test(t.subject)){items.push({id:t.id,st:"fyi",g:1,title:t.subject,summary:t.snippet});return}
     if(t.unread||t.important){nReply++;items.push({id:t.id,st:"reply",g:t.important&&t.unread?3:2,title:"Reply to "+who+": "+t.subject,summary:t.snippet});return}
     items.push({id:t.id,st:"work",g:1,title:t.subject,summary:t.snippet||"Check whether this needs action."});
   });
