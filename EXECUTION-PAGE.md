@@ -58,7 +58,7 @@ Anthropic doesn't offer a "Sign in with Claude" for other websites, and using so
    | `GOOGLE_CLIENT_ID` | the same Client ID as in `docs/config.js` |
    | `ALLOWED_EMAILS` | optional, comma-separated Google addresses allowed to use Claude |
    | `ALLOWED_DOMAINS` | optional, for example `wyzrent.com` |
-   | `DAILY_LIMIT` | optional, calls per person per day (default 150) |
+   | `DAILY_LIMIT` | optional, calls per person per day (default 50) |
 
    Then redeploy. You pay for the usage, so set a spending limit in the Anthropic console and use `ALLOWED_EMAILS` or `ALLOWED_DOMAINS` so only your team can use it. The function (`api/claude.js`) checks every request against the person's Google sign-in and refuses tokens issued to any other app.
 2. **Their own key (fallback).** On GitHub Pages there is no server, and on Vercel the function stays off until you add the variables. In both cases the guided screen asks each person for their own key instead.
@@ -97,3 +97,12 @@ Open http://localhost:8000. For sign-in to work locally, also add `http://localh
 
 ## Older files
 `owner-execution-page.html` and `NOTES-for-Karim.md` are the earlier claude.ai-only version. They only work inside claude.ai and are not part of the published site.
+
+## Decisions so far (owner's answers)
+- **Hosting:** Vercel, with shared Claude through the owner's key. A custom domain can come later.
+- **Client ID:** the owner sends it and it is saved in `docs/config.js`, so the plain link works for everyone.
+- **Google:** app published (up to 100 people, "unverified" warning once). Verification later, if it is sold.
+- **Claude use:** only a list of family and staff emails (`ALLOWED_EMAILS`), 50 calls per person per day.
+- **Page:** English only, Gmail only, main calendar only, WhatsApp share buttons, built-in tasks plus optional Todoist, optional research import, guided first-run steps. The setup card drops to the last row, folded, once everything is connected.
+- **Company dashboard (later):** each person's board stays private. The dashboard receives counts (emails waiting, overdue tasks, meetings today) plus ChatGPT and Claude research topics and ideas. Stored in a small database such as Supabase.
+- **Delivery:** a web app installed from the browser. Free trial then monthly per user. First customers: busy executives.

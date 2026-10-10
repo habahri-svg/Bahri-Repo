@@ -4,7 +4,7 @@
      GOOGLE_CLIENT_ID    required. The same Client ID as docs/config.js. Tokens issued to any other app are refused.
      ALLOWED_EMAILS      optional. Comma-separated list. If set, only these Google accounts can use Claude.
      ALLOWED_DOMAINS     optional. Comma-separated list such as wyzrent.com.
-     DAILY_LIMIT         optional. Calls per person per day (default 150).
+     DAILY_LIMIT         optional. Calls per person per day (default 50).
    GET returns {ok:true} when the function is configured, so the page knows to switch Claude on automatically. */
 "use strict";
 
@@ -41,7 +41,7 @@ function overLimit(email) {
   const n = (g.__wyzRate.get(key) || 0) + 1;
   g.__wyzRate.set(key, n);
   if (g.__wyzRate.size > 2000) g.__wyzRate.clear();
-  return n > (+process.env.DAILY_LIMIT || 150);
+  return n > (+process.env.DAILY_LIMIT || 50);
 }
 
 module.exports = async function handler(req, res) {
