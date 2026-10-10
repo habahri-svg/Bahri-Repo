@@ -138,6 +138,16 @@ ol.steps li::marker{color:var(--gold);font-weight:700}
 .msg pre{white-space:pre-wrap;font:inherit;overflow-wrap:anywhere;margin:8px 0 4px}
 .msg .meta{font-size:13px;color:var(--soft);font-weight:400}
 .found{display:flex;flex-direction:column}
+.askmenu button{padding:8px 10px;border:0;border-radius:5px;background:none;color:var(--fg);font:500 14px inherit;text-align:left;cursor:pointer}
+.askmenu button:hover,.askmenu button:focus-visible{background:var(--sky)}
+.snzrow{display:flex;gap:6px;padding:4px;align-items:center}
+.snzrow input{min-width:0;flex:1;padding:6px 8px}
+.snzrow button{border:1px solid var(--navy);color:var(--navy);font-weight:600}
+.instr{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.instr:empty{display:none}
+.instr textarea{min-height:56px}
+.instrout{display:flex;flex-direction:column;gap:8px}
+.instrout .ans{white-space:pre-wrap;font-size:14px;line-height:1.5;padding:10px 12px;border-radius:8px;background:var(--sky);overflow-wrap:anywhere}
 label.chk{display:flex;gap:6px;align-items:center}
 .onb{position:fixed;inset:0;z-index:20;background:rgba(14,34,56,.6);display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto}
 .onbbox{width:100%;max-width:520px;max-height:100%;overflow:auto;box-shadow:0 12px 40px rgba(14,34,56,.35)}
@@ -418,8 +428,9 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
 </div>
 <div id="thr" class="thr" hidden role="dialog" aria-modal="true" aria-labelledby="thrTitle">
   <div class="thrbox card"><div class="pad">
-    <div class="headrow"><h2 id="thrTitle" style="flex:1 1 200px;overflow-wrap:anywhere"></h2><a id="thrGmail" class="btn small" target="_blank" rel="noopener">Open in Gmail</a><button class="btn small" type="button" id="thrClose">Close</button></div>
+    <div class="headrow"><h2 id="thrTitle" style="flex:1 1 200px;overflow-wrap:anywhere"></h2><span id="thrSnooze"></span><a id="thrGmail" class="btn small" target="_blank" rel="noopener">Open in Gmail</a><button class="btn small" type="button" id="thrClose">Close</button></div>
     <div id="thrBody"></div>
+    <details class="msg" id="thrAIbox" hidden><summary>Instruct AI about this email</summary><div id="thrInstruct" class="instr"></div></details>
     <div id="thrReply" hidden>
       <h2>Reply</h2>
       <span class="status">To</span><input class="in" id="thrTo" aria-label="To" autocomplete="off">

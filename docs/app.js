@@ -432,6 +432,71 @@ function templateDraft(i,chase){
   return "Hi "+(first||"there")+",\n\n"+(chase?"Just following up on \""+(t.subject||"my last email")+"\". Could you let me know where this stands? [DETAIL]":"Thanks for your message about \""+(t.subject||"this")+"\". [DETAIL]")+"\n\nBest,\n"+me;
 }
 
+/* ---------- snooze: tomorrow, 3 days, 1 week or a date you pick ---------- */
+const niceDay=s=>{try{return new Date(s+"T00:00:00").toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"})}catch(e){return s}};
+function snoozeUntil(id,days,date){let v=date;if(!v){const d=new Date();d.setDate(d.getDate()+days);v=ymd(d)}state.snooze[id]=v;persist();renderBoard()}
+function snoozeDrop(id,after){
+  const cur=state.snooze[id],active=cur&&cur>todayKey();
+  const d=el("details","askdd");const sm=el("summary","",active?"Snoozed to "+niceDay(cur)+" ▾":"Snooze ▾");sm.title="Hide this until later";d.append(sm);
+  const m=el("div","askmenu");
+  const add=(t,fn)=>{const b=el("button","",t);b.type="button";b.onclick=()=>{d.open=false;fn();if(after)after()};m.append(b)};
+  add("Tomorrow",()=>snoozeUntil(id,1));add("In 3 days",()=>snoozeUntil(id,3));add("In 1 week",()=>snoozeUntil(id,7));
+  const row=el("div","snzrow");const dt=el("input","in");dt.type="date";const t=new Date();t.setDate(t.getDate()+1);dt.min=ymd(t);dt.setAttribute("aria-label","Pick a date");
+  const go=el("button","","Set");go.type="button";go.onclick=()=>{if(!dt.value)return;d.open=false;snoozeUntil(id,0,dt.value);if(after)after()};
+  row.append(dt,go);m.append(row);
+  if(active)add("Wake it up now",()=>{delete state.snooze[id];persist();renderBoard()});
+  d.append(m);return d;
+}
+
+/* ---------- instruct AI on an email: tell it what to do, see the answer here ---------- */
+const msgCache={};
+const threadBlock=msgs=>msgs.slice(-6).map(x=>"From: "+(x.sender||"")+"\nDate: "+(x.date||"")+"\n"+String(x.plaintextBody||x.snippet||"").slice(0,3000)).join("\n\n---\n\n");
+async function threadText(id){
+  if(msgCache[id])return msgCache[id];
+  let msgs=[];try{const r=await mcp.callTool("Gmail","get_thread",{threadId:id,messageFormat:"PLAIN_TEXT"},{cache:false});msgs=(r.payload&&r.payload.messages)||[]}catch(e){}
+  return msgCache[id]=threadBlock(msgs)||((tById(id)||{}).snippet||"");
+}
+function buildInstruct(i,box,getText,useReply){
+  box.replaceChildren();let cached="";Promise.resolve(getText()).then(t=>cached=t||"").catch(()=>{});
+  const inp=el("textarea");inp.placeholder="Tell it what to do, for example: reply yes and suggest Tuesday at 10";inp.setAttribute("aria-label","Instruction for AI");
+  const out=el("div","instrout"),chips=el("div","chips");
+  const go=el("button","btn small solid","Do it");go.type="button";
+  const gpt=el("a","btn small","Ask ChatGPT instead");gpt.target="_blank";gpt.rel="noopener";gpt.href="https://chatgpt.com/";
+  const setGpt=()=>{gpt.href="https://chatgpt.com/?q="+encodeURIComponent((inp.value.trim()||"Help me with this email.")+"\n\nEmail thread:\n"+cached.slice(0,3000))};
+  ["mousedown","touchstart","focus","click"].forEach(ev=>gpt.addEventListener(ev,setGpt));
+  const result=r=>{
+    out.replaceChildren();
+    out.append(el("div","ans",String(r.answer||"Done.")));
+    const acts=el("div","acts");
+    if(r.reply&&String(r.reply).trim()){const b=el("button","btn small solid","Use as my reply");b.type="button";b.onclick=()=>useReply(String(r.reply));acts.append(b)}
+    (Array.isArray(r.tasks)?r.tasks:[]).slice(0,3).forEach(t=>{if(!t||!t.title)return;const b=el("button","btn small","Add task: "+clip(t.title,40)+(t.due?" ("+t.due+")":""));b.type="button";b.onclick=()=>{addTask(String(t.title),"Email from "+nameOf((tById(i.id)||{}).from),/^\d{4}-\d{2}-\d{2}$/.test(t.due||"")?t.due:"");b.textContent="Task added";b.disabled=true};acts.append(b)});
+    const n=Math.round(+r.snooze_days||0);
+    if(n>0&&n<=60){const b=el("button","btn small","Snooze "+n+" day"+(n>1?"s":""));b.type="button";b.onclick=()=>snoozeUntil(i.id,n);acts.append(b)}
+    const c=el("button","btn small ghost","Copy answer");c.type="button";c.onclick=()=>navigator.clipboard.writeText(String(r.answer||"")).then(()=>c.textContent="Copied").catch(()=>c.textContent="Select the text to copy");acts.append(c);
+    out.append(acts);
+  };
+  async function run(){
+    const q=inp.value.trim();if(!q){inp.focus();return}
+    if(!sample){out.replaceChildren(el("p","status err","Connect Claude to get answers here (setup step 4). Meanwhile, Ask ChatGPT opens it with this email filled in."));return}
+    go.disabled=true;out.replaceChildren(el("p","status","Thinking..."));
+    try{
+      const txt=cached||await getText();cached=txt||"";
+      const first=(myName||"").split(" ")[0];
+      const r=await sample.json("You are the personal assistant of "+(myName||"a manager")+" at WYZ Rent, a Dubai holiday home management company. Today is "+new Date().toDateString()+".\n\nEmail thread (latest last):\n"+cached+"\n\nTheir instruction: "+q+"\n\nReturn JSON only: {\"answer\": a short plain answer, max 120 words, no em dashes, \"reply\": a ready-to-send reply email body in their voice (contractions, signed with the first name"+(first?" "+first:"")+") or an empty string when no reply is needed, \"tasks\": [ {\"title\": short, \"due\": \"YYYY-MM-DD\" or \"\"} ] only when they ask for a task or one is clearly needed, \"snooze_days\": a whole number of days to snooze this email, or 0 }.",{modelTier:"default",cache:false});
+      result(r||{});
+    }catch(e){out.replaceChildren(el("p","status err","Couldn't do that ("+clip((e&&e.message)||"unknown reason",110)+")."))}
+    go.disabled=false;
+  }
+  [["Summarize","Summarize this in three short lines."],["Draft a reply","Write a short, warm reply."],["What should I do?","Tell me the best next step and why."],["Make it a task","Turn this into a task, with a due date if one is mentioned."]].forEach(([l,v])=>{const c=el("button","chip",l);c.type="button";c.onclick=()=>{inp.value=v;run()};chips.append(c)});
+  go.onclick=run;
+  const row=el("div","acts");row.append(go,gpt);
+  box.append(inp,chips,row,out);inp.focus();
+}
+function toggleInstruct(i,box){
+  if(box.childNodes.length){box.replaceChildren();return}
+  buildInstruct(i,box,()=>threadText(i.id),text=>openThread(i.id,{item:i,text}));
+}
+
 /* ---------- thread view: read the whole conversation and reply from the page ---------- */
 let found=[];
 let thr={id:"",msgs:[],item:null,armed:0,done:false};
@@ -476,13 +541,20 @@ async function openThread(id,o){
   thr={id,msgs:[],item:o.item||{id,st:"reply",title:t.subject||"",summary:t.snippet||""},armed:0,done:false};
   $("thr").hidden=false;$("thrTitle").textContent=t.subject||"Conversation";
   $("thrGmail").href=t.url||"https://mail.google.com/";
+  $("thrSnooze").replaceChildren(snoozeDrop(id,thrClose));$("thrAIbox").hidden=true;$("thrAIbox").open=false;
   $("thrBody").replaceChildren(el("p","sub","Loading the conversation..."));
   $("thrReply").hidden=true;$("thrSt").textContent="";$("thrSt").className="status";$("thrText").value="";$("thrAll").checked=false;
   ["thrSend","thrSave","thrText","thrTo","thrCc"].forEach(k=>$(k).disabled=false);
   $("thrSend").textContent="Send";$("thrAI").textContent=sample?"Write it with Claude":"Fill a template";
   try{const r=await mcp.callTool("Gmail","get_thread",{threadId:id,messageFormat:"PLAIN_TEXT"},{cache:false});thr.msgs=(r.payload&&r.payload.messages)||[]}catch(e){thr.msgs=[]}
   renderThread();
-  if(thr.msgs.length){$("thrReply").hidden=false;fillTargets();if(o.draft)thrDraft()}
+  if(thr.msgs.length){
+    $("thrReply").hidden=false;fillTargets();
+    $("thrAIbox").hidden=false;
+    buildInstruct(thr.item,$("thrInstruct"),()=>threadBlock(thr.msgs),text=>{$("thrText").value=text;$("thrSt").className="status";$("thrSt").textContent="Edit it, then send it or save it as a draft.";$("thrText").focus()});
+    if(o.text){$("thrText").value=o.text;$("thrSt").textContent="Edit it, then send it or save it as a draft."}
+    else if(o.draft)thrDraft()
+  }
   $("thr").querySelector(".pad").scrollTop=0;
 }
 function thrChase(){const l=lastMsg();return thr.item.st==="follow"||thr.item.st==="wait"||addrOf(l.sender).toLowerCase()===myAddr()}
@@ -582,9 +654,9 @@ function itemRow(i){
   {const rd=el("button","btn small","Read thread");rd.type="button";rd.onclick=()=>openThread(i.id,{item:i});a.append(rd)}
   if(i.st==="reply"||i.st==="follow"||i.st==="work"||i.st==="wait"){const d=el("button","btn small solid",i.st==="follow"||i.st==="wait"?"Draft a chaser":"Draft a reply");d.type="button";d.onclick=()=>openThread(i.id,{item:i,draft:true});a.append(d)}
   const dn=el("button","btn small ghost",state.done[i.id]?"Undo done":"Done");dn.type="button";dn.onclick=()=>{if(state.done[i.id])delete state.done[i.id];else state.done[i.id]=1;persist();renderBoard()};
-  const sz=el("button","btn small ghost",state.snooze[i.id]?"Unsnooze":"Snooze to tomorrow");sz.type="button";sz.onclick=()=>{if(state.snooze[i.id])delete state.snooze[i.id];else{const d=new Date();d.setDate(d.getDate()+1);state.snooze[i.id]=ymd(d)}persist();renderBoard()};
+  const sz=snoozeDrop(i.id);const ib=el("div","instr");const ins=el("button","btn small ghost","Instruct AI");ins.type="button";ins.onclick=()=>toggleInstruct(i,ib);
   const at=el("button","btn small ghost","Add to tasks");at.type="button";at.onclick=()=>{addTask(i.title||t.subject,"Email from "+nameOf(t.from));at.textContent="Added";at.disabled=true};
-  a.append(askDrop("I need help with an email. From: "+(t.lastFromMe?"me, to "+((t.lastTo||[]).join(", ")):(t.from||""))+". Subject: "+(t.subject||"")+". What it's about: "+(i.summary||t.snippet||"")+" What's the best way to handle it? If a reply or chaser is needed, draft one I can edit.",(i.title||t.subject||"")+(i.summary?"\n"+i.summary:"")),dn,sz,at);m.append(a);row.append(m);return row;
+  a.append(askDrop("I need help with an email. From: "+(t.lastFromMe?"me, to "+((t.lastTo||[]).join(", ")):(t.from||""))+". Subject: "+(t.subject||"")+". What it's about: "+(i.summary||t.snippet||"")+" What's the best way to handle it? If a reply or chaser is needed, draft one I can edit.",(i.title||t.subject||"")+(i.summary?"\n"+i.summary:"")),dn,sz,at,ins);m.append(a,ib);row.append(m);return row;
 }
 async function draftFor(i,host,btn){
   btn.disabled=true;btn.textContent="Reading the thread";
