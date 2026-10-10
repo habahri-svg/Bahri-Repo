@@ -1,0 +1,1173 @@
+const PAGE_URL = location.href.split("#")[0];
+const G = Connectors.google;
+const ST = {reply:"Reply today",follow:"Follow up",work:"Work on",wait:"Waiting on others",fyi:"FYI"};
+const ORDER = ["reply","follow","work","wait","fyi"];
+const UR = {4:"Critical",3:"High",2:"Medium",1:"Low"};
+const SRC = ["Gmail","Google Calendar"];
+const $ = id => document.getElementById(id);
+const el = (t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
+let LS = "wyzcc-v1";
+const state0={done:{},snooze:{},tasks:[]};
+let mcp=null, sample=null, db=null, perms=null, uid=null, myName="", email="", pic="";
+let threads=[], sent=[], events=null, board=null, state={done:{},snooze:{},tasks:[]}, flt=null, showOff=false;
+let busy=false;
+
+/* ---------- dates ---------- */
+const pad2=n=>String(n).padStart(2,"0");
+const ymd=d=>d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());
+function todayLine(){const d=new Date();$("today").textContent=d.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
+todayLine();
+const fmtTime=s=>{try{return new Date(s).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}catch(e){return ""}};
+const fmtWhen=s=>{try{const d=new Date(s),n=new Date();const same=ymd(d)===ymd(n);return same?"Today "+fmtTime(s):d.toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"})+", "+fmtTime(s)}catch(e){return ""}};
+
+/* ---------- local + db storage ---------- */
+function lsGet(){try{return JSON.parse(localStorage.getItem(LS)||"{}")}catch(e){return {}}}
+function lsSet(o){try{localStorage.setItem(LS,JSON.stringify(o))}catch(e){}}
+let saveT=0;
+function persist(){
+  const snap={board,state,at:Date.now()};
+  lsSet(snap);
+  if(db&&uid){clearTimeout(saveT);saveT=setTimeout(()=>{db.collection("data/users/"+uid).doc("cc").set({json:JSON.stringify(snap)}).catch(()=>{})},1200)}
+}
+function restore(snap){if(!snap)return;if(snap.board)board=snap.board;if(snap.state)state=Object.assign({done:{},snooze:{},tasks:[]},snap.state);try{renderBoard();renderLinks();renderTasks();applyOrder()}catch(e){}}
+
+/* ---------- tabs ---------- */
+const tabs=[["t-today","p-today"],["t-conn","p-conn"],["t-inst","p-inst"]];
+function show(tid){tabs.forEach(([t,p])=>{const on=t===tid;$(t).setAttribute("aria-selected",String(on));$(p).hidden=!on})}
+tabs.forEach(([t])=>$(t).onclick=()=>show(t));
+
+/* ---------- install tab ---------- */
+$("link").value=PAGE_URL;
+$("copy").onclick=()=>{const b=$("copy");navigator.clipboard.writeText(PAGE_URL).then(()=>{b.textContent="Copied";setTimeout(()=>b.textContent="Copy link",1500)}).catch(()=>{$("link").focus();$("link").select();b.textContent="Press copy on your keyboard"})};
+
+/* ---------- connection status + setup checklist ---------- */
+const connState={};          // Gmail / Google Calendar: ok | prompt | denied | missing | reauth | na
+const connNote={};
+let research={claude:null,chatgpt:null,fu:null};  // imported or read research, plus follow-ups
+function setConn(src,key,detail){connState[src]=key;connNote[src]=detail||"";renderSetup()}
+function errToConn(src,e){
+  const c=e&&e.code;
+  if(c==="server_not_connected"||c==="selection_required")return setConn(src,"missing"),true;
+  if(c==="needs_reauth")return setConn(src,"reauth"),true;
+  if(c==="not_in_manifest"||c==="consent_required")return setConn(src,"denied"),true;
+  if(c==="not_granted"||c==="capability_disabled")return setConn(src,"na"),true;
+  return false;
+}
+async function readConn(){
+  if(!mcp){SRC.forEach(s=>setConn(s,"na"));return}
+  for(const s of SRC){
+    let st="prompt";try{st=perms?await perms.state("mcp:"+s).catch(()=>"unavailable"):"prompt"}catch(e){}
+    if(st==="denied")setConn(s,"denied");else if(connState[s]!=="ok")setConn(s,"prompt");
+  }
+  try{const r=await mcp.listTools();SRC.forEach(s=>{const sv=(r.servers||[]).find(x=>x.server===s);if(!sv)setConn(s,"missing");else if(sv.authStatus==="needs_reauth")setConn(s,"reauth")})}catch(e){}
+}
+const CONNECTORS="https://claude.ai/settings/connectors";
+const GPT_EXPORT="https://chatgpt.com/#settings/DataControls";
+const CLAUDE_EXPORT="https://claude.ai/settings/data-privacy-controls";
+const daysAgo=t=>Math.floor((Date.now()-t)/86400000);
+function stepDefs(){
+  const g=k=>connState[k];
+  const skip=(flag)=>["Skip",()=>{state[flag]=1;persist();renderSetup()}];
+  const mailStep=(name,what)=>{
+    const s=g(name);
+    if(s==="ok")return {done:true,desc:what};
+    if(s==="reauth")return {desc:"Your Google sign-in ran out. Tap Sign in again.",btn:["Sign in again",()=>connectGoogle()]};
+    if(s==="denied")return {desc:"Google didn't give this page permission. Tap Allow, then tick every box on Google's screen.",btn:["Allow",()=>connectGoogle(true)]};
+    return {desc:what+" Tap Connect Google.",btn:["Connect Google",()=>connectGoogle()]};
+  };
+  const imp=(key,label,exportUrl,fileId,how)=>{
+    const r=research[key];
+    if(r&&r.at){const d=daysAgo(r.at);const stale=key==="chatgpt"&&d>=7;
+      return {done:!stale,desc:(r.convs||[]).length+" conversations, imported "+(d===0?"today":d+" day"+(d>1?"s":"")+" ago")+"."+(stale?" Import a fresh copy to keep follow-ups current.":""),btn:["Import again",()=>$(fileId).click()],link:[exportUrl,"Open "+label+" export page"]};}
+    return {desc:how,link:[exportUrl,"Open "+label+" export page"],btn:["Import file",()=>$(fileId).click()]};
+  };
+  const optional=(name,s,okTxt,flag,missingTxt,missingBtn,errTxt,retry)=>{
+    const base={name};
+    if(s==="ok")return Object.assign(base,{done:true,desc:okTxt});
+    const sk=state[flag]?null:skip(flag);
+    if(s==="reauth"||s==="denied")return Object.assign(base,{desc:errTxt,btn:missingBtn});
+    if(s==="error")return Object.assign(base,{desc:"It answered with an error: "+clip(retry.note,140)+".",btn:["Try again",retry.fn],btn2:sk,done:!!state[flag]});
+    return Object.assign(base,{desc:missingTxt,btn:missingBtn,btn2:sk,done:!!state[flag]});
+  };
+  return [
+    {name:"Signed in with Google",done:!!uid,desc:uid?"You're signed in as "+email+". Your board is private to you.":"Tap Continue with Google at the top of the page.",btn:uid?null:["Continue with Google",()=>connectGoogle()]},
+    Object.assign({name:"Gmail"},mailStep("Gmail","Reads your inbox and sent mail, and saves reply drafts you approve.")),
+    Object.assign({name:"Google Calendar"},mailStep("Google Calendar","Shows your meetings for today and tomorrow.")),
+    {name:"Claude for smarter sorting (optional)",done:!!sample||!!state.skipAi,desc:sample?(Connectors.ai.mode()==="shared"?"Claude is on automatically with your Google sign-in. Nothing to connect.":"Claude is on. Your key is stored on this device only."):"Without a key, your inbox is sorted by simple rules. Add a Claude API key for smarter sorting, drafts and research follow-ups. It stays on this device.",btn:sample?(Connectors.ai.mode()==="key"?["Remove key",removeAiKey]:null):["Add key",setAiKey],btn2:sample||state.skipAi?null:skip("skipAi")},
+    Object.assign({name:"Your Claude research"},imp("claude","Claude",CLAUDE_EXPORT,"f-claude","1. Tap Open Claude export page. 2. Under Your data, tap Export data and confirm. 3. Claude emails you a download link (usually within minutes). 4. Download the .zip from that email, no need to unzip it. 5. Come back here, tap Import file and choose it.")),
+    Object.assign({name:"Your ChatGPT research"},imp("chatgpt","ChatGPT",GPT_EXPORT,"f-chatgpt","1. Tap Open ChatGPT export page and sign in if asked. 2. In Data controls, tap Export data, then Confirm export. 3. OpenAI emails you a download link. 4. Download the .zip from that email, no need to unzip it. 5. Come back here, tap Import file and choose it. Repeat weekly to keep it current.")),
+    optional("Google Drive (optional)",drive.state,"Connected. Your recent documents show under Documents.","skipDrive","Shows the documents you've been working on. Uses the same Google sign-in as Gmail.",["Connect Google",()=>connectGoogle(drive.state==="denied")],"Google didn't give this page access to Drive. Tap Allow and tick every box on Google's screen.",{note:drive.note,fn:loadDrive}),
+    optional("Todoist (optional)",todo.state,"Connected. Your Todoist tasks for today show under My tasks.","skipTodo","Use Todoist? In Todoist open Settings, Integrations, Developer and copy your API token, then tap Add token. No Todoist? Tap Skip, the built-in task list already works.",["Add token",setTodoToken],"Todoist didn't accept the token. Tap Replace token and paste it again.",{note:todo.note,fn:loadTodoist}),
+    ...(DASH?[{name:"WYZ Rent dashboard (optional)",done:!!state.shareDash||!!state.skipDash,
+      desc:state.shareDash?(state.dashErr?"Couldn't share: "+state.dashErr:"Sharing is on. Only counts and your research topics and ideas go to the company dashboard, never email text."+(state.dashAt?" Last shared "+fmtWhen(state.dashAt)+".":"")):"Optional. Share a daily summary with the company dashboard. Only counts and research topics and ideas are sent, never email text. You can turn it off any time.",
+      btn:state.shareDash?["Share now",()=>shareSummary()]:["Turn on sharing",()=>setShare(true)],
+      btn2:state.shareDash?["Turn off",()=>setShare(false)]:(state.skipDash?null:["Not now",()=>{state.skipDash=1;persist();renderSetup()}])}]:[]),
+    {name:"Installed on your phone or computer",done:!!state.installed,desc:state.installed?"Done.":"Pin the page so it opens like an app. Steps are in the Install tab.",btn:state.installed?null:["Show me how",()=>show("t-inst")],btn2:state.installed?null:["I've done it",()=>{state.installed=1;persist();renderSetup()}]}
+  ];
+}
+let lastStatus="",statT=0;
+function reportStatus(steps){
+  if(!db||!uid)return;
+  const st={steps:steps.map(s=>({n:s.name,ok:!!s.done})),gmail:connState.Gmail||"",calendar:connState["Google Calendar"]||"",todoist:todo.state,drive:drive.state,
+    inbox:threads.length,sorted:!!(board&&board.items&&board.items.length),meetings:events?events.length:null,
+    claudeChats:(research.claude&&research.claude.convs||[]).length,chatgptChats:(research.chatgpt&&research.chatgpt.convs||[]).length,followups:(research.fu&&research.fu.items||[]).length,tasks:(state.tasks||[]).filter(t=>!t.done).length};
+  const key=JSON.stringify(st);if(key===lastStatus)return;lastStatus=key;
+  clearTimeout(statT);statT=setTimeout(()=>{db.collection("status").doc(uid).set(Object.assign({at:Date.now()},st)).catch(()=>{})},3000);
+}
+function renderSetup(){
+  const steps=stepDefs();try{reportStatus(steps)}catch(e){}const n=steps.filter(s=>s.done).length;
+  $("progBar").style.width=Math.round(n/steps.length*100)+"%";
+  $("setupTxt").textContent=n===steps.length?"All set. Everything below runs on your own accounts.":n+" of "+steps.length+" done. Sign in to each account below, one time. Everything uses your own accounts and nobody else sees your board.";
+  const allDone=n===steps.length;
+  if(allDone!==setupComplete){setupComplete=allDone;if(allDone)collapsed.add("setupCard");else collapsed.delete("setupCard");saveCol();try{applyOrder();applyCol()}catch(e){}}
+  try{gateUi()}catch(e){}
+  ["setupList","setupList2"].forEach(id=>{
+    const host=$(id);host.replaceChildren();
+    steps.forEach((s,ix)=>{
+      const r=el("div","stp"+(s.done?" done":""));r.append(el("span","num",s.done?"✓":String(ix+1)),el("span","nm",s.name));
+      const go=el("div","go");
+      if(s.link){const a=el("a","btn small",s.link[1]);a.href=s.link[0];a.target="_blank";a.rel="noopener";go.append(a)}
+      if(s.btn){const b=el("button","btn small solid",s.btn[0]);b.type="button";b.onclick=s.btn[1];go.append(b)}
+      if(s.btn2){const b=el("button","btn small ghost",s.btn2[0]);b.type="button";b.onclick=s.btn2[1];go.append(b)}
+      r.append(go,el("span","ds",s.desc));host.append(r);
+    });
+  });
+  try{if(!$("onb").hidden&&ONB[onbI]==="research")onbRender()}catch(e){}
+}
+/* ---------- guided connect: Claude, Todoist, research (shown right after Google sign-in) ---------- */
+let ONB=["claude","todoist","research","done"];
+let onbI=0;
+const firstName=()=>(myName||"").split(" ")[0]||"there";
+function onbOpen(){ONB=(Connectors.ai.mode()==="shared"?["todoist","research"]:["claude","todoist","research"]).concat(DASH?["dash"]:[],["done"]);onbI=0;$("onb").hidden=false;$("onbMsg").textContent="";onbRender()}
+function onbClose(finished){$("onb").hidden=true;if(finished){state.onboarded=1;persist()}renderSetup()}
+function onbGo(n){onbI=Math.min(n,ONB.length-1);$("onbMsg").textContent="";onbRender()}
+function onbLink(href,text){const a=el("a","btn small",text);a.href=href;a.target="_blank";a.rel="noopener";return a}
+function onbBtn(text,fn,cls){const b=el("button","btn "+(cls||""),text);b.type="button";b.onclick=fn;return b}
+function onbRender(){
+  const k=ONB[onbI],body=$("onbBody"),acts=$("onbActs");body.replaceChildren();acts.replaceChildren();
+  $("onbStep").textContent=k==="done"?"All done":"Step "+(onbI+1)+" of "+(ONB.length-1);
+  const dots=$("onbDots");dots.replaceChildren();ONB.forEach((_,i)=>dots.append(el("i",i<=onbI?"on":"")));
+  const p=(t,c)=>body.append(el("p",c||"sub",t));
+  if(k==="claude"){
+    $("onbTitle").textContent="Connect Claude";
+    if(sample){p("Claude is connected. Your inbox is sorted smartly and drafts are written for you.");acts.append(onbBtn("Next",()=>onbGo(onbI+1),"solid"));return}
+    p("Welcome, "+firstName()+". Google is connected. Next, connect Claude so your inbox is sorted by what needs you, replies are drafted for you and your research gets follow-ups.");
+    p("Claude has no sign-in button for other websites, so it connects with your own API key. It is stored on this device only and sent only to Anthropic.");
+    body.append(onbLink("https://console.anthropic.com/settings/keys","Get my Claude key"));
+    const inp=el("input","in");inp.id="onbKey";inp.type="password";inp.placeholder="sk-ant-...";inp.autocomplete="off";inp.setAttribute("aria-label","Claude API key");body.append(inp);
+    acts.append(onbBtn("Connect Claude",async function(){
+      const v=inp.value.trim(),b=this;
+      if(!/^sk-ant-/.test(v)){$("onbMsg").textContent="Claude keys start with sk-ant-. Copy the key again.";return}
+      b.disabled=true;b.textContent="Checking your key...";$("onbMsg").textContent="";
+      Connectors.ai.set(v);sample=Connectors.makeSample();
+      try{await sample("Reply with the single word OK.",{modelTier:"quick",cache:false});state.claudeOk=1;persist();renderSetup();
+        if(threads.length)triage(board&&board.sig||"",true);followups(true);onbGo(onbI+1)}
+      catch(e){Connectors.ai.clear();sample=null;b.disabled=false;b.textContent="Connect Claude";
+        $("onbMsg").textContent=e&&e.code==="not_granted"?"Claude rejected that key. Check it and try again.":e&&e.code==="rate_limited"?"Claude is busy. Try again in a minute.":"Couldn't reach Claude. Check your connection and try again."}
+    },"solid"),onbBtn("Skip for now",()=>{state.skipAi=1;persist();onbGo(onbI+1)},"ghost"));
+  }else if(k==="todoist"){
+    $("onbTitle").textContent="Connect Todoist";
+    if(todo.state==="ok"){p("Todoist is connected. Today's tasks show next to your email.");acts.append(onbBtn("Next",()=>onbGo(onbI+1),"solid"));return}
+    if(onbI===0)p("Welcome, "+firstName()+". Google and Claude are connected, so your inbox is already being sorted for you. Two optional connections left.");
+    p("Use Todoist? Connect it to see today's tasks beside your email and tick them off here. In Todoist open Settings, Integrations, Developer, copy your API token and paste it below.");
+    body.append(onbLink("https://app.todoist.com/app/settings/integrations/developer","Open Todoist settings"));
+    const inp=el("input","in");inp.id="onbTodo";inp.type="password";inp.placeholder="Todoist API token";inp.autocomplete="off";inp.setAttribute("aria-label","Todoist API token");body.append(inp);
+    acts.append(onbBtn("Connect Todoist",async function(){
+      const v=inp.value.trim(),b=this;if(!v){$("onbMsg").textContent="Paste your Todoist token first.";return}
+      b.disabled=true;b.textContent="Checking...";$("onbMsg").textContent="";
+      Connectors.todoist.set(v);todo.state="unknown";await loadTodoist();
+      if(todo.state==="ok"){onbGo(onbI+1);return}
+      b.disabled=false;b.textContent="Connect Todoist";
+      if(todo.state==="reauth"||todo.state==="denied"){Connectors.todoist.clear();todo.state="missing";renderSetup();$("onbMsg").textContent="Todoist rejected that token. Copy it again from Todoist."}
+      else $("onbMsg").textContent="Todoist didn't answer ("+clip(todo.note,100)+"). You can skip this and try again later."
+    },"solid"),onbBtn("I don't use Todoist",()=>{state.skipTodo=1;persist();onbGo(onbI+1)},"ghost"));
+  }else if(k==="research"){
+    $("onbTitle").textContent="Bring in your ChatGPT and Claude research";
+    p("Optional. Export your chats from each service, then import the file here. The page then suggests a follow-up for each piece of unfinished research. ChatGPT and Claude only share chats through an export file, so this part takes a few minutes.");
+    [["chatgpt","ChatGPT",GPT_EXPORT,"f-chatgpt"],["claude","Claude",CLAUDE_EXPORT,"f-claude"]].forEach(([key,label,url,fid])=>{
+      const r=research[key],row=el("div","onbrow");
+      row.append(el("b","",label+(r&&r.at?" ✓":"")));
+      row.append(el("span","status",r&&r.at?(r.convs||[]).length+" conversations imported.":"Open the export page, request your data, then import the .zip from the email."));
+      const a=el("div","acts");a.append(onbLink(url,"Open "+label+" export page"),onbBtn(r&&r.at?"Import again":"Import file",()=>$(fid).click()));row.append(a);body.append(row)});
+    acts.append(onbBtn("Continue",()=>onbGo(onbI+1),"solid"));
+  }else if(k==="dash"){
+    $("onbTitle").textContent="Share a daily summary with the company";
+    p("Optional. Turn this on to send a short daily summary to the WYZ Rent dashboard, so the team can see how the day is going.");
+    p("What is sent: counts only (emails to reply, follow-ups, meetings today, open tasks) and your research topics and ideas. Never email text, names or files. You can turn it off at any time.");
+    acts.append(onbBtn("Turn on sharing",()=>{setShare(true);onbGo(onbI+1)},"solid"),onbBtn("Not now",()=>{state.skipDash=1;persist();onbGo(onbI+1)},"ghost"));
+  }else{
+    $("onbTitle").textContent="You're all set, "+firstName();
+    const line=(ok,t)=>body.append(el("p","sub",(ok?"✓ ":"○ ")+t));
+    line(true,"Google: Gmail, Calendar and Drive ("+(email||"signed in")+")");
+    line(!!sample,sample?"Claude: connected, smart sorting and drafts on":"Claude: not connected, simple sorting for now");
+    line(todo.state==="ok",todo.state==="ok"?"Todoist: connected":"Todoist: not connected");
+    const n=((research.chatgpt&&research.chatgpt.convs)||[]).length+((research.claude&&research.claude.convs)||[]).length;
+    line(n>0,n?"Research: "+n+" conversations imported":"Research: not imported yet");
+    if(DASH)line(!!state.shareDash,state.shareDash?"Company dashboard: sharing a daily summary":"Company dashboard: not sharing");
+    p("You can connect anything left from the Connections tab at any time.");
+    acts.append(onbBtn("Open my page",()=>onbClose(true),"solid"));
+  }
+  const f=body.querySelector("input")||acts.querySelector("button");if(f)setTimeout(()=>f.focus(),30);
+}
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("onb").hidden)onbClose(true)});
+$("onbAgain").onclick=()=>{show("t-today");onbOpen()};
+
+/* ---------- share a daily summary with the company dashboard (optional, off until the person turns it on) ---------- */
+const DASH=(window.WYZ_CONFIG&&window.WYZ_CONFIG.DASHBOARD_URL)||"";
+const dubaiDay=()=>new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Dubai"});
+function summaryPayload(){
+  const items=allItems().filter(i=>!isOff(i));
+  const n=k=>items.filter(i=>i.st===k).length;
+  const today=ymd(new Date());
+  const meet=(events||[]).filter(x=>{const s=x.start&&(x.start.dateTime||x.start.date);return s&&(x.start.date?x.start.date===today:ymd(new Date(s))===today)}).length;
+  const open=(state.tasks||[]).filter(t=>!t.done).length+(todo.state==="ok"?todo.tasks.length:0);
+  const byKey={};allConvs().forEach(c=>byKey[c.src+":"+c.id]=c);
+  const rs=((research.fu&&research.fu.items)||[]).slice(0,10).map(f=>{const c=byKey[f.key];return {topic:clip(f.topic||"",200),idea:clip(f.next||"",200),source:c&&c.src==="chatgpt"?"chatgpt":"claude"}}).filter(x=>x.topic);
+  return {date:dubaiDay(),emails_to_reply:n("reply"),follow_ups:n("follow"),waiting:n("wait"),meetings_today:meet,tasks_open:Math.min(open,10000),research:rs};
+}
+async function shareSummary(){
+  if(!DASH||!G.connected())return;
+  try{
+    const t=await G.token();
+    const r=await fetch(DASH,{method:"POST",headers:{"content-type":"application/json",Authorization:"Bearer "+t},body:JSON.stringify(summaryPayload())});
+    if(!r.ok)throw new Error(r.status===403?"Your Google account isn't on the dashboard's approved list.":"The dashboard answered "+r.status+".");
+    state.dashAt=Date.now();state.dashErr="";
+  }catch(e){state.dashErr=(e&&e.message)||"Couldn't reach the dashboard."}
+  persist();renderSetup();
+}
+function setShare(on){state.shareDash=on?1:0;if(on)state.skipDash=0;persist();renderSetup();if(on)shareSummary()}
+
+/* ---------- connect, personalise, sign out ---------- */
+const niceErr=e=>{const c=e&&e.code;
+  if(c==="popup_closed")return "The Google window was closed. Tap Continue with Google to try again.";
+  if(c==="popup_failed_to_open")return "Your browser blocked the Google window. Allow pop-ups for this site, then try again.";
+  if(c==="consent_required")return "Google didn't give permission. Tap Continue with Google again and tick every box on Google's screen.";
+  if(c==="not_configured")return "Google sign-in isn't set up yet. The site owner needs to add a Google Client ID (EXECUTION-PAGE.md, step 2).";
+  if(c==="google_unavailable")return e.message;
+  return (e&&e.message)||"Couldn't connect to Google. Try again."};
+const lastName=()=>{try{return localStorage.getItem("wyz-last-name")||""}catch(e){return ""}};
+function showWelcome(){
+  const w=$("welcome");w.hidden=false;
+  if(!G.configured()){$("wTitle").textContent="One-time setup needed";$("wText").textContent="Google needs to know this site before anyone can sign in. Follow the steps below once, paste the Client ID, and the Continue with Google button turns on.";$("wBtn").disabled=true;$("wSetup").hidden=false;$("wOrigin").textContent=location.origin;return}
+  $("wBtn").disabled=false;
+  if(!G.fromConfigFile()){$("wFamily").hidden=false;$("wFamLink").value=location.origin+location.pathname+"#cid="+encodeURIComponent(G.clientId())}
+  const n=lastName();if(n){$("wTitle").textContent="Welcome back, "+n.split(" ")[0];$("wText").textContent="Tap Continue with Google to reconnect. Your board loads straight away."}
+}
+function goSec(k){
+  collapsed.delete(SEC_CARD[k]);saveCol();applyCol();
+  const e=document.querySelector('[data-sec="'+k+'"]');
+  if(e){const y=e.getBoundingClientRect().top+window.scrollY-$("toolbar").offsetHeight-8;window.scrollTo({top:y,behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"})}
+}
+/* the banner: a one-line read on the day, plus counts that jump to the right section */
+function updateHero(){
+  const box=$("heroStats"),sum=$("heroSum");
+  if(!uid||!G.connected()){box.replaceChildren();sum.textContent="";return}
+  const s=summaryPayload();
+  document.title=(s.emails_to_reply?"("+s.emails_to_reply+") ":"")+"WYZ Rent Execution Page";
+  const now=Date.now();
+  const next=(events||[]).filter(x=>x.start&&x.start.dateTime&&Date.parse(x.start.dateTime)>now).sort((a,b)=>Date.parse(a.start.dateTime)-Date.parse(b.start.dateTime))[0];
+  const parts=[];
+  if(s.emails_to_reply)parts.push(s.emails_to_reply+" email"+(s.emails_to_reply>1?"s":"")+" to reply to");
+  if(s.follow_ups)parts.push(s.follow_ups+" to chase");
+  if(s.meetings_today)parts.push(s.meetings_today+" meeting"+(s.meetings_today>1?"s":""));
+  let line=parts.length?"Today: "+parts.join(", ")+".":(board?"You're clear for now. Nothing urgent is waiting.":"");
+  if(next)line+=" Next up at "+fmtTime(next.start.dateTime)+": "+clip(next.summary||"Meeting",50)+".";
+  sum.textContent=line;
+  const defs=[["Reply today",s.emails_to_reply,"#d6453d",()=>{flt="reply";renderBoard();goSec("inbox")}],["Follow up",s.follow_ups,"#e08a2e",()=>{flt="follow";renderBoard();goSec("inbox")}],["Meetings today",s.meetings_today,"#9cc9e8",()=>goSec("cal")],["Open tasks",s.tasks_open,"#45a843",()=>goSec("tasks")]];
+  box.replaceChildren();
+  defs.forEach(([label,n,color,fn])=>{const b=el("button","hstat");b.type="button";b.append(el("b","",String(n)));const l=el("span");const dot=el("i");dot.style.background=color;l.append(dot,label);b.append(l);b.onclick=fn;b.setAttribute("aria-label",n+" "+label);box.append(b)});
+}
+function renderHello(){
+  const h=new Date().getHours();
+  $("hello").textContent=myName?(h<12?"Good morning, ":h<18?"Good afternoon, ":"Good evening, ")+myName.split(" ")[0]:"Your execution page";
+  try{updateHero()}catch(e){}
+  $("who").hidden=!uid;
+  if(uid){$("whoName").textContent=email||myName;const a=$("avatar");if(pic){a.src=pic;a.hidden=false}else a.hidden=true}
+}
+let loopOn=false;
+async function afterConnect(){
+  const p=await G.profile();
+  uid=p.sub;myName=p.name||"";email=p.email||"";pic=p.picture||"";
+  try{localStorage.setItem("wyz-last-name",myName)}catch(e){}
+  LS="wyzcc-v1-"+uid;
+  $("welcome").hidden=true;renderHello();
+  const snap=lsGet();if(snap&&snap.state)restore(snap);
+  await loadResearch();renderTasks();renderSetup();
+  if(!state.onboarded)onbOpen();
+  await refreshAll(false);
+  if(!loopOn){loopOn=true;
+    setInterval(()=>{if(!document.hidden)refreshAll(false)},600000);
+    document.addEventListener("visibilitychange",()=>{if(!document.hidden&&board&&Date.now()-(board.at||0)>300000)refreshAll(false)})}
+}
+async function connectGoogle(consent){
+  const b=$("wBtn"),old="Continue with Google";
+  b.disabled=true;b.textContent="Opening Google...";$("wMsg").textContent="";
+  try{await G.connect(true,!!consent);await afterConnect()}
+  catch(e){$("wMsg").textContent=niceErr(e);showWelcome()}
+  b.disabled=!G.configured();b.textContent=old;
+}
+function setTodoToken(){
+  const t=prompt("Paste your Todoist API token. In Todoist: Settings, Integrations, Developer.");
+  if(!t||!t.trim())return;
+  Connectors.todoist.set(t);todo.state="unknown";loadTodoist();
+}
+function setAiKey(){
+  const k=prompt("Paste your Claude API key (starts with sk-ant-). It is stored on this device only.");
+  if(!k||!k.trim())return;
+  Connectors.ai.set(k);sample=Connectors.makeSample();state.claudeOk=1;persist();renderSetup();
+  if(threads.length)triage(board&&board.sig||"",true);followups(true);
+}
+function removeAiKey(){Connectors.ai.clear();sample=Connectors.makeSample();renderSetup();if(threads.length)triage(board&&board.sig||"",true)}
+const gateUi=()=>{};
+$("wBtn").onclick=()=>connectGoogle();
+const copyBtn=(id,text,label)=>{$(id).onclick=()=>navigator.clipboard.writeText(text()).then(()=>{$(id).textContent="Copied";setTimeout(()=>$(id).textContent=label,1500)}).catch(()=>{$(id).textContent="Copy by hand"})};
+copyBtn("wFamCopy",()=>$("wFamLink").value,"Copy link");
+copyBtn("wCopyOrigin",()=>location.origin,"Copy address");
+copyBtn("wCopyScopes",()=>["https://www.googleapis.com/auth/gmail.readonly","https://www.googleapis.com/auth/gmail.compose","https://www.googleapis.com/auth/gmail.modify","https://www.googleapis.com/auth/calendar.readonly","https://www.googleapis.com/auth/drive.metadata.readonly"].join("\n"),"Copy scopes");
+$("wSave").onclick=()=>{const v=$("wClient").value.trim();if(!/\.apps\.googleusercontent\.com$/.test(v)){$("wMsg").textContent="That doesn't look like a Client ID. It ends in .apps.googleusercontent.com";return}G.setClientId(v);location.reload()};
+$("signOut").onclick=$("manage").onclick=async()=>{await G.signOut();try{localStorage.removeItem("wyz-last-name")}catch(e){}location.reload()};
+
+/* ---------- calendar ---------- */
+async function loadCal(){
+  if(!mcp)return;
+  const d=new Date();d.setHours(0,0,0,0);const e=new Date(d);e.setDate(e.getDate()+8);
+  try{
+    const r=await mcp.callTool("Google Calendar","list_events",{startTime:ymd(d)+"T00:00:00",endTime:ymd(e)+"T00:00:00",orderBy:"startTime",pageSize:40},{cache:false});
+    const p=r.payload||{};events=(p.events||[]).filter(x=>x.status!=="cancelled");
+    setConn("Google Calendar","ok");renderCal();
+  }catch(err){if(!errToConn("Google Calendar",err)){$("cal").replaceChildren(el("p","status err","Couldn't read your calendar just now: "+(err&&err.message||"try Refresh now")))}else renderCal()}
+}
+function renderCal(){
+  try{updateHero()}catch(e){}
+  const host=$("cal");host.replaceChildren();
+  if(connState["Google Calendar"]!=="ok"){host.append(el("p","sub","Your meetings show here once Google Calendar is connected."));return}
+  const days=Array.from({length:7},(_,n)=>{const d=new Date();d.setDate(d.getDate()+n);return [ymd(d),n===0?"Today":n===1?"Tomorrow":niceDay(ymd(d)),n]});
+  days.forEach(([day,lbl,n])=>{
+    const list=(events||[]).filter(x=>{const s=x.start&&(x.start.dateTime||x.start.date);return s&&(x.start.date?x.start.date===day:ymd(new Date(s))===day)});
+    if(n>1&&!list.length)return;
+    host.append(el("div","daylbl",lbl));
+    if(!list.length){host.append(el("p","sub","Nothing scheduled."));return}
+    list.forEach(x=>{const r=el("div","ev");r.append(el("b","",x.start.date?"All day":fmtTime(x.start.dateTime)+(x.end&&x.end.dateTime?"–"+fmtTime(x.end.dateTime):"")));
+      const s=el("span");const a=x.conferenceUrl||x.htmlLink;if(a){const l=el("a","",x.summary||"(No title)");l.href=a;l.target="_blank";l.rel="noopener";l.style.color="var(--fg)";s.append(l)}else s.append(x.summary||"(No title)");
+      if(x.location)s.append(el("small",""," · "+x.location));if(x.conferenceUrl){const j=el("a","btn small","Join");j.href=x.conferenceUrl;j.target="_blank";j.rel="noopener";j.style.marginLeft="8px";s.append(j)}r.append(s);host.append(r)});
+  });
+}
+
+/* ---------- mail ---------- */
+const nameOf=s=>{s=String(s||"");const m=s.match(/^\s*"?([^"<]+?)"?\s*</);return m?m[1]:s.replace(/@.*/,"")};
+const addrOf=s=>{s=String(s||"");const m=s.match(/<([^>]+)>/);return (m?m[1]:s).trim()};
+function slimThread(t){const ms=t.messages||[];const last=ms[ms.length-1]||{};const first=ms[0]||{};
+  const mine=(last.labelIds||[]).includes("SENT");const lastOther=[...ms].reverse().find(m=>!(m.labelIds||[]).includes("SENT"))||{};
+  const days=last.date?Math.floor((Date.now()-Date.parse(last.date))/86400000):null;
+  return {id:t.id,from:mine?(lastOther.sender||first.sender||""):(last.sender||first.sender||""),subject:first.subject||last.subject||"(No subject)",snippet:(last.snippet||"").replace(/&#39;/g,"'").replace(/&quot;/g,'"').replace(/&amp;/g,"&").slice(0,280),date:last.date||first.date||"",count:t.messageCount||ms.length,unread:(last.labelIds||[]).includes("UNREAD"),important:(last.labelIds||[]).includes("IMPORTANT"),url:t.viewUrl||last.viewUrl||"",lastId:last.id||t.id,lastFromMe:mine,lastTo:mine?(last.toRecipients||[]).slice(0,3):[],daysSinceLast:days,auto:(last.labelIds||[]).some(l=>/^CATEGORY_(PROMOTIONS|SOCIAL|UPDATES|FORUMS)$/.test(l))}}
+async function loadMail(force){
+  if(!mcp||busy)return;busy=true;setFresh("load","Reading your inbox and sent mail");
+  try{
+    const g=await mcp.server("Gmail").catch(e=>{throw e});
+    const [inb,snt,snt2]=await Promise.all([
+      g.search_threads({query:"in:inbox newer_than:7d -category:promotions -category:social",pageSize:30},{cache:false}),
+      g.search_threads({query:"in:sent newer_than:3d -to:me",pageSize:40},{cache:false}).catch(()=>({})),
+      g.search_threads({query:"in:sent older_than:3d newer_than:21d -to:me",pageSize:40},{cache:false}).catch(()=>({}))
+    ]);
+    const map=new Map();
+    ((inb&&inb.threads)||[]).forEach(t=>map.set(t.id,{t,inInbox:true}));
+    [snt,snt2].forEach(x=>((x&&x.threads)||[]).forEach(t=>{if(!map.has(t.id))map.set(t.id,{t,inInbox:false})}));
+    /* search previews hold only the oldest messages of a thread: fetch the rest where some are missing */
+    const need=[...map.values()].filter(v=>(v.t.messageCount||0)>((v.t.messages||[]).length)).slice(0,30);
+    await Promise.all(need.map(async v=>{try{const full=await g.get_thread({threadId:v.t.id,messageFormat:"MINIMAL"},{cache:false});if(full&&Array.isArray(full.messages)&&full.messages.length)v.t=Object.assign({},v.t,{messages:full.messages,messageCount:full.messages.length})}catch(e){}}));
+    threads=[...map.values()].map(v=>Object.assign(slimThread(v.t),{inInbox:v.inInbox}));sent=[];
+    setConn("Gmail","ok");
+    const sig=threads.map(t=>t.id+":"+t.count).join("|");
+    if(force||!board||board.sig!==sig||!board.v2)await triage(sig);else{renderBoard();setFresh("ok")}
+  }catch(err){
+    if(!errToConn("Gmail",err))setFresh("err","Couldn't read Gmail just now: "+(err&&err.message||"try Refresh now"));else setFresh("err","Gmail needs attention: see the setup steps");
+    renderBoard();
+  }finally{busy=false}
+}
+async function triage(sig,force){
+  if(!threads.length){board={sig,items:[],headline:"Nothing in your inbox from the last 7 days.",at:Date.now()};persist();renderBoard();setFresh("ok");return}
+  if(!sample){board=heuristicBoard(sig,true);persist();renderBoard();setFresh("ok");return}
+  setFresh("load","Sorting your inbox with Claude");
+  const now=new Date();
+  const prompt="You are triaging one person's email for their daily run sheet. The person is "+(myName||"the reader")+" at WYZ Rent, a Dubai holiday home management company. Today is "+now.toString()+".\n\n"+
+  "Email threads (JSON). inInbox = in the inbox now. lastFromMe = the person sent the last message. lastTo = who they wrote to. daysSinceLast = days since the last message:\n"+JSON.stringify(threads.map(({url,lastId,...r})=>r))+
+  "\n\nReturn JSON only: {\"headline\": one or two plain sentences on what matters today, \"items\": [{\"id\": thread id, \"st\": one of reply|follow|work|wait|fyi, \"g\": urgency 1-4 (4 critical), \"title\": short action-style title, \"summary\": one or two sentences saying what it is and what to do, \"when\": short timing note like 'You asked Tue, 3 days ago' }]}.\n"+
+  "Statuses: reply = someone wrote and is waiting for this person's answer. work = a task to do that isn't a reply. wait = lastFromMe is true, they asked for something or are expecting an answer, and it's been under 3 days. follow = lastFromMe is true, they're still owed an answer, and it's been 3 days or more, so they should chase (name who to chase in the title). fyi = worth knowing, nothing to do. "+
+  "Take follow and wait seriously: look through every lastFromMe thread and include each one where a reply, document, decision or update is still owed to them, even if it's older. Skip lastFromMe threads that were just thanks, confirmations or closing notes, and anything they sent to themselves. "+
+  "Leave out pure marketing, newsletters, one-time passcodes and automatic notifications that need nothing. Write plainly, no em dashes. Most urgent first within each status.";
+  try{
+    const r=await sample.json(prompt,{modelTier:"default",cache:false});
+    const items=(r&&r.items||[]).filter(x=>x&&threads.some(t=>t.id===x.id)&&ST[x.st]);
+    state.claudeOk=1;board={sig,v2:1,items,headline:String(r&&r.headline||""),at:Date.now()};persist();renderSetup();renderBoard();setFresh("ok");
+  }catch(err){
+    const c=err&&err.code;
+    {const hb=heuristicBoard(sig,false);hb.headline=(c==="not_granted"?"Your Claude API key was rejected, so your inbox is sorted by simple rules. ":c==="rate_limited"?"Claude is busy, so your inbox is sorted by simple rules for now. ":"Couldn't use Claude just now ("+clip((err&&err.message)||"unknown reason",110)+"), so your inbox is sorted by simple rules. ")+hb.headline;board=hb}
+    renderBoard();setFresh("ok");
+  }
+}
+
+/* ---------- simple sorting rules, used when no Claude key is set ---------- */
+function heuristicBoard(sig,final){
+  const auto=/no-?reply|noreply|do-?not-?reply|notifications?@|newsletter|mailer-daemon|updates?@|news@|marketing|billing@|invoice@|orders?@|alerts?@|security@|support@|account@/i;
+  const autoSubj=/dispatched|shipped|out for delivery|your order|order #|receipt|invoice|statement|verification code|one-time|otp|password|security alert|sign-?in|payout|booking confirmation/i;
+  const asks=/\?|please|kindly|could you|can you|let me know|confirm|send|share|update|waiting|asap|urgent|quote|follow/i;
+  const items=[];let nReply=0,nFollow=0;
+  threads.forEach(t=>{
+    const who=nameOf(t.lastFromMe?(t.lastTo||[])[0]:t.from)||"them";
+    const d=t.daysSinceLast==null?0:t.daysSinceLast;
+    if(t.lastFromMe){
+      if(d>21||t.auto||!asks.test(t.snippet+" "+t.subject))return;
+      if(t.snippet.length<90&&/^(thanks|thank you|ok|okay|noted|great|perfect|received|sounds good)\b/i.test(t.snippet))return;
+      const chase=d>=3;if(chase)nFollow++;
+      items.push({id:t.id,st:chase?"follow":"wait",g:d>=7?3:2,title:(chase?"Chase ":"Waiting on ")+who+": "+t.subject,summary:"You wrote "+(d===0?"today":d+" day"+(d>1?"s":"")+" ago")+" and there's no reply yet.",when:d===0?"You wrote today":"You wrote "+d+" day"+(d>1?"s":"")+" ago"});
+      return}
+    if(!t.inInbox)return;
+    if(t.auto||auto.test(t.from)||autoSubj.test(t.subject)){items.push({id:t.id,st:"fyi",g:1,title:t.subject,summary:t.snippet});return}
+    if(t.unread||t.important){nReply++;items.push({id:t.id,st:"reply",g:t.important&&t.unread?3:2,title:"Reply to "+who+": "+t.subject,summary:t.snippet});return}
+    items.push({id:t.id,st:"work",g:1,title:t.subject,summary:t.snippet||"Check whether this needs action."});
+  });
+  const hl=(nReply?nReply+" email"+(nReply>1?"s":"")+" to reply to":"Nothing waiting for a reply")+(nFollow?" and "+nFollow+" to chase":"")+". Add a Claude API key in the setup steps for smarter sorting.";
+  const b={sig,items,headline:hl,at:Date.now()};if(final)b.v2=1;return b;
+}
+function templateDraft(i,chase){
+  const t=tById(i.id)||{};const first=(nameOf(t.lastFromMe?(t.lastTo||[])[0]:t.from)||"").split(" ")[0];const me=(myName||"").split(" ")[0];
+  return "Hi "+(first||"there")+",\n\n"+(chase?"Just following up on \""+(t.subject||"my last email")+"\". Could you let me know where this stands? [DETAIL]":"Thanks for your message about \""+(t.subject||"this")+"\". [DETAIL]")+"\n\nBest,\n"+me;
+}
+
+/* ---------- snooze: tomorrow, 3 days, 1 week or a date you pick ---------- */
+const niceDay=s=>{try{return new Date(s+"T00:00:00").toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"})}catch(e){return s}};
+function snoozeUntil(id,days,date){let v=date;if(!v){const d=new Date();d.setDate(d.getDate()+days);v=ymd(d)}state.snooze[id]=v;persist();renderBoard()}
+function snoozeDrop(id,after){
+  const cur=state.snooze[id],active=cur&&cur>todayKey();
+  const d=el("details","askdd");const sm=el("summary","",active?"Snoozed to "+niceDay(cur)+" ▾":"Snooze ▾");sm.title="Hide this until later";d.append(sm);
+  const m=el("div","askmenu");
+  const add=(t,fn)=>{const b=el("button","",t);b.type="button";b.onclick=()=>{d.open=false;fn();if(after)after()};m.append(b)};
+  add("Tomorrow",()=>snoozeUntil(id,1));add("In 3 days",()=>snoozeUntil(id,3));add("In 1 week",()=>snoozeUntil(id,7));
+  add(state.repeat&&state.repeat[id]?"Stop repeating weekly":"Repeat weekly",()=>{state.repeat=state.repeat||{};if(state.repeat[id])delete state.repeat[id];else state.repeat[id]=1;persist();renderBoard()});
+  const row=el("div","snzrow");const dt=el("input","in");dt.type="date";const t=new Date();t.setDate(t.getDate()+1);dt.min=ymd(t);dt.setAttribute("aria-label","Pick a date");
+  const go=el("button","","Set");go.type="button";go.onclick=()=>{if(!dt.value)return;d.open=false;snoozeUntil(id,0,dt.value);if(after)after()};
+  row.append(dt,go);m.append(row);
+  if(active)add("Wake it up now",()=>{delete state.snooze[id];persist();renderBoard()});
+  d.append(m);return d;
+}
+
+/* ---------- learn their tone from recent sent mail ---------- */
+let toneP=null;
+function toneExamples(){
+  if(toneP)return toneP;
+  toneP=(async()=>{try{
+    const g=await mcp.server("Gmail");const r=await g.search_threads({query:"in:sent newer_than:60d -to:me",pageSize:6});const out=[];
+    for(const th of (r.threads||[]).slice(0,5)){
+      const f=await g.get_thread({threadId:th.id,messageFormat:"PLAIN_TEXT"});
+      const mine=(f.messages||[]).filter(m=>addrOf(m.sender).toLowerCase()===myAddr()).pop();
+      if(mine){const b=String(mine.plaintextBody||"").split(/\nOn .{5,90} wrote:|\n-{2,} ?Forwarded/)[0].split("\n").filter(l=>!l.startsWith(">")).join("\n").trim().slice(0,500);if(b.length>30)out.push(b)}
+    }
+    return out.length?"Match the voice, warmth and length of how they usually write. Examples of their own emails:\n\n"+out.map((x,i)=>"Example "+(i+1)+":\n"+x).join("\n\n"):"";
+  }catch(e){return ""}})();
+  return toneP;
+}
+const gcalLink=ev=>{const f=v=>{let x=String(v||"").replace(/[-:]/g,"").slice(0,15);if(x.length===13)x+="00";return x};return "https://calendar.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent(ev.title||"Meeting")+"&dates="+f(ev.start)+"/"+f(ev.end||ev.start)+"&ctz=Asia%2FDubai"+(ev.location?"&location="+encodeURIComponent(ev.location):"")};
+
+/* ---------- instruct AI on an email: tell it what to do, see the answer here ---------- */
+const msgCache={};
+const threadBlock=msgs=>msgs.slice(-6).map(x=>"From: "+(x.sender||"")+"\nDate: "+(x.date||"")+"\n"+String(x.plaintextBody||x.snippet||"").slice(0,3000)).join("\n\n---\n\n");
+async function threadText(id){
+  if(msgCache[id])return msgCache[id];
+  let msgs=[];try{const r=await mcp.callTool("Gmail","get_thread",{threadId:id,messageFormat:"PLAIN_TEXT"},{cache:false});msgs=(r.payload&&r.payload.messages)||[]}catch(e){}
+  return msgCache[id]=threadBlock(msgs)||((tById(id)||{}).snippet||"");
+}
+function buildInstruct(i,box,getText,useReply){
+  box.replaceChildren();let cached="";Promise.resolve(getText()).then(t=>cached=t||"").catch(()=>{});
+  const inp=el("textarea");inp.placeholder="Tell it what to do, for example: reply yes and suggest Tuesday at 10";inp.setAttribute("aria-label","Instruction for AI");
+  const out=el("div","instrout"),chips=el("div","chips");
+  const go=el("button","btn small solid","Do it");go.type="button";
+  const gpt=el("a","btn small","Ask ChatGPT instead");gpt.target="_blank";gpt.rel="noopener";gpt.href="https://chatgpt.com/";
+  const setGpt=()=>{gpt.href="https://chatgpt.com/?q="+encodeURIComponent((inp.value.trim()||"Help me with this email.")+"\n\nEmail thread:\n"+cached.slice(0,3000))};
+  ["mousedown","touchstart","focus","click"].forEach(ev=>gpt.addEventListener(ev,setGpt));
+  const result=r=>{
+    out.replaceChildren();
+    out.append(el("div","ans",String(r.answer||"Done.")));
+    const acts=el("div","acts");
+    if(r.reply&&String(r.reply).trim()){const b=el("button","btn small solid","Use as my reply");b.type="button";b.onclick=()=>useReply(String(r.reply));acts.append(b)}
+    (Array.isArray(r.tasks)?r.tasks:[]).slice(0,3).forEach(t=>{if(!t||!t.title)return;const b=el("button","btn small","Add task: "+clip(t.title,40)+(t.due?" ("+t.due+")":""));b.type="button";b.onclick=()=>{addTask(String(t.title),"Email from "+nameOf((tById(i.id)||{}).from),/^\d{4}-\d{2}-\d{2}$/.test(t.due||"")?t.due:"");b.textContent="Task added";b.disabled=true};acts.append(b)});
+    const n=Math.round(+r.snooze_days||0);
+    if(n>0&&n<=60){const b=el("button","btn small","Snooze "+n+" day"+(n>1?"s":""));b.type="button";b.onclick=()=>snoozeUntil(i.id,n);acts.append(b)}
+    if(r.event&&r.event.title&&r.event.start){const l=el("a","btn small","Add to calendar: "+clip(r.event.title,30));l.href=gcalLink(r.event);l.target="_blank";l.rel="noopener";acts.append(l)}
+    const c=el("button","btn small ghost","Copy answer");c.type="button";c.onclick=()=>navigator.clipboard.writeText(String(r.answer||"")).then(()=>c.textContent="Copied").catch(()=>c.textContent="Select the text to copy");acts.append(c);
+    out.append(acts);
+  };
+  async function run(){
+    const q=inp.value.trim();if(!q){inp.focus();return}
+    if(!sample){out.replaceChildren(el("p","status err","Connect Claude to get answers here (setup step 4). Meanwhile, Ask ChatGPT opens it with this email filled in."));return}
+    go.disabled=true;out.replaceChildren(el("p","status","Thinking..."));
+    try{
+      const txt=cached||await getText();cached=txt||"";
+      const first=(myName||"").split(" ")[0];
+      const tone=/reply|draft|write|answer|respond/i.test(q)?await toneExamples():"";
+      const r=await sample.json("You are the personal assistant of "+(myName||"a manager")+" at WYZ Rent, a Dubai holiday home management company. Today is "+new Date().toDateString()+".\n\nEmail thread (latest last):\n"+cached+"\n\nTheir instruction: "+q+"\n\nReturn JSON only: {\"answer\": a short plain answer, max 120 words, no em dashes, \"reply\": a ready-to-send reply email body in their voice (contractions, signed with the first name"+(first?" "+first:"")+") or an empty string when no reply is needed, \"tasks\": [ {\"title\": short, \"due\": \"YYYY-MM-DD\" or \"\"} ] only when they ask for a task or one is clearly needed, \"snooze_days\": a whole number of days to snooze this email, or 0, \"event\": null, or {\"title\", \"start\": \"YYYY-MM-DDTHH:MM\", \"end\": \"YYYY-MM-DDTHH:MM\", \"location\"} only when the email proposes or confirms a meeting }."+(tone?"\n\n"+tone:""),{modelTier:"default",cache:false});
+      result(r||{});
+    }catch(e){out.replaceChildren(el("p","status err","Couldn't do that ("+clip((e&&e.message)||"unknown reason",110)+")."))}
+    go.disabled=false;
+  }
+  [["Summarize","Summarize this in three short lines."],["Draft a reply","Write a short, warm reply."],["What should I do?","Tell me the best next step and why."],["Make it a task","Turn this into a task, with a due date if one is mentioned."]].forEach(([l,v])=>{const c=el("button","chip",l);c.type="button";c.onclick=()=>{inp.value=v;run()};chips.append(c)});
+  go.onclick=run;
+  const row=el("div","acts");row.append(go,gpt);
+  box.append(inp,chips,row,out);inp.focus();
+}
+function toggleInstruct(i,box){
+  if(box.childNodes.length){box.replaceChildren();return}
+  buildInstruct(i,box,()=>threadText(i.id),text=>openThread(i.id,{item:i,text}));
+}
+
+/* ---------- thread view: read the whole conversation and reply from the page ---------- */
+let found=[];
+let thr={id:"",msgs:[],item:null,armed:0,done:false,mode:"reply",files:[]};
+const addrs=l=>(l||[]).map(addrOf).filter(Boolean);
+const myAddr=()=>String(email||"").toLowerCase();
+function lastMsg(){return thr.msgs[thr.msgs.length-1]||{}}
+function replyTargets(all){
+  const last=lastMsg(),mine=myAddr();
+  const fromMe=addrOf(last.sender).toLowerCase()===mine;
+  const to=fromMe?addrs(last.toRecipients):[addrOf(last.replyTo||last.sender)];
+  const cc=all?addrs(last.ccRecipients).concat(fromMe?[]:addrs(last.toRecipients)):[];
+  const seen=new Set([mine]);
+  const clean=a=>a.filter(x=>x&&!seen.has(x.toLowerCase())&&seen.add(x.toLowerCase()));
+  const t=clean(to);
+  return {to:t.length?t:to,cc:clean(cc)};
+}
+function quoteOf(m){
+  const when=m.date?new Date(m.date).toLocaleString("en-GB",{dateStyle:"medium",timeStyle:"short"}):"";
+  const body=String(m.plaintextBody||m.snippet||"").split("\n").slice(0,40).join("\n").slice(0,3000).split("\n").map(l=>"> "+l).join("\n");
+  return "\n\nOn "+when+", "+(nameOf(m.sender)||m.sender)+" wrote:\n"+body;
+}
+function fillTargets(){
+  const all=$("thrAll").checked,t=replyTargets(all);
+  $("thrTo").value=t.to.join(", ");$("thrCc").value=t.cc.join(", ");$("thrCcWrap").hidden=!all;
+}
+function renderThread(){
+  const body=$("thrBody");body.replaceChildren();
+  if(!thr.msgs.length){body.append(el("p","status err","Couldn't load this conversation. Try Open in Gmail."));return}
+  thr.msgs.forEach((m,ix)=>{
+    const d=el("details","msg");if(ix>=thr.msgs.length-2)d.open=true;
+    const s=el("summary");s.append(document.createTextNode((nameOf(m.sender)||m.sender||"Unknown")+" "),el("span","meta","· "+(m.date?fmtWhen(m.date):"")+(addrOf(m.sender).toLowerCase()===myAddr()?" · you":"")));
+    d.append(s);
+    const to=(m.toRecipients||[]).map(x=>nameOf(x)||x).join(", ");
+    if(to)d.append(el("div","meta","To: "+to+((m.ccRecipients||[]).length?" · Cc: "+m.ccRecipients.map(x=>nameOf(x)||x).join(", "):"")));
+    d.append(el("pre","",String(m.plaintextBody||m.snippet||"(No text in this message)").trim()));
+    if((m.attachments||[]).length)d.append(el("div","meta","Attachments: "+m.attachments.join(", ")+" (open in Gmail to download)"));
+    body.append(d);
+  });
+}
+async function openThread(id,o){
+  o=o||{};const t=tById(id)||{};
+  thr={id,msgs:[],item:o.item||{id,st:"reply",title:t.subject||"",summary:t.snippet||""},armed:0,done:false,mode:"reply",files:[]};
+  setMode("reply");$("thrFiles").value="";$("thrFileList").textContent="";$("thrArchive").disabled=false;$("thrArchive").textContent="Archive";$("thrRemind").value="3";
+  $("thr").hidden=false;$("thrTitle").textContent=t.subject||"Conversation";
+  $("thrGmail").href=t.url||"https://mail.google.com/";
+  $("thrSnooze").replaceChildren(snoozeDrop(id,thrClose));$("thrAIbox").hidden=true;$("thrAIbox").open=false;
+  $("thrBody").replaceChildren(el("p","sub","Loading the conversation..."));
+  $("thrReply").hidden=true;$("thrSt").textContent="";$("thrSt").className="status";$("thrText").value="";$("thrAll").checked=false;
+  ["thrSend","thrSave","thrText","thrTo","thrCc"].forEach(k=>$(k).disabled=false);
+  $("thrSend").textContent="Send";$("thrAI").textContent=sample?"Write it with Claude":"Fill a template";
+  try{const r=await mcp.callTool("Gmail","get_thread",{threadId:id,messageFormat:"PLAIN_TEXT"},{cache:false});thr.msgs=(r.payload&&r.payload.messages)||[]}catch(e){thr.msgs=[]}
+  renderThread();
+  if(thr.msgs.length&&(lastMsg().labelIds||[]).includes("UNREAD"))mcp.callTool("Gmail","mark_read",{threadId:id}).catch(()=>{});
+  if(thr.msgs.length){
+    $("thrReply").hidden=false;fillTargets();
+    $("thrAIbox").hidden=false;
+    buildInstruct(thr.item,$("thrInstruct"),()=>threadBlock(thr.msgs),text=>{$("thrText").value=text;$("thrSt").className="status";$("thrSt").textContent="Edit it, then send it or save it as a draft.";$("thrText").focus()});
+    if(o.text){$("thrText").value=o.text;$("thrSt").textContent="Edit it, then send it or save it as a draft."}
+    else if(o.draft)thrDraft()
+  }
+  $("thr").querySelector(".pad").scrollTop=0;
+}
+function thrChase(){const l=lastMsg();return thr.item.st==="follow"||thr.item.st==="wait"||addrOf(l.sender).toLowerCase()===myAddr()}
+async function thrDraft(){
+  const ta=$("thrText"),st=$("thrSt"),chase=thrChase();
+  st.className="status";st.textContent=sample?"Writing a draft with Claude...":"";ta.value="";
+  const text=threadBlock(thr.msgs);
+  try{
+    const tone=sample?await toneExamples():"";
+    const r=!sample?{text:templateDraft(thr.item,chase)}:await sample((chase?"Write a short, polite follow-up email chasing an answer that is still owed, ":"Write a reply email ")+"for "+(myName||"me")+" at WYZ Rent. Plain text only, ready to edit, signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":"")+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject, no quoted text."+(tone?"\n\n"+tone:"")+"\n\nWhat it's about: "+(thr.item.title||"")+". "+(thr.item.summary||"")+"\n\nThread (latest last):\n"+text,{cache:false,onText:u=>{ta.value=u.text}});
+    ta.value=r.text;st.textContent="Edit it, then send it or save it as a draft."
+  }catch(e){st.className="status err";st.textContent="Couldn't write a draft ("+clip((e&&e.message)||"unknown reason",110)+"). Write your own here."}
+}
+function thrArgs(){
+  const last=lastMsg(),subj=String(tById(thr.id)&&tById(thr.id).subject||$("thrTitle").textContent||"");
+  const split=v=>String(v||"").split(/[,;]/).map(x=>x.trim()).filter(Boolean);
+  const files=thr.files.map(f=>({name:f.name,type:f.type,data:f.data}));
+  if(thr.mode==="forward")return {to:split($("thrTo").value),cc:split($("thrCc").value),subject:/^fwd?:/i.test(subj)?subj:"Fwd: "+subj,body:$("thrText").value.trimEnd()+forwardBlock(),attachments:files};
+  return {to:split($("thrTo").value),cc:split($("thrCc").value),subject:/^re:/i.test(subj)?subj:"Re: "+subj,body:$("thrText").value.trimEnd()+quoteOf(last),replyToMessageId:last.id,attachments:files};
+}
+function forwardBlock(){
+  return "\n\n---------- Forwarded message ----------\n"+thr.msgs.slice(-3).map(m=>"From: "+(m.sender||"")+"\nDate: "+(m.date?new Date(m.date).toLocaleString("en-GB",{dateStyle:"medium",timeStyle:"short"}):"")+"\nSubject: "+$("thrTitle").textContent+"\n\n"+String(m.plaintextBody||m.snippet||"").slice(0,6000)).join("\n\n---\n\n");
+}
+function setMode(m){
+  thr.mode=m;const fwd=m==="forward";
+  $("thrFwd").textContent=fwd?"Back to reply":"Forward";
+  $("thrSumWrap").hidden=!(fwd&&sample);$("thrRemWrap").hidden=fwd;$("thrAll").parentElement.hidden=fwd;
+  $("thrAI").hidden=fwd;if(!fwd)$("thrSum").checked=false;
+}
+$("thrFwd").onclick=()=>{
+  if(thr.mode==="forward"){setMode("reply");fillTargets();return}
+  setMode("forward");$("thrTo").value="";$("thrCc").value="";$("thrCcWrap").hidden=true;$("thrText").value="";
+  $("thrSt").className="status";$("thrSt").textContent="Type who to send it to and an optional note. The conversation is added below your note.";$("thrTo").focus();
+};
+$("thrFiles").onchange=async e=>{
+  const files=[...e.target.files];let total=thr.files.reduce((n,f)=>n+f.size,0);
+  for(const f of files){
+    if(total+f.size>10*1024*1024){$("thrSt").className="status err";$("thrSt").textContent="Attachments can total 10 MB at most. "+f.name+" was left out.";continue}
+    const data=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(",")[1]||"");r.onerror=rej;r.readAsDataURL(f)});
+    thr.files.push({name:f.name,type:f.type,size:f.size,data});total+=f.size;
+  }
+  e.target.value="";
+  $("thrFileList").textContent=thr.files.map(f=>f.name+" ("+Math.max(1,Math.round(f.size/1024))+" KB)").join(", ");
+};
+async function thrAct(kind){
+  const st=$("thrSt"),a=thrArgs();st.className="status";
+  if(!$("thrText").value.trim()&&!thr.files.length){st.className="status err";st.textContent=thr.mode==="forward"?"Add a short note or an attachment first.":"Write your reply first.";return}
+  if(!a.to.length||a.to.some(x=>!/^\S+@\S+\.\S+$/.test(x))){st.className="status err";st.textContent="Check the To address.";return}
+  const btn=$(kind==="send"?"thrSend":"thrSave");
+  if(kind==="send"&&!thr.armed){thr.armed=1;btn.textContent="Tap again to send to "+a.to[0]+(a.to.length>1?" +"+(a.to.length-1):"");setTimeout(()=>{if(thr.armed&&!thr.done){thr.armed=0;btn.textContent="Send"}},6000);return}
+  thr.armed=0;btn.disabled=true;const old=btn.textContent;btn.textContent=kind==="send"?"Sending...":"Saving...";
+  try{
+    if(thr.mode==="forward"&&$("thrSum").checked&&sample){
+      const sm=await sample("Summarize this email conversation for someone who has not seen it, in 4 short bullet lines, plain words, no em dashes.\n\n"+threadBlock(thr.msgs),{cache:false});
+      a.body=$("thrText").value.trimEnd()+"\n\nSummary:\n"+sm.text.trim();
+    }
+    const r=await mcp.callTool("Gmail",kind==="send"?"send_message":"create_draft",a);
+    thr.done=true;["thrSend","thrSave","thrText","thrTo","thrCc"].forEach(k=>$(k).disabled=true);
+    btn.textContent=kind==="send"?"Sent":"Saved";
+    st.className="status";st.textContent=kind==="send"?"Sent to "+a.to.join(", ")+". Marked as done.":"Saved to your Gmail drafts.";
+    if(kind==="send"){
+      state.done[thr.id]=1;logDone(thr.item);
+      const n=+$("thrRemind").value;if(thr.mode==="reply"&&n>0){const d=new Date();d.setDate(d.getDate()+n);state.chase=state.chase||{};state.chase[thr.id]={due:ymd(d),title:a.subject,at:Date.now(),to:a.to[0]};st.textContent+=" You'll be reminded on "+niceDay(ymd(d))+" if there's no reply."}
+      persist();renderBoard()}
+    else if(r.payload&&r.payload.viewUrl){const l=el("a","btn small","Open draft");l.href=r.payload.viewUrl;l.target="_blank";l.rel="noopener";$("thrSt").append(" ",l)}
+  }catch(e){
+    btn.disabled=false;btn.textContent=old==="Sending..."?"Send":"Save to Gmail drafts";st.className="status err";
+    st.textContent=e&&e.code==="consent_required"?"Google didn't allow sending. Sign out and back in, and tick every box.":"Couldn't "+(kind==="send"?"send":"save")+" it ("+clip((e&&e.message)||"unknown reason",100)+"). Check Gmail before trying again."
+  }
+}
+async function thrArchive(){
+  const b=$("thrArchive"),st=$("thrSt");b.disabled=true;b.textContent="Archiving...";
+  try{await mcp.callTool("Gmail","archive_thread",{threadId:thr.id});b.textContent="Archived";state.done[thr.id]=1;logDone(thr.item,"archived");persist();renderBoard();setTimeout(thrClose,600)}
+  catch(e){b.disabled=false;b.textContent="Archive";st.className="status err";
+    if(e&&e.code==="consent_required"){st.textContent="Archive needs one more Google permission. ";const l=el("button","btn small solid","Allow");l.type="button";l.onclick=()=>connectGoogle(true);st.append(l)}
+    else st.textContent="Couldn't archive it ("+clip((e&&e.message)||"unknown reason",90)+")."}
+}
+$("thrArchive").onclick=thrArchive;
+function thrClose(){$("thr").hidden=true}
+$("thrClose").onclick=thrClose;$("thrAI").onclick=thrDraft;$("thrAll").onchange=fillTargets;
+$("thrSend").onclick=()=>thrAct("send");$("thrSave").onclick=()=>thrAct("save");
+$("thrWA").onclick=()=>window.open(waLink($("thrText").value),"_blank","noopener");
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("thr").hidden)thrClose()});
+$("thr").addEventListener("click",e=>{if(e.target===$("thr"))thrClose()});
+
+/* ---------- search all mail ---------- */
+async function searchMail(){
+  const q=$("mailQ").value.trim(),host=$("mailRes");host.replaceChildren();
+  if(!q)return;
+  if(!G.connected()){host.append(el("p","status err","Connect Google first."));return}
+  host.append(el("p","status","Searching..."));
+  try{
+    const g=await mcp.server("Gmail");const r=await g.search_threads({query:q,pageSize:20});
+    found=(r.threads||[]).map(slimThread);host.replaceChildren();
+    if(!found.length){host.append(el("p","status","Nothing found."));return}
+    host.append(el("p","status",found.length+" conversation"+(found.length>1?"s":"")+" found."));
+    found.forEach(t=>{
+      const row=el("div","item");row.append(el("span","dot none"));const m=el("div","main");
+      m.append(el("span","t",t.subject),el("span","s",t.snippet),el("span","m",(t.lastFromMe?"You wrote to "+(nameOf((t.lastTo||[])[0])||"them"):nameOf(t.from))+(t.date?" · "+fmtWhen(t.date):"")+(t.count>1?" · "+t.count+" messages":"")));
+      const a=el("div","acts");
+      a.append(onbBtn("Read thread",()=>openThread(t.id),"small"),onbBtn("Reply",()=>openThread(t.id,{draft:true}),"small solid"));
+      m.append(a);row.append(m);host.append(row);
+    });
+  }catch(e){host.replaceChildren(el("p","status err","Couldn't search just now ("+clip((e&&e.message)||"unknown reason",100)+")."))}
+}
+$("mailGo").onclick=searchMail;$("mailQ").addEventListener("keydown",e=>{if(e.key==="Enter")searchMail()});
+
+/* ---------- board ---------- */
+const tById=id=>threads.find(t=>t.id===id)||found.find(t=>t.id===id);
+const todayKey=()=>ymd(new Date());
+const isOff=i=>!!state.done[i.id]||(state.snooze[i.id]&&state.snooze[i.id]>todayKey());
+function reminderItems(){
+  const c=state.chase||{},today=todayKey(),out=[];
+  Object.keys(c).forEach(id=>{
+    const t=threads.find(x=>x.id===id);if(!t)return;
+    const td=t.date?Date.parse(t.date):0;
+    if(!t.lastFromMe&&td>(c[id].at||0)){delete c[id];return}   /* someone wrote back after we sent */
+    if(c[id].due<=today&&!c[id].fired){c[id].fired=1;delete state.done[id];persist()}
+    if(c[id].fired)out.push({id,st:"follow",g:3,title:"No reply yet: "+(t.subject||c[id].title),summary:"You asked to be reminded. Chase "+(nameOf(c[id].to||(t.lastTo||[])[0])||"them")+" or mark it done.",when:"Reminder set for "+niceDay(c[id].due)});
+  });
+  return out;
+}
+const allItems=()=>{const rem=board?reminderItems():[];const ids=new Set(rem.map(r=>r.id));return (board&&board.items||[]).filter(x=>!ids.has(x.id)).concat(rem)};
+const backFirst=i=>state.snooze[i.id]===todayKey()?1:0;
+function logDone(i,kind){state.log=(state.log||[]).concat({t:String(i.title||i.id).slice(0,120),at:Date.now(),k:kind||""}).slice(-300)}
+function markDone(i){
+  if(state.repeat&&state.repeat[i.id]){logDone(i,"weekly");snoozeUntil(i.id,7);return}
+  state.done[i.id]=1;if(state.chase)delete state.chase[i.id];logDone(i);persist();renderBoard();
+}
+function renderBoard(){
+  try{updateHero()}catch(e){}
+  const host=$("board");host.replaceChildren();
+  if(!board){return}
+  $("headline").textContent=board.headline||"";
+  const items=allItems().slice().sort((a,b)=>ORDER.indexOf(a.st)-ORDER.indexOf(b.st)||backFirst(b)-backFirst(a)||b.g-a.g);
+  const vis=items.filter(i=>showOff||!isOff(i));
+  // filters
+  const f=$("filters");f.replaceChildren();
+  ORDER.forEach(k=>{const n=items.filter(i=>i.st===k&&!isOff(i)).length;if(!n)return;const b=el("button","chip");b.type="button";b.append(el("span","dot "+k),el("span","",ST[k]),el("b","",String(n)));b.setAttribute("aria-pressed",String(flt===k));b.onclick=()=>{flt=flt===k?null:k;renderBoard()};f.append(b)});
+  const offN=items.filter(isOff).length;$("showOff").textContent=(showOff?"Hide":"Show")+" done and snoozed ("+offN+")";
+  ORDER.forEach(k=>{
+    if(flt&&flt!==k)return;const list=vis.filter(i=>i.st===k);if(!list.length)return;
+    const g=el("div","card group");const h=el("h3");h.append(el("span","dot "+k),el("span","",ST[k]),el("span","n",list.length+" item"+(list.length>1?"s":"")));g.append(h);makeCollapsible(g,"g-"+k,h);
+    list.forEach(i=>g.append(itemRow(i)));host.append(g);
+  });
+  if(!vis.length&&(board.items||[]).length)host.append(el("p","sub","All clear. Everything is done or snoozed."));
+  applyCol();
+}
+function itemRow(i){
+  const t=tById(i.id)||{};const row=el("div","item");if(isOff(i))row.style.opacity=".55";
+  row.append(el("span","dot "+i.st));const m=el("div","main");
+  m.append(el("span","t",i.title||t.subject||""));
+  if(i.summary)m.append(el("span","s",i.summary));
+  const meta=el("span","m");const u=el("span","urg u"+i.g,UR[i.g]||"");meta.append(u,(state.snooze[i.id]===todayKey()?" · Back today":"")+(state.repeat&&state.repeat[i.id]?" · Weekly":"")+" · "+(t.lastFromMe?"You wrote to "+(nameOf((t.lastTo||[])[0])||"them"):(nameOf(t.from)||""))+(i.when?" · "+i.when:t.date?" · "+fmtWhen(t.date):""));m.append(meta);
+  const a=el("div","acts");
+  if(t.url){const o=el("a","btn small","Open in Gmail");o.href=t.url;o.target="_blank";o.rel="noopener";a.append(o)}
+  {const rd=el("button","btn small","Read thread");rd.type="button";rd.onclick=()=>openThread(i.id,{item:i});a.append(rd)}
+  if(i.st==="reply"||i.st==="follow"||i.st==="work"||i.st==="wait"){const d=el("button","btn small solid",i.st==="follow"||i.st==="wait"?"Draft a chaser":"Draft a reply");d.type="button";d.onclick=()=>openThread(i.id,{item:i,draft:true});a.append(d)}
+  const dn=el("button","btn small ghost",state.done[i.id]?"Undo done":"Done");dn.type="button";dn.onclick=()=>{if(state.done[i.id]){delete state.done[i.id];persist();renderBoard()}else markDone(i)};
+  const sz=snoozeDrop(i.id);const ib=el("div","instr");const ins=el("button","btn small ghost","Instruct AI");ins.type="button";ins.onclick=()=>toggleInstruct(i,ib);
+  const at=el("button","btn small ghost","Add to tasks");at.type="button";at.onclick=()=>{addTask(i.title||t.subject,"Email from "+nameOf(t.from));at.textContent="Added";at.disabled=true};
+  a.append(askDrop("I need help with an email. From: "+(t.lastFromMe?"me, to "+((t.lastTo||[]).join(", ")):(t.from||""))+". Subject: "+(t.subject||"")+". What it's about: "+(i.summary||t.snippet||"")+" What's the best way to handle it? If a reply or chaser is needed, draft one I can edit.",(i.title||t.subject||"")+(i.summary?"\n"+i.summary:"")),dn,sz,at,ins);m.append(a,ib);row.append(m);return row;
+}
+async function draftFor(i,host,btn){
+  btn.disabled=true;btn.textContent="Reading the thread";
+  let full=null,msgs=[];
+  try{full=await mcp.callTool("Gmail","get_thread",{threadId:i.id,messageFormat:"PLAIN_TEXT"},{cache:false});msgs=(full.payload&&full.payload.messages)||[]}catch(e){}
+  const text=msgs.slice(-6).map(x=>"From: "+(x.sender||"")+"\nDate: "+(x.date||"")+"\n"+String(x.plaintextBody||x.plaintext_body||x.snippet||"").slice(0,3000)).join("\n\n---\n\n");
+  const box=el("div","draftbox");const ta=el("textarea");ta.id="d-"+i.id;ta.value="";const st=el("span","status","Writing a draft");
+  box.append(st,ta);host.append(box);btn.textContent="Writing";
+  try{
+    const chase=(i.st==="follow"||i.st==="wait");const r=!sample?{text:templateDraft(i,chase)}:await sample((chase?"Write a short, polite follow-up email chasing an answer that is still owed, ":"Write a reply email ")+"for "+(myName||"me")+" at WYZ Rent. Plain text only, ready to edit, signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":"")+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject.\n\nWhat it's about: "+(i.title||"")+". "+(i.summary||"")+"\n\nThread (latest last):\n"+(text||tById(i.id)?.snippet||""),{cache:false,onText:u=>{ta.value=u.text}});
+    ta.value=r.text;st.textContent="Edit it, then save it to your Gmail drafts.";
+  }catch(e){st.textContent="Couldn't write a draft just now ("+clip((e&&e.message)||"unknown reason",110)+"). Write your own here, then save it.";st.className="status err"}
+  btn.remove();
+  const acts=el("div","acts");const sv=el("button","btn small solid","Save to Gmail drafts");sv.type="button";
+  sv.onclick=async()=>{
+    sv.disabled=true;sv.textContent="Saving";
+    const last=msgs[msgs.length-1]||{};const t=tById(i.id)||{};
+    const lastSent=(last.labelIds||[]).includes("SENT");const to=lastSent?addrOf((last.toRecipients||[])[0]||t.from):addrOf(last.sender||t.from);const subj=(t.subject||"").match(/^re:/i)?t.subject:"Re: "+(t.subject||"");
+    try{const r=await mcp.callTool("Gmail","create_draft",{to:[to],subject:subj,body:ta.value,replyToMessageId:last.id||t.lastId});
+      const p=r.payload||{};sv.textContent="Saved to drafts";if(p.viewUrl){const o=el("a","btn small","Open draft");o.href=p.viewUrl;o.target="_blank";o.rel="noopener";acts.append(o)}}
+    catch(e){sv.disabled=false;sv.textContent="Save to Gmail drafts";st.textContent=e&&e.code==="not_in_manifest"?"Saving drafts is turned off for this page. Copy the text instead.":"Couldn't confirm the save. Check your Gmail drafts before trying again.";st.className="status err"}
+  };
+  const cp=el("button","btn small","Copy text");cp.type="button";cp.onclick=()=>navigator.clipboard.writeText(ta.value).then(()=>cp.textContent="Copied").catch(()=>{ta.focus();ta.select()});
+  const wa=el("a","btn small","Send on WhatsApp");wa.target="_blank";wa.rel="noopener";wa.href="#";wa.onclick=()=>{wa.href=waLink(ta.value)};wa.onmousedown=wa.ontouchstart=()=>{wa.href=waLink(ta.value)};
+  acts.append(sv,cp,wa);box.append(acts);
+}
+$("showOff").onclick=()=>{showOff=!showOff;renderBoard()};
+
+/* ---------- ask ---------- */
+$("askGo").onclick=ask;$("askQ").addEventListener("keydown",e=>{if(e.key==="Enter")ask()});
+async function ask(){
+  const q=$("askQ").value.trim();if(!q)return;const out=$("askOut");out.hidden=false;
+  if(!sample){out.textContent="Ask needs a Claude API key. Add one in the setup steps (Claude for smarter sorting).";return}
+  out.textContent="Thinking...";
+  const ctx={today:new Date().toString(),board:(board&&board.items||[]).map(i=>({status:ST[i.st],urgency:UR[i.g],title:i.title,summary:i.summary,from:nameOf((tById(i.id)||{}).from)})),calendar:(events||[]).map(e=>({when:e.start&&(e.start.dateTime||e.start.date),what:e.summary}))};
+  try{const r=await sample("You help "+(myName||"a WYZ Rent team member")+" run their day. Answer briefly and plainly, no em dashes. Their board and calendar (JSON):\n"+JSON.stringify(ctx)+"\n\nQuestion: "+q,{cache:false,onText:u=>{out.textContent=u.text}});out.textContent=r.text}
+  catch(e){out.textContent=e&&e.code==="not_granted"?"Allow Claude for this page to use Ask.":"Couldn't answer just now. Try again in a moment."}
+}
+
+/* ---------- research: Claude (live or import) + ChatGPT (import) ---------- */
+const CLAUDE_SRV="claude_ai";
+let claudeLive="no";   // Claude chat history has no connector yet, so it comes in through the export file
+const decode=s=>String(s||"").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&amp;/g,"&");
+const clip=(s,n)=>{s=String(s||"").replace(/\s+/g," ").trim();return s.length>n?s.slice(0,n-1)+"…":s};
+const pick=convs=>{const cut=Date.now()-30*86400000;let r=convs.filter(c=>c.at>=cut);if(r.length<8)r=convs.slice();return r.sort((a,b)=>b.at-a.at).slice(0,25)};
+function parseClaudeText(txt){
+  const out=[];const re=/<chat url='([^']+)' updated_at='([^']+)'>([\s\S]*?)<\/chat>/g;let m;
+  while((m=re.exec(String(txt)))){const body=decode(m[3]);const title=(body.match(/Title:\s*(.+)/)||[])[1]||"Untitled";
+    const sum=(body.match(/Summary:\s*([\s\S]+)/)||[])[1]||"";const firstQ=(body.match(/\nH:\s*([\s\S]*?)(\nA:|$)/)||[])[1]||"";
+    out.push({src:"claude",id:m[1],url:m[1],title:clip(title,120),at:Date.parse(m[2])||0,asks:[clip(firstQ.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g,""),300)].filter(Boolean),summary:clip(sum,700)})}
+  return out;
+}
+async function readClaudeLive(force){
+  if(!mcp){claudeLive="no";renderSetup();return}
+  try{
+    const r=await mcp.callTool(CLAUDE_SRV,"recent_chats",{n:20},{cache:false});
+    const txt=typeof r.payload==="string"?r.payload:(r.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
+    const convs=parseClaudeText(txt);claudeLive="yes";
+    research.claude={at:Date.now(),via:"live",convs:pick(convs)};saveResearch();renderSetup();followups(force);
+  }catch(e){claudeLive="no";renderSetup();renderResearch()}
+}
+function parseGpt(arr){
+  return (Array.isArray(arr)?arr:[]).map(c=>{
+    const ms=Object.values(c.mapping||{}).map(n=>n&&n.message).filter(m=>m&&m.author&&m.author.role==="user"&&m.content&&Array.isArray(m.content.parts))
+      .sort((a,b)=>(a.create_time||0)-(b.create_time||0)).map(m=>m.content.parts.filter(p=>typeof p==="string").join(" ").trim()).filter(Boolean);
+    const id=c.conversation_id||c.id||"";
+    return {src:"chatgpt",id,url:id?"https://chatgpt.com/c/"+id:"https://chatgpt.com/",title:clip(c.title||"Untitled",120),at:((c.update_time||c.create_time||0)*1000),asks:[ms[0],ms.length>2?ms[ms.length-2]:null,ms.length>1?ms[ms.length-1]:null].filter(Boolean).map(s=>clip(s,300))};
+  });
+}
+function parseClaudeExport(arr){
+  return (Array.isArray(arr)?arr:[]).map(c=>{
+    const hs=(c.chat_messages||[]).filter(m=>m.sender==="human").map(m=>m.text||((m.content||[]).map(x=>x.text||"").join(" "))).filter(Boolean);
+    return {src:"claude",id:c.uuid||"",url:c.uuid?"https://claude.ai/chat/"+c.uuid:"https://claude.ai/",title:clip(c.name||"Untitled",120),at:Date.parse(c.updated_at||c.created_at)||0,asks:[hs[0],hs.length>1?hs[hs.length-1]:null].filter(Boolean).map(s=>clip(s,300)),summary:clip(c.summary||"",500)};
+  });
+}
+async function readUpload(file){
+  if(/\.zip$/i.test(file.name)||file.type.includes("zip")){
+    if(!window.JSZip)throw new Error("Couldn't open the .zip here. Unzip it and choose conversations.json instead.");
+    const z=await JSZip.loadAsync(file);const f=Object.values(z.files).find(x=>/(^|\/)conversations\.json$/i.test(x.name));
+    if(!f)throw new Error("That file has no conversations.json inside. Make sure it's the export from Settings.");
+    return JSON.parse(await f.async("string"));
+  }
+  return JSON.parse(await file.text());
+}
+function wireImport(id,key){
+  $(id).addEventListener("change",async e=>{
+    const file=e.target.files&&e.target.files[0];e.target.value="";if(!file)return;
+    $("resHead").textContent="Reading your "+(key==="chatgpt"?"ChatGPT":"Claude")+" file...";show("t-today");
+    try{const data=await readUpload(file);const convs=key==="chatgpt"?parseGpt(data):parseClaudeExport(data);
+      if(!convs.length)throw new Error("No conversations found in that file.");
+      research[key]={at:Date.now(),via:"import",convs:pick(convs)};saveResearch();renderSetup();followups(true);}
+    catch(err){$("resHead").textContent=(err&&err.message)||"Couldn't read that file. Choose the export file from Settings.";}
+  });
+}
+wireImport("f-chatgpt","chatgpt");wireImport("f-claude","claude");
+
+const allConvs=()=>[...((research.claude&&research.claude.convs)||[]),...((research.chatgpt&&research.chatgpt.convs)||[])].sort((a,b)=>b.at-a.at);
+async function followups(force){
+  const convs=allConvs();renderResearch();
+  if(!convs.length)return;
+  const sig=convs.map(c=>c.src+":"+c.id+":"+c.at).join("|");
+  if(!force&&research.fu&&research.fu.sig===sig)return;
+  if(!sample){return}
+  $("resHead").replaceChildren(el("span","spin"),"Finding follow-ups in your research...");
+  const prompt="You help "+(myName||"a WYZ Rent team member")+" at WYZ Rent (Dubai holiday home management) pick up research they started in Claude and ChatGPT. Today is "+new Date().toDateString()+".\n\nTheir recent conversations (JSON, newest first; asks are their own questions):\n"+JSON.stringify(convs.map(c=>({key:c.src+":"+c.id,src:c.src,title:c.title,date:new Date(c.at).toDateString(),asks:c.asks,summary:c.summary||undefined})))+
+    "\n\nReturn JSON only: {\"headline\": one plain sentence on the main threads of their research, \"items\": [{\"key\": the key, \"topic\": 3-6 word topic, \"where\": one sentence on where they left it, \"next\": one concrete next step to finish or act on it, \"prompt\": a ready-to-send follow-up question they could ask next, \"g\": priority 1-3 (3 = act this week)}]}. "+
+    "Include only conversations with real unfinished work or a decision to make, up to 10, highest priority first. Skip small talk and finished one-off questions. Plain words, no em dashes.";
+  try{const r=await sample.json(prompt,{modelTier:"default",cache:false});
+    const keys=new Set(convs.map(c=>c.src+":"+c.id));
+    research.fu={sig,headline:String(r&&r.headline||""),items:((r&&r.items)||[]).filter(x=>x&&keys.has(x.key)),at:Date.now()};
+    state.claudeOk=1;saveResearch();renderSetup();renderResearch();}
+  catch(e){$("resHead").textContent=e&&e.code==="not_granted"?"Allow Claude in the setup steps to get follow-ups. Your research is listed below meanwhile.":"Couldn't work out follow-ups just now. Your research is listed below.";renderResearch(true)}
+}
+function renderResearch(keepHead){
+  const host=$("research");host.replaceChildren();const convs=allConvs();
+  if(!convs.length){if(!keepHead)$("resHead").textContent="Your recent Claude and ChatGPT research shows here, each with a suggested follow-up, once you connect them in the setup steps above.";return}
+  const byKey={};convs.forEach(c=>byKey[c.src+":"+c.id]=c);
+  const fu=research.fu&&research.fu.items&&research.fu.items.length?research.fu.items:null;
+  if(!keepHead)$("resHead").textContent=fu?(research.fu.headline||"Follow-ups from your recent research."):"Your recent research. Follow-ups appear once Claude is allowed.";
+  const rows=fu?fu.map(f=>({f,c:byKey[f.key]})).filter(x=>x.c):convs.slice(0,10).map(c=>({f:null,c}));
+  rows.forEach(({f,c})=>{
+    const r=el("div","rs");const t=el("div","t");t.append(el("span","src",c.src==="claude"?"Claude":"ChatGPT"),el("span","",f?f.topic:c.title));r.append(t);
+    if(f){r.append(el("span","s",f.where||""));const nx=el("span","f");nx.append(el("b","","Next: "),f.next||"");r.append(nx);if(f.prompt)r.append(el("span","q","Ask next: "+f.prompt))}
+    else if(c.asks&&c.asks[0])r.append(el("span","q",c.asks[0]));
+    r.append(el("span","m",c.title+" · "+new Date(c.at).toLocaleDateString("en-GB",{day:"numeric",month:"short"})));
+    const a=el("div","acts");
+    const op=el("a","btn small","Open conversation");op.href=c.url;op.target="_blank";op.rel="noopener";a.append(op);
+    if(f&&f.prompt){
+      const q=encodeURIComponent(f.prompt);const ask=el("a","btn small solid",c.src==="claude"?"Ask in Claude":"Ask in ChatGPT");ask.href=c.src==="claude"?"https://claude.ai/new?q="+q:"https://chatgpt.com/?q="+q;ask.target="_blank";ask.rel="noopener";a.append(ask);
+      const cp=el("button","btn small ghost","Copy question");cp.type="button";cp.onclick=()=>navigator.clipboard.writeText(f.prompt).then(()=>cp.textContent="Copied").catch(()=>cp.textContent="Select the text to copy");a.append(cp);
+    }
+    a.append(askDrop(f&&f.prompt?f.prompt:"I was researching: "+c.title+". "+((c.asks||[]).join(" ")).slice(0,600)+" Help me pick this up again and tell me the next step."));
+    const at=el("button","btn small ghost","Add to tasks");at.type="button";at.onclick=()=>{addTask(f?f.next||f.topic:c.title,(c.src==="claude"?"Claude":"ChatGPT")+" research");at.textContent="Added";at.disabled=true};a.append(at);
+    r.append(a);host.append(r);
+  });
+}
+let resT=0;
+function saveResearch(){
+  try{localStorage.setItem(LS+"-res",JSON.stringify(research))}catch(e){}
+  if(db&&uid){clearTimeout(resT);resT=setTimeout(()=>{db.collection("data/users/"+uid).doc("research").set({json:JSON.stringify(research)}).catch(()=>{})},1200)}
+}
+async function loadResearch(){
+  try{const l=JSON.parse(localStorage.getItem(LS+"-res")||"null");if(l)research=Object.assign(research,l)}catch(e){}
+  if(db&&uid){try{const s=await db.collection("data/users/"+uid).doc("research").get();if(s.exists){const o=JSON.parse(s.data().json||"{}");research=Object.assign({claude:null,chatgpt:null,fu:null},o)}}catch(e){}}
+  renderSetup();renderResearch();
+}
+$("wipeRes").onclick=async()=>{research={claude:null,chatgpt:null,fu:null};try{localStorage.removeItem(LS+"-res")}catch(e){}
+  if(db&&uid){try{await db.collection("data/users/"+uid).doc("research").delete()}catch(e){}}$("wipeRes").textContent="Deleted";renderSetup();renderResearch()};
+
+/* ---------- tasks: built-in list + Todoist (optional) ---------- */
+const TODO="Todoist";
+let todo={state:"unknown",tasks:[],note:""};   // state: unknown | ok | missing | denied | reauth | error
+const newId=()=>Math.random().toString(36).slice(2,10);
+function addTask(text,src,due,pri){
+  text=clip(text,200);if(!text)return;
+  state.tasks=state.tasks||[];state.tasks.unshift({id:newId(),t:text,src:src||"",due:due||"",p:+pri||1,done:0,at:Date.now()});
+  persist();renderTasks();
+  if(todo.state==="ok"&&$("toTodoist")&&$("toTodoist").checked)pushTodoist(text,due);
+}
+function findList(x,depth){
+  if(depth>4||!x)return null;
+  if(Array.isArray(x)&&x.length&&typeof x[0]==="object"&&("content" in x[0]||"title" in x[0]))return x;
+  if(typeof x==="object")for(const v of Object.values(x)){const r=findList(v,(depth||0)+1);if(r)return r}
+  return null;
+}
+async function loadTodoist(){
+  if(!mcp)return;
+  try{
+    const d=new Date();let input={startDate:ymd(d),daysCount:1,limit:50};
+    try{const desc=await mcp.describeTool(TODO,"find-tasks-by-date");const props=(desc&&desc.inputSchema&&desc.inputSchema.properties)||{};
+      input={};if("startDate" in props)input.startDate="overdue" in props?ymd(d):"today";if("daysCount" in props)input.daysCount=1;if("limit" in props)input.limit=50;if("overdueOption" in props)input.overdueOption="include-overdue";}catch(e){}
+    const r=await mcp.callTool(TODO,"find-tasks-by-date",input,{cache:false});
+    const list=findList(r.structuredContent||r.payload,0);
+    if(list){todo.tasks=list.slice(0,40).map(t=>({id:String(t.id||""),t:String(t.content||t.title||""),due:String((t.due&&(t.due.date||t.due.string))||t.dueDate||t.due||""),p:t.priority||1})).filter(t=>t.t)}
+    else{const txt=typeof r.payload==="string"?r.payload:(r.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
+      todo.tasks=txt.split("\n").map(s=>s.replace(/^[-*\d.\s]+/,"").trim()).filter(s=>s&&s.length>2).slice(0,40).map(s=>({id:"",t:s,due:""}))}
+    todo.state="ok";todo.note="";
+  }catch(e){
+    const c=e&&e.code;todo.state=c==="server_not_connected"||c==="selection_required"?"missing":c==="needs_reauth"?"reauth":c==="not_in_manifest"||c==="consent_required"?"denied":"error";
+    todo.note=todo.state==="error"?(e&&e.message)||"":"";todo.tasks=[];
+  }
+  renderTasks();renderSetup();
+}
+async function completeTodoist(t,btn){
+  btn.disabled=true;btn.textContent="Completing";
+  try{await mcp.callTool(TODO,"complete-tasks",{ids:[t.id]});todo.tasks=todo.tasks.filter(x=>x!==t);renderTasks()}
+  catch(e){btn.disabled=false;btn.textContent="Couldn't complete. Do it in Todoist"}
+}
+async function pushTodoist(text,due){
+  try{await mcp.callTool(TODO,"add-tasks",{tasks:[Object.assign({content:text},due?{dueString:due}:{})]});loadTodoist()}catch(e){$("taskNote").textContent="Saved here. Couldn't also add it to Todoist just now."}
+}
+function renderTasks(){
+  try{updateHero()}catch(e){}
+  const host=$("tasks");if(!host)return;host.replaceChildren();
+  const mine=(state.tasks||[]).filter(t=>!t.done);
+  const rows=[...mine.map(t=>({k:"me",t})),...(todo.state==="ok"?todo.tasks.map(t=>({k:"td",t})):[])];
+  const dueOf=r=>String(r.t.due||"").slice(0,10)||"9999-99-99",priOf=r=>r.k==="td"?(r.t.p>=3?2:1):(r.t.p||1);
+  rows.sort((a,b)=>dueOf(a)<dueOf(b)?-1:dueOf(a)>dueOf(b)?1:priOf(b)-priOf(a));
+  if(!rows.length){const e=el("p","sub","No open tasks. Add one above, or tap Add to tasks on any email or research follow-up.");e.style.padding="0 14px 14px";host.append(e)}
+  rows.forEach(({k,t})=>{
+    const r=el("div","item");r.append(el("span","dot "+(k==="td"?"work":"follow")));const m=el("div","main");
+    m.append(el("span","t",t.t));
+    const dd=dueOf({t});const over=dd!=="9999-99-99"&&dd<todayKey();const meta=[k==="td"?"Todoist":"My list",priOf({k,t})>1?"High priority":"",t.src||"",dd!=="9999-99-99"?(over?"Overdue, was due ":"Due ")+niceDay(dd):""].filter(Boolean).join(" · ");const mm=el("span","m",meta);if(over)mm.style.color="var(--d-reply)";m.append(mm);
+    const a=el("div","acts");const b=el("button","btn small ghost","Mark done");b.type="button";
+    b.onclick=k==="td"?()=>completeTodoist(t,b):()=>{t.done=1;persist();renderTasks()};
+    a.append(askDrop("Help me get this task done: "+t.t+(t.due?" (due "+t.due+")":"")+". Break it into concrete steps and tell me what to do first.","Task: "+t.t+(t.due?" (due "+t.due+")":"")),b);m.append(a);r.append(m);host.append(r);
+  });
+  const done=(state.tasks||[]).filter(t=>t.done).length;$("taskNote").textContent=done?done+" done on your list.":"";
+  $("todoWrap").hidden=todo.state!=="ok";
+}
+$("taskAdd").onclick=()=>{addTask($("taskIn").value,"Added by you",$("taskDue").value,$("taskPri").value);$("taskIn").value="";$("taskDue").value="";$("taskPri").value="1"};
+$("taskIn").addEventListener("keydown",e=>{if(e.key==="Enter")$("taskAdd").click()});
+
+/* ---------- "Ask" dropdown on each line ---------- */
+function waLink(text){return "https://wa.me/?text="+encodeURIComponent(String(text||"").slice(0,1800))}
+function askDrop(prompt,waText){
+  const q=encodeURIComponent(String(prompt||"").slice(0,1500));
+  const d=el("details","askdd");const sm=el("summary","","Ask \u25BE");sm.title="Ask Claude or ChatGPT, or share on WhatsApp";sm.setAttribute("aria-label","Ask Claude or ChatGPT about this");d.append(sm);
+  const m=el("div","askmenu");
+  [["Ask Claude","https://claude.ai/new?q="+q],["Ask ChatGPT","https://chatgpt.com/?q="+q]].concat(waText?[["Share on WhatsApp",waLink(waText)]]:[]).forEach(([t,u])=>{const a=el("a","",t);a.href=u;a.target="_blank";a.rel="noopener";a.onclick=()=>{d.open=false};m.append(a)});
+  d.append(m);return d;
+}
+document.addEventListener("click",e=>{document.querySelectorAll("details.askdd[open]").forEach(d=>{if(!d.contains(e.target))d.open=false})});
+
+/* ---------- Google Drive: recent documents ---------- */
+const DRIVE="Google Drive";
+let drive={state:"unknown",files:[]};
+async function loadDrive(){
+  if(!mcp)return;
+  try{
+    const r=await mcp.callTool(DRIVE,"list_recent_files",{pageSize:10,orderBy:"lastModifiedByMe",excludeContentSnippets:true},{cache:false});
+    const p=r.payload||{};drive.files=(Array.isArray(p.files)?p.files:[]).map(f=>({id:String(f.id||""),t:String(f.title||f.name||"Untitled"),mod:f.modifiedTime||"",ext:String(f.fileExtension||"").toUpperCase(),mime:String(f.mimeType||"")})).filter(f=>f.id);
+    drive.state="ok";
+  }catch(e){const c=e&&e.code;drive.state=c==="server_not_connected"||c==="selection_required"?"missing":c==="needs_reauth"?"reauth":c==="not_in_manifest"||c==="consent_required"?"denied":"error";drive.files=[];drive.note=(e&&e.message)||""}
+  renderDocs();renderSetup();
+}
+const kindOf=f=>/document/.test(f.mime)?"Doc":/spreadsheet/.test(f.mime)?"Sheet":/presentation/.test(f.mime)?"Slides":/folder/.test(f.mime)?"Folder":(f.ext||"File");
+let docResults=null;
+function renderDocs(){
+  const host=$("docs");if(!host)return;host.replaceChildren();
+  if(drive.state!=="ok"){$("docsHead").textContent=drive.state==="error"?"Couldn't read Google Drive just now. Tap Refresh now.":"The Google Drive files you've been working on show here once Google Drive is connected in the setup steps.";return}
+  $("docsHead").textContent=drive.files.length?"The files you changed most recently.":"No recent files in your Google Drive.";
+  (docResults||drive.files).forEach(f=>{
+    const r=el("div","item");r.append(el("span","dot none"));const m=el("div","main");
+    m.append(el("span","t",f.t));m.append(el("span","m",kindOf(f)+(f.mod?" · Changed "+fmtWhen(f.mod):"")));
+    const a=el("div","acts");const o=el("a","btn small","Open");o.href="https://drive.google.com/file/d/"+encodeURIComponent(f.id)+"/view";o.target="_blank";o.rel="noopener";
+    const at=el("button","btn small ghost","Add to tasks");at.type="button";at.onclick=()=>{addTask("Finish: "+f.t,"Google Drive");at.textContent="Added";at.disabled=true};
+    a.append(o,askDrop("I'm working on a document called \""+f.t+"\" ("+kindOf(f)+"). Help me plan what to finish in it next and what to check before I share it.","Document: "+f.t+" https://drive.google.com/file/d/"+f.id+"/view"),at);
+    m.append(a);r.append(m);host.append(r);
+  });
+}
+
+/* ---------- quick links ---------- */
+const LINKS=[
+  ["WYZ Dashboard","https://dashboard.wyzrent.com"],
+  ["Hostaway","https://dashboard.hostaway.com"],
+  ["Command Center build (Lovable)","https://lovable.dev/projects/1cc94a7d-8c35-4257-be82-df4aaf0d6def"],
+  ["Wafeq","https://app.wafeq.com"],
+  ["PriceLabs","https://app.pricelabs.co"],
+  ["Gmail","https://mail.google.com"],
+  ["Google Calendar","https://calendar.google.com"],
+  ["Google Drive","https://drive.google.com"],
+  ["WhatsApp","https://web.whatsapp.com"],
+  ["wyzrent.com","https://wyzrent.com"]
+];
+function renderLinks(){
+  const host=$("links");host.replaceChildren();
+  const mine=(state.links||[]);
+  [...LINKS.map(([n,u])=>({n,u})),...mine.map((l,ix)=>Object.assign({ix},l))].forEach(l=>{
+    const a=el("a","chip",l.n);a.href=l.u;a.target="_blank";a.rel="noopener";a.style.textDecoration="none";host.append(a);
+    if(l.ix!=null){const x=el("button","chip","Remove "+l.n);x.type="button";x.style.fontSize="12px";x.onclick=()=>{state.links.splice(l.ix,1);persist();renderLinks()};host.append(x)}
+  });
+}
+$("lnAdd").onclick=()=>{
+  const n=clip($("lnName").value,40),u=$("lnUrl").value.trim();
+  if(!n||!/^https:\/\/[^\s]+\.[^\s]+/i.test(u)){$("lnNote").textContent="Give it a name and a full address starting with https://";return}
+  state.links=state.links||[];state.links.push({n,u});persist();renderLinks();$("lnName").value="";$("lnUrl").value="";$("lnNote").textContent="Added. It's saved to your page only.";
+};
+
+/* ---------- freshness ---------- */
+function setFresh(k,txt){const f=$("fresh");f.className="status"+(k==="err"?" err":"");f.replaceChildren();
+  if(k==="load"){f.append(el("span","spin"),txt+"...");return}
+  if(k==="err"){f.textContent=txt;return}
+  f.textContent="Updated "+new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}
+
+/* ---------- collapse / expand ---------- */
+var collapsed=new Set();try{collapsed=new Set(JSON.parse(localStorage.getItem(LS+"-col")||"[]"))}catch(e){}
+function saveCol(){try{localStorage.setItem(LS+"-col",JSON.stringify([...collapsed]))}catch(e){}}
+function applyCol(){document.querySelectorAll("[data-col]").forEach(c=>{const on=collapsed.has(c.dataset.col);c.classList.toggle("collapsed",on);const h=c.querySelector(".hdr");if(h)h.setAttribute("aria-expanded",String(!on))});
+  const ib=collapsed.has("c-inbox");$("board").hidden=ib;$("showOff").parentElement.hidden=ib;}
+function makeCollapsible(card,key,hdr){card.dataset.col=key;hdr.classList.add("hdr");hdr.tabIndex=0;hdr.setAttribute("role","button");
+  const t=()=>{collapsed.has(key)?collapsed.delete(key):collapsed.add(key);saveCol();applyCol()};
+  hdr.onclick=t;hdr.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();t()}}}
+["setupCard","c-links","c-cal","c-tasks","c-inbox","c-res","c-docs"].forEach(id=>{const c=$(id);const h=c&&c.querySelector(".pad > h2");if(h)makeCollapsible(c,id,h)});
+$("colAll").onclick=()=>{document.querySelectorAll("#p-today [data-col]").forEach(c=>collapsed.add(c.dataset.col));ORDER.forEach(k=>collapsed.add("g-"+k));saveCol();applyCol()};
+$("expAll").onclick=()=>{collapsed.clear();saveCol();applyCol()};
+/* ---------- move sections up and down ---------- */
+const SEC_DEFAULT=["setup","inbox","cal","tasks","research","docs","links"];
+let setupComplete=false;   /* once every setup step is done or skipped, the setup card drops to the last row */
+function secOrder(){let o=((state&&state.order)||[]).filter(k=>SEC_DEFAULT.includes(k));if(!setupComplete&&!o.includes("setup"))o.unshift("setup");SEC_DEFAULT.forEach(k=>{if(!o.includes(k))o.push(k)});
+  if(setupComplete)o=o.filter(k=>k!=="setup").concat("setup");return o}
+const movableKeys=()=>secOrder().filter(k=>!(setupComplete&&k==="setup"));
+function updMoveBtns(){const o=secOrder(),m=movableKeys();o.forEach(k=>{const ix=m.indexOf(k);const e=document.querySelector('[data-sec="'+k+'"]');if(!e)return;e.querySelectorAll(".mv button").forEach(b=>{b.disabled=ix<0||(b.dataset.d==="-1"&&ix===0)||(b.dataset.d==="1"&&ix===m.length-1)})})}
+const SEC_LABEL={setup:"Setup",inbox:"Inbox",cal:"Today and tomorrow",tasks:"My tasks",research:"Research",docs:"Documents",links:"Quick links"};
+const SEC_CARD={setup:"setupCard",inbox:"c-inbox",cal:"c-cal",tasks:"c-tasks",research:"c-res",docs:"c-docs",links:"c-links"};
+function renderNav(){const n=$("secNav");n.replaceChildren();secOrder().forEach(k=>{const b=el("button","navchip",SEC_LABEL[k]);b.type="button";
+  b.onclick=()=>{collapsed.delete(SEC_CARD[k]);if(k==="inbox")ORDER.forEach(x=>collapsed.delete("g-"+x));saveCol();applyCol();
+    const e=document.querySelector('[data-sec="'+k+'"]');if(e){const y=e.getBoundingClientRect().top+window.scrollY-$("toolbar").offsetHeight-8;window.scrollTo({top:y,behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"})}};n.append(b)})}
+function applyOrder(){const host=$("secs");secOrder().forEach(k=>{const e=host.querySelector('[data-sec="'+k+'"]');if(e)host.append(e)});updMoveBtns();renderNav()}
+function moveSec(k,d){const o=movableKeys();const a=o.indexOf(k),b=a+d;if(a<0||b<0||b>=o.length)return;[o[a],o[b]]=[o[b],o[a]];state.order=o;persist();applyOrder();
+  const btn=document.querySelector('[data-sec="'+k+'"] .mv button[data-d="'+d+'"]');if(btn&&!btn.disabled)btn.focus();}
+document.querySelectorAll("[data-sec]").forEach(sec=>{const h=sec.querySelector(".pad > h2");if(!h)return;const name=h.textContent;const mv=el("span","mv");
+  [["-1","\u2191","Move up"],["1","\u2193","Move down"]].forEach(([d,t,l])=>{const b=el("button","btn small ghost mvb",t);b.type="button";b.dataset.d=d;b.setAttribute("aria-label",l+": "+name);b.title=l;
+    b.onclick=e=>{e.stopPropagation();moveSec(sec.dataset.sec,+d)};b.onkeydown=e=>e.stopPropagation();mv.append(b)});h.append(mv)});
+applyCol();
+
+/* ---------- boot ---------- */
+async function refreshAll(force){
+  if(!G.connected()){showWelcome();setFresh("err","Connect Google to load your day.");return}
+  await readConn();loadCal();
+  if(!state.skipDrive||drive.state==="ok")loadDrive();
+  if(!state.skipTodo||todo.state==="ok")loadTodoist();
+  await loadMail(force);followups(false);
+  if(state.shareDash&&Date.now()-(state.dashAt||0)>1800000)shareSummary();
+}
+$("refresh").onclick=()=>refreshAll(false);
+(async()=>{
+  collapsed.delete("c-inbox");collapsed.delete("setupCard");ORDER.forEach(k=>collapsed.delete("g-"+k));saveCol();
+  try{applyOrder();applyCol();renderLinks();renderSetup();renderTasks();renderResearch()}catch(e){}
+  mcp=Connectors.mcp;perms=Connectors.perms;await Connectors.ai.detect();sample=Connectors.makeSample();
+  renderHello();
+  if(!G.configured()){showWelcome();setFresh("err","Google sign-in isn't set up yet.");return}
+  if(G.wasConnected()){
+    setFresh("load","Reconnecting to Google");
+    try{await G.connect(false);await afterConnect();return}catch(e){}
+  }
+  showWelcome();setFresh("err","Connect Google to load your day.");
+})();
+
+/* ---------- search Drive, text size, invite, weekly review ---------- */
+async function searchDocs(){
+  const q=$("docQ").value.trim();
+  if(!q){docResults=null;renderDocs();return}
+  if(!G.connected())return;
+  try{
+    const r=await mcp.callTool("Google Drive","search_files",{query:q,pageSize:15});
+    docResults=((r.payload&&r.payload.files)||[]).map(f=>({id:String(f.id),t:String(f.title||"Untitled"),mod:f.modifiedTime||"",ext:String(f.fileExtension||"").toUpperCase(),mime:String(f.mimeType||"")}));
+    renderDocs();$("docsHead").textContent=docResults.length?docResults.length+" file"+(docResults.length>1?"s":"")+" found. Clear the box and search to go back to recent files.":"No files found."
+  }catch(e){$("docsHead").textContent="Couldn't search Drive just now ("+clip((e&&e.message)||"unknown reason",90)+")."}
+}
+$("docGo").onclick=searchDocs;$("docQ").addEventListener("keydown",e=>{if(e.key==="Enter")searchDocs()});
+const ZOOMS=[1,1.15,1.3];
+function applyZoom(){let z=1;try{z=+localStorage.getItem("wyz-zoom")||1}catch(e){}document.body.style.zoom=z;$("zoomBtn").textContent=z>1?"Text size "+Math.round(z*100)+"%":"Text size"}
+$("zoomBtn").onclick=()=>{let z=1;try{z=+localStorage.getItem("wyz-zoom")||1}catch(e){}const n=ZOOMS[(ZOOMS.indexOf(z)+1)%ZOOMS.length];try{localStorage.setItem("wyz-zoom",String(n))}catch(e){}applyZoom()};
+applyZoom();
+$("inviteBtn").onclick=()=>{
+  const txt="Hi! Here is the WYZ Rent Execution Page. It shows your inbox sorted by what needs action, today's meetings and recent files, all from your own Google account.\n\n1. Open this link in Chrome or Safari:\n"+PAGE_URL+"\n\n2. Tap \"Continue with Google\" and sign in with your own account.\n\n3. If Google says it hasn't verified the app, tap Advanced, then Go to WYZ Execution Page. That is normal.\n\n4. Tick every box and tap Continue, then follow the short steps on screen.\n\nOnly you can see your own data. If anything doesn't work, send me a screenshot.";
+  window.open(waLink(txt),"_blank","noopener");
+};
+async function weeklyReview(){
+  const host=$("mailRes");host.replaceChildren();
+  const since=Date.now()-7*864e5,log=(state.log||[]).filter(x=>x.at>=since);
+  const items=allItems(),open=items.filter(i=>!isOff(i)),snoozed=items.filter(i=>isOff(i)&&!state.done[i.id]).length;
+  const lines=["Finished this week: "+log.length,"Still to reply: "+open.filter(i=>i.st==="reply").length,"Still to chase: "+open.filter(i=>i.st==="follow").length,"Snoozed for later: "+snoozed];
+  const card=el("div","ans",lines.join("\n"));host.append(el("p","status","Your week so far"),card);
+  if(!sample){host.append(el("p","status","Add Claude in the setup steps to get a written review with advice for next week."));return}
+  const wait=el("p","status","Writing your review...");host.append(wait);
+  try{
+    const r=await sample("Write a short weekly review for "+(myName||"the reader")+" at WYZ Rent, in plain words, no em dashes, 4 to 6 lines. Say what got finished, what is still open and the top two things to do first next week.\n\nFinished items: "+(log.map(x=>x.t).slice(-25).join("; ")||"none recorded")+"\nStill to reply: "+open.filter(i=>i.st==="reply").map(i=>i.title).slice(0,10).join("; ")+"\nStill to chase: "+open.filter(i=>i.st==="follow").map(i=>i.title).slice(0,10).join("; "),{cache:false});
+    wait.replaceWith(el("div","ans",r.text));
+  }catch(e){wait.textContent="Couldn't write the review ("+clip((e&&e.message)||"unknown reason",90)+")."}
+}
+$("weekGo").onclick=weeklyReview;
+
+/* ---------- system check: test every connection, read-only ---------- */
+const SCOPE_LABEL={gmailRead:"read your email",gmailDraft:"save drafts and send replies",gmailModify:"archive and mark as read",cal:"read your calendar",drive:"list your Drive files"};
+let lastReport="";
+async function testEverything(){
+  const out=$("testOut"),sum=$("testSum"),btn=$("testGo");
+  btn.disabled=true;btn.textContent="Testing...";out.replaceChildren();$("testCopy").hidden=true;sum.textContent="";
+  const rows=[];
+  const add=(name,status,detail,fix)=>{rows.push({name,status,detail});
+    const r=el("div","chk-row");const ic=el("span","ic "+status,status==="ok"?"✓":status==="warn"?"!":status==="bad"?"✕":"–");
+    r.append(ic,el("span","nm",name),el("span","ds",detail));
+    if(fix){const g=el("div","go");const b=el("button","btn small solid",fix[0]);b.type="button";b.onclick=fix[1];g.append(b);r.append(g)}
+    out.append(r)};
+  const msg=e=>clip((e&&e.message)||"unknown reason",120);
+  // 1 browser
+  let ls=false;try{localStorage.setItem("wyz-test","1");localStorage.removeItem("wyz-test");ls=true}catch(e){}
+  add("Browser storage",ls?"ok":"warn",ls?"Your board and settings can be saved on this device.":"Storage is blocked (private window?). Your board won't be remembered.");
+  // 2 google
+  if(!G.configured()){add("Google sign-in","bad","No Google Client ID is set up on this site (EXECUTION-PAGE.md, step 2).");}
+  else if(!G.connected()){add("Google sign-in","bad","Not signed in.",["Continue with Google",()=>connectGoogle()])}
+  else{
+    try{const t=await G.token();const p=await G.profile();add("Google sign-in",t?"ok":"bad","Signed in as "+(p.email||"you")+".")}
+    catch(e){add("Google sign-in","bad","Your sign-in ran out ("+msg(e)+").",["Sign in again",()=>connectGoogle()])}
+    // 3 permissions
+    const miss=G.scopeNames().filter(n=>!G.hasScope(n));
+    add("Google permissions",miss.length?"warn":"ok",miss.length?"Not allowed yet: "+miss.map(n=>SCOPE_LABEL[n]||n).join(", ")+".":"All permissions are allowed (read mail, send replies, archive, calendar, Drive).",miss.length?["Allow them",()=>connectGoogle(true)]:null);
+    // 4 gmail
+    try{const g=await mcp.server("Gmail");const r=await g.search_threads({query:"in:inbox",pageSize:1});add("Gmail: read mail","ok","Reading works"+(r.threads&&r.threads[0]?" (latest: "+clip(slimThread(r.threads[0]).subject,50)+").":"."))}
+    catch(e){add("Gmail: read mail","bad",e&&e.code==="api_disabled"?e.message:"Couldn't read Gmail ("+msg(e)+").")}
+    // 5 calendar
+    try{const d=new Date();d.setHours(0,0,0,0);const e2=new Date(d);e2.setDate(e2.getDate()+1);const r=await mcp.callTool("Google Calendar","list_events",{startTime:ymd(d)+"T00:00:00",endTime:ymd(e2)+"T00:00:00",pageSize:5},{cache:false});add("Google Calendar","ok","Reading works ("+((r.payload&&r.payload.events)||[]).length+" meetings today).")}
+    catch(e){add("Google Calendar","bad","Couldn't read the calendar ("+msg(e)+").")}
+    // 6 drive
+    try{const r=await mcp.callTool("Google Drive","list_recent_files",{pageSize:1},{cache:false});add("Google Drive","ok","Reading works"+((r.payload&&r.payload.files||[])[0]?" (latest: "+clip(r.payload.files[0].name||r.payload.files[0].title||"file",40)+").":"."))}
+    catch(e){add("Google Drive","bad","Couldn't read Drive ("+msg(e)+").")}
+  }
+  // 7 claude
+  const mode=Connectors.ai.mode();
+  if(!sample)add("Claude (AI)","na","Not connected. Sorting uses simple rules. Instruct AI and smart drafts are off.");
+  else{try{const r=await sample("Reply with the single word OK.",{modelTier:"quick",cache:false});add("Claude (AI)","ok",(mode==="shared"?"Working through the shared connection. ":"Working with your own key. ")+"It answered: "+clip(r.text,20)+".")}
+    catch(e){add("Claude (AI)","bad","Claude is switched on but failed ("+msg(e)+")."+(mode==="shared"?" Check ANTHROPIC_API_KEY, credit and ALLOWED_EMAILS in Vercel.":" Check your key and credit."))}}
+  // 8 todoist
+  if(!Connectors.todoist.has())add("Todoist","na","Not connected (optional).");
+  else{try{await mcp.callTool("Todoist","find-tasks-by-date",{});add("Todoist","ok","Reading works.")}catch(e){add("Todoist","bad","Todoist failed ("+msg(e)+").",["Replace token",setTodoToken])}}
+  // 9 dashboard
+  if(!DASH)add("Company dashboard","na","Not set up yet (optional).");
+  else add("Company dashboard",state.shareDash?(state.dashErr?"warn":"ok"):"na",state.shareDash?(state.dashErr?"Sharing is on but the last send failed: "+state.dashErr:"Sharing is on"+(state.dashAt?". Last sent "+fmtWhen(state.dashAt)+".":".")):"Sharing is off. You choose in the setup steps.");
+  // 10 page data
+  add("Today's board","ok",(board&&board.items?board.items.length:0)+" items sorted, "+(events?events.length:0)+" meetings loaded, "+((state.tasks||[]).filter(t=>!t.done).length)+" tasks.");
+  const bad=rows.filter(r=>r.status==="bad").length,warn=rows.filter(r=>r.status==="warn").length,okn=rows.filter(r=>r.status==="ok").length;
+  sum.className="status"+(bad?" err":"");
+  sum.textContent=bad?bad+" problem"+(bad>1?"s":"")+" found. Fix the red items, then test again.":warn?"Working, with "+warn+" thing"+(warn>1?"s":"")+" to look at.":"Everything is working ("+okn+" checks passed).";
+  lastReport="WYZ Execution Page system check, "+new Date().toLocaleString("en-GB")+"\n"+rows.map(r=>(r.status==="ok"?"OK    ":r.status==="warn"?"CHECK ":r.status==="bad"?"FAIL  ":"OFF   ")+r.name+": "+r.detail).join("\n");
+  $("testCopy").hidden=false;btn.disabled=false;btn.textContent="Test everything again";
+}
+$("testGo").onclick=testEverything;
+$("testCopy").onclick=()=>navigator.clipboard.writeText(lastReport).then(()=>{$("testCopy").textContent="Copied";setTimeout(()=>$("testCopy").textContent="Copy the report",1500)}).catch(()=>{$("testCopy").textContent="Select the text above"});
