@@ -852,7 +852,7 @@ function quoteOf(m){
   return "\n\nOn "+when+", "+(nameOf(m.sender)||m.sender)+" wrote:\n"+body;
 }
 function fillTargets(){
-  const all=$("thrAll").checked,t=replyTargets(all);
+  const all=$("thrAll").checked,t=replyTargets(all);$("thrAllSel").value=all?"all":"sender";
   $("thrTo").value=t.to.join(", ");$("thrCc").value=t.cc.join(", ");$("thrCcWrap").hidden=!all;
 }
 /* Real email view: HTML mail goes in a locked iframe (no scripts, links open in a new tab), plain text gets clickable links. */
@@ -1213,7 +1213,16 @@ $("thrExact").onclick=()=>{$("thrText").value=voice.raw.trim();$("thrExact").hid
 if(SR){$("thrMic").hidden=false;$("thrLang").hidden=false;try{const l=localStorage.getItem("wyz-voice-lang");if(l)$("thrLang").value=l}catch(e){}}
 $("thrLang").onchange=()=>{try{localStorage.setItem("wyz-voice-lang",$("thrLang").value)}catch(e){}};
 function thrChase(){const l=lastMsg();return thr.item.st==="follow"||thr.item.st==="wait"||addrOf(l.sender).toLowerCase()===myAddr()}
-function replyPrompt(chase,tone,text){return (chase?"Write a short, polite follow-up email chasing an answer that is still owed, ":"Write a reply email ")+"for "+(myName||"me")+" at WYZ Rent. Plain text only, ready to edit, "+(sigText()?"with no sign-off and no name, because their signature is added automatically":"signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject, no quoted text."+(tone?"\n\n"+tone:"")+"\n\nWhat it's about: "+(thr.item.title||"")+". "+(thr.item.summary||"")+"\n\nThread (latest last):\n"+text}
+/* the person's own direction overrides the AI's idea of the answer */
+const dirNote=d=>d?"\n\nIMPORTANT. The person has decided what to answer. Follow this direction exactly and keep every point of it. Don't add commitments, numbers or dates they didn't give. Their direction: "+d:"";
+async function writeMyWay(dir,chase,text,set,status,about){
+  if(!dir.trim()){status("Type your direction first, for example: agree, ask for the contract by Thursday.",true);return}
+  if(!sample){set(dir.trim());status(chatAI()?"No AI on this page yet, so your direction is in the box. Edit it, or use Write it with "+CHAT[chatAI()].name+".":"No AI is connected, so your words are in the box. Edit them, then send.");return}
+  status("Writing it your way...");
+  try{let tone="";try{tone=await toneExamples()}catch(x){}const r=await creditFallback(p=>sample(replyPrompt(chase,tone,text,about)+dirNote(dir),{cache:false,provider:p}));const t=String(r.text||"").trim();if(!t)throw new Error("the AI sent back nothing");set(t);status("Here it is, written your way. Edit anything, then send.")}
+  catch(e){status("Couldn't write it ("+clip((e&&e.message)||"unknown reason",90)+"). Your direction is still in the box above.",true)}
+}
+function replyPrompt(chase,tone,text,about){const it=about||thr.item||{};return (chase?"Write a short, polite follow-up email chasing an answer that is still owed, ":"Write a reply email ")+"for "+(myName||"me")+" at WYZ Rent. Plain text only, ready to edit, "+(sigText()?"with no sign-off and no name, because their signature is added automatically":"signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject, no quoted text."+(tone?"\n\n"+tone:"")+"\n\nWhat it's about: "+(it.title||"")+". "+(it.summary||"")+"\n\nThread (latest last):\n"+text}
 async function thrDraft(){
   const ta=$("thrText"),st=$("thrSt"),chase=thrChase();
   st.className="status";st.textContent=sample?"Writing a draft with Claude...":"";ta.value="";
@@ -1241,7 +1250,7 @@ function setMode(m){
   thr.mode=m;const fwd=m==="forward",nw=m==="new";
   ["thrSnooze","thrMore","thrGmail","thrArchive","thrVip","thrMute"].forEach(k=>$(k).hidden=nw);
   $("thrBody").hidden=nw;if(nw){$("thrAIbox").hidden=true;$("thrPrev").hidden=$("thrNext").hidden=true;$("thrPos").textContent=""}
-  $("thrSubjWrap").hidden=!nw;$("thrBrief").hidden=!nw;if(nw)$("thrCcWrap").hidden=false;
+  $("thrSubjWrap").hidden=!nw;$("thrBrief").hidden=!nw;if(nw)$("thrCcWrap").hidden=false;$("thrDirRow").hidden=nw;$("thrDir").value="";
   $("thrFwd").hidden=nw;
   $("thrFwd").textContent=fwd?"Back to reply":"Forward";
   $("thrSumWrap").hidden=!(fwd&&sample);$("thrRemWrap").hidden=fwd;$("thrAll").parentElement.hidden=fwd||nw;
@@ -1419,6 +1428,10 @@ function thrMore(){
 function thrClose(){if(thr.counting){thrNote("Your email is about to be sent. Press Undo to stop it, or wait a few seconds.");return}$("thr").hidden=true}
 $("thrClose").onclick=thrClose;$("thrAI").onclick=()=>{if(!sample&&chatAI()){showFree();return}if(thr.mode==="new")composeDraft();else if($("thrAIpick").value==="free")showFree();else suggestReply({prov:aiPickValue(),force:true})};$("thrAll").onchange=fillTargets;
 $("thrSend").onclick=()=>thrAct("send");
+$("thrAllSel").onchange=()=>{$("thrAll").checked=$("thrAllSel").value==="all";fillTargets()};
+$("thrDirGo").onclick=async()=>{const b=$("thrDirGo"),st=$("thrSt");b.disabled=true;
+  await writeMyWay($("thrDir").value,thrChase(),threadBlock(thr.msgs),t=>{$("thrText").value=t},(m,err)=>{st.className="status"+(err?" err":"");st.textContent=m});b.disabled=false};
+$("thrDir").addEventListener("keydown",e=>{if(e.key==="Enter")$("thrDirGo").click()});
 ["thrText","thrTo","thrCc"].forEach(k=>$(k).addEventListener("input",()=>{if(thr.armed&&!thr.counting){thr.armed=0;$("thrSend").textContent="Send";$("thrSt").textContent=""}}));$("thrSave").onclick=()=>thrAct("save");
 $("thrWA").onclick=()=>window.open(waLink($("thrText").value),"_blank","noopener");
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("thr").hidden)thrClose()});
@@ -1595,7 +1608,11 @@ async function draftFor(i,host,btn){
   let full=null,msgs=[];
   try{full=await mcp.callTool("Gmail","get_thread",{threadId:i.id,messageFormat:"PLAIN_TEXT"},{cache:false});msgs=(full.payload&&full.payload.messages)||[]}catch(e){}
   const text=msgs.slice(-6).map(x=>"From: "+(x.sender||"")+"\nDate: "+(x.date||"")+"\n"+String(x.plaintextBody||x.plaintext_body||x.snippet||"").slice(0,3000)).join("\n\n---\n\n");
-  const box=el("div","draftbox");const ta=el("textarea");ta.id="d-"+i.id;ta.value="";const st=el("span","status","Writing a draft");
+  const toRow=el("div","ask");const toSel=el("select","in");toSel.style.flex="0 1 220px";toSel.setAttribute("aria-label","Reply to");
+  toSel.append(new Option("Reply to sender only","sender"),new Option("Reply to everyone (all)","all"));toRow.append(toSel);
+  const dirRow=el("div","ask");const dirIn=el("input","in");dirIn.placeholder="Your direction for the answer (optional)";dirIn.setAttribute("aria-label","Your direction for the answer");
+  const dirGo=el("button","btn small","Write it my way");dirGo.type="button";dirRow.append(dirIn,dirGo);
+  const box=el("div","draftbox");box.append(toRow,dirRow);const ta=el("textarea");ta.id="d-"+i.id;ta.value="";const st=el("span","status","Writing a draft");
   box.append(st,ta);host.append(box);btn.textContent="Writing";
   try{
     const chase=(i.st==="follow"||i.st==="wait");const r=!sample?{text:templateDraft(i,chase)}:await sample((chase?"Write a short, polite follow-up email chasing an answer that is still owed, ":"Write a reply email ")+"for "+(myName||"me")+" at WYZ Rent. Plain text only, ready to edit, "+(sigText()?"with no sign-off and no name, because their signature is added automatically":"signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject.\n\nWhat it's about: "+(i.title||"")+". "+(i.summary||"")+"\n\nThread (latest last):\n"+(text||tById(i.id)?.snippet||""),{cache:false,provider:aiPickValue(),onText:u=>{ta.value=u.text}});
@@ -1613,6 +1630,8 @@ async function draftFor(i,host,btn){
   };
   const cp=el("button","btn small","Copy text");cp.type="button";cp.onclick=()=>navigator.clipboard.writeText(ta.value).then(()=>cp.textContent="Copied").catch(()=>{ta.focus();ta.select()});
   const wa=el("a","btn small","Send on WhatsApp");wa.target="_blank";wa.rel="noopener";wa.href="#";wa.onclick=()=>{wa.href=waLink(ta.value)};wa.onmousedown=wa.ontouchstart=()=>{wa.href=waLink(ta.value)};
+  dirGo.onclick=async()=>{dirGo.disabled=true;await writeMyWay(dirIn.value,(i.st==="follow"||i.st==="wait"),text,t=>{ta.value=t;ta.dispatchEvent(new Event("input"))},(m,err)=>{st.className="status"+(err?" err":"");st.textContent=m},i);dirGo.disabled=false};
+  dirIn.addEventListener("keydown",e=>{if(e.key==="Enter")dirGo.click()});
   /* Send from the list: Send, then Confirm, like in the email view */
   const sd=el("button","btn small solid","Send");sd.type="button";let armed=0;
   const last=()=>msgs[msgs.length-1]||{};
@@ -1621,16 +1640,18 @@ async function draftFor(i,host,btn){
     if(!ta.value.trim()){st.textContent="Write your reply first.";st.className="status err";return}
     if(/\[(DATE|DETAIL)[^\]]*\]/i.test(ta.value)){st.textContent="Fill in the [DATE] or [DETAIL] part first.";st.className="status err";ta.focus();return}
     const to=target();if(!/^\S+@\S+\.\S+$/.test(to)){st.textContent="Couldn't find who to send it to. Open the email instead.";st.className="status err";return}
-    if(!armed){armed=1;sd.textContent="Confirm: send to "+to;st.className="status";st.textContent="Check it, then press Confirm.";return}
+    if(!armed){armed=1;sd.textContent="Confirm: send to "+to+(toSel.value==="all"?" and everyone":"");st.className="status";st.textContent="Check it, then press Confirm.";return}
     sd.disabled=true;sd.textContent="Sending...";
+    const mine=new Set(G.accounts().map(x=>String(x.email||"").toLowerCase()).concat([String(email||"").toLowerCase()]));
+    const cc=toSel.value==="all"?[...new Set([addrOf(last().sender)].concat((last().toRecipients||[]).map(addrOf),(last().ccRecipients||[]).map(addrOf)).map(x=>String(x||"").toLowerCase()))].filter(x=>x&&x!==to.toLowerCase()&&!mine.has(x)):[];
     const t=tById(i.id)||{},l=last(),sg=sigText(),body=ta.value.trimEnd()+(sg&&!ta.value.includes(sg)?"\n\n"+sg:"")+(l.id?quoteOf(l):"");
     const subj=(t.subject||"").match(/^re:/i)?t.subject:"Re: "+(t.subject||"");
-    try{await mcp.callTool("Gmail","send_message",{to:[to],subject:subj,body,replyToMessageId:l.id||t.lastId});
+    try{await mcp.callTool("Gmail","send_message",{to:[to],cc,subject:subj,body,replyToMessageId:l.id||t.lastId});
       sd.textContent="Sent";st.className="status";st.textContent="Sent to "+to+". Marked as done.";ta.disabled=true;sv.disabled=true;
       state.done[i.id]=Date.now();logDone(i);persist();setTimeout(()=>{try{renderBoard()}catch(e){}},1500)}
     catch(e){armed=0;sd.disabled=false;sd.textContent="Send";st.className="status err";st.textContent="Couldn't send it ("+clip((e&&e.message)||"unknown reason",90)+"). Check your sent mail before trying again."}
   };
-  ta.addEventListener("input",()=>{if(armed){armed=0;sd.textContent="Send"}});
+  ta.addEventListener("input",()=>{if(armed){armed=0;sd.textContent="Send"}});toSel.onchange=()=>{if(armed){armed=0;sd.textContent="Send"}};
   sv.className="btn small";
   acts.prepend(sd);acts.append(sv,cp,wa);box.append(acts);
 }
@@ -2758,8 +2779,8 @@ function top3Candidates(){
     const s=e.start&&e.start.dateTime&&Date.parse(e.start.dateTime);if(!s||s<now-15*60000||ymd(new Date(s))!==today||e.status==="cancelled")return;
     out.push({kind:"event",ref:e.id,title:e.summary||"(No title)",why:"Starts at "+fmtTime(e.start.dateTime)+(e.location?" · "+e.location:""),score:36-((s-now)/3600000)*3,ev:e});
   });
-  const hide=(state.topHide&&state.topHide.day===today&&state.topHide.ids)||[];
-  return out.filter(x=>!hide.includes(x.kind+":"+x.ref)).sort((a,b)=>b.score-a.score);
+  const hide=(state.topHide&&state.topHide.day===today&&state.topHide.ids)||[],zz=state.topSnooze||{},nowT=Date.now();
+  return out.filter(x=>!hide.includes(x.kind+":"+x.ref)&&!(zz[x.kind+":"+x.ref]>nowT)).sort((a,b)=>b.score-a.score);
 }
 let top3Busy=false,top3Fail=0;
 const topN=()=>{const n=+state.topN;return Number.isInteger(n)&&n>=1&&n<=10?n:10};
@@ -2799,7 +2820,7 @@ function renderTop3(){
     const r=el("div","t3row");r.append(el("span","t3n",String(i+1)));const m=el("div","main");
     m.append(el("span","t",x.title));if(x.why)m.append(el("span","s",x.why));
     const a=el("div","acts");
-    a.append(onbBtn("✓ Done",()=>topDone(x),"small solid"),topDelBtn(x));
+    a.append(onbBtn("✓ Done",()=>topDone(x),"small solid"),topSnoozeDrop(x),topDelBtn(x));
     if(x.kind==="mail"){a.append(onbBtn("Read thread",()=>openThread(x.ref,{item:x.item}),"small"),onbBtn("Draft a reply",()=>openThread(x.ref,{item:x.item,draft:true}),"small solid"))}
     else if(x.kind==="task"){}
     else{if(x.ev)a.append(onbBtn("Prep brief",()=>openBrief(x.ev),"small solid"));if(x.ev&&x.ev.conferenceUrl){const j=el("a","btn small","Join");j.href=x.ev.conferenceUrl;j.target="_blank";j.rel="noopener";a.append(j)}}
@@ -2816,6 +2837,18 @@ function topDone(x){
   topRefresh();
 }
 /* Delete asks once more, like Send. Emails leave the page but stay in Gmail. */
+/* Snooze from the top list: the item leaves the list (and the board, for email) until the time you pick */
+function topSnoozeDrop(x){
+  const d=el("details","askdd");d.append(el("summary","","Snooze ▾"));const m=el("div","askmenu");
+  const at=(h,dayOff)=>{const t=new Date();if(dayOff!=null){t.setDate(t.getDate()+dayOff);t.setHours(8,0,0,0)}else t.setTime(t.getTime()+h*3600000);return t};
+  const nextSun=()=>{const t=new Date();t.setDate(t.getDate()+((7-t.getDay())%7||7));t.setHours(8,0,0,0);return t};
+  const go=(when,label)=>{d.open=false;state.topSnooze=state.topSnooze||{};state.topSnooze[x.kind+":"+x.ref]=when.getTime();
+    if(x.kind==="mail"&&ymd(when)>todayKey())state.snooze[x.ref]=ymd(when);
+    persist();try{renderBoard()}catch(e){}renderTop3();toast("Snoozed until "+label+".")};
+  [["1 hour",()=>at(1),"in an hour"],["3 hours",()=>at(3),"later today"],["Tomorrow morning",()=>at(0,1),"tomorrow 8am"],["In 3 days",()=>at(0,3),"in 3 days"],["Next week",nextSun,"next Sunday"]].forEach(([t,f,l])=>{const b=el("button","",t);b.type="button";b.onclick=()=>go(f(),l);m.append(b)});
+  const pick=el("input","in");pick.type="date";pick.min=ymd(new Date(Date.now()+864e5));pick.setAttribute("aria-label","Pick a date");pick.onchange=()=>{if(!pick.value)return;const t=new Date(pick.value+"T08:00");go(t,niceDay(pick.value))};
+  m.append(pick);d.append(m);return d;
+}
 function topDelBtn(x){
   const b=onbBtn("Delete",null,"small ghost");b.title=x.kind==="mail"?"Removes it from your page. The email stays in Gmail.":x.kind==="task"?"Deletes this task.":"Removes it from today's list.";
   let armed=0,tm=0;

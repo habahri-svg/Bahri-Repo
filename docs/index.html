@@ -648,8 +648,9 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       <span class="status">To</span><input class="in" id="thrTo" aria-label="To" autocomplete="off">
       <div id="thrSubjWrap" hidden><span class="status">Subject</span><input class="in" id="thrSubj" aria-label="Subject" autocomplete="off"></div>
       <textarea id="thrBrief" aria-label="What should the email say" placeholder="Tell the AI what the email should say, for example: ask Sara for the revised pool quote by Thursday" style="min-height:70px" hidden></textarea>
-      <label class="status chk"><input type="checkbox" id="thrAll"> Reply all</label>
+      <div class="ask"><label class="status" for="thrAllSel">Reply to</label><select class="in" id="thrAllSel" style="flex:0 1 220px"><option value="sender">Sender only</option><option value="all">Everyone (reply all)</option></select><input type="checkbox" id="thrAll" hidden></div>
       <div id="thrCcWrap" hidden><span class="status">Cc</span><input class="in" id="thrCc" aria-label="Cc" autocomplete="off"></div>
+      <div class="ask" id="thrDirRow"><input class="in" id="thrDir" placeholder="Your direction, e.g. say yes, we'll go with one broker for 3 months, benchmarks by Thursday" aria-label="Your direction for the answer"><button class="btn small solid" type="button" id="thrDirGo">Write it my way</button></div>
       <textarea id="thrText" aria-label="Your reply"></textarea>
       <div class="headrow"><label class="btn small ghost" style="cursor:pointer">Attach files<input type="file" id="thrFiles" multiple hidden></label><span class="status" id="thrFileList"></span></div>
       <div class="headrow"><select class="in" id="thrTpl" aria-label="Insert a template" style="flex:1 1 200px"></select><button class="btn small ghost" type="button" id="thrTplSave">Save as template</button></div>
