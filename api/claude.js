@@ -6,20 +6,21 @@
      ALLOWED_DOMAINS     optional. Comma-separated list such as wyzrent.com.
      DAILY_LIMIT         optional. Calls per person per day (default 50).
      CLAUDE_MODEL        optional. The standard model. Defaults to claude-sonnet-5-5.
-     ALLOWED_MODELS      optional. Models people may choose. Defaults to Sonnet 5.5 and Haiku 5.5.
+     ALLOWED_MODELS      optional. Models people may choose. Defaults to Sonnet 5.5 and Haiku 4.5.
    GET returns {ok:true} when the function is configured, so the page knows to switch Claude on automatically. */
 "use strict";
 const S = require("./_shared");
 const overLimit = S.makeLimiter("claude");
 
 /* Standard model is Sonnet 5.5. People may pick another from the allowed list. Add Opus with
-   ALLOWED_MODELS=claude-sonnet-5-5,claude-haiku-5-5,claude-opus-5-5 */
+   ALLOWED_MODELS=claude-sonnet-5-5,claude-haiku-4-5-20251001,claude-opus-5-5 */
 const DEFAULT_MODEL = process.env.CLAUDE_MODEL || "claude-sonnet-5-5";
-const allowedModels = function () { return S.list(process.env.ALLOWED_MODELS || "claude-sonnet-5-5,claude-haiku-5-5"); };
+const allowedModels = function () { return S.list(process.env.ALLOWED_MODELS || "claude-sonnet-5-5,claude-haiku-4-5-20251001"); };
 
 module.exports = async function handler(req, res) {
-  const ready = !!(process.env.ANTHROPIC_API_KEY && process.env.GOOGLE_CLIENT_ID);
-  const ctx = await S.gate(req, res, ready, overLimit, { blocks: true });
+  const missing = ["ANTHROPIC_API_KEY", "GOOGLE_CLIENT_ID"].filter(function (k) { return !String(process.env[k] || "").trim(); });
+  const ready = !missing.length;
+  const ctx = await S.gate(req, res, ready, overLimit, { blocks: true, missing: missing });
   if (!ctx) return;
   const b = ctx.body;
   try {

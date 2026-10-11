@@ -1933,7 +1933,7 @@ $("aiTest").onclick=async()=>{
   const rows=[["claude","Claude"],["chatgpt","ChatGPT"]];
   for(const [id,name] of rows){
     const line=el("p","status");out.append(line);
-    if(!A.avail(id)){line.className="status err";line.textContent=name+": not connected. "+(id==="claude"?"The owner has not added ANTHROPIC_API_KEY in Vercel, or you have not pasted your own key above.":"The owner has not added OPENAI_API_KEY in Vercel, or you have not pasted your own key above.");continue}
+    if(!A.avail(id)){line.className="status err";const ms=A.missing(id);line.textContent=name+": not connected. "+(ms.length?"Vercel is missing "+ms.join(" and ")+". Add "+(ms.length>1?"them":"it")+" in Vercel under Settings, Environment Variables (tick Production), then open Deployments and press Redeploy. A new setting only works after a redeploy. Or paste your own key above.":(id==="claude"?"The owner has not added ANTHROPIC_API_KEY in Vercel, or you have not pasted your own key above.":"The owner has not added OPENAI_API_KEY in Vercel, or you have not pasted your own key above."));continue}
     const mode=A.mode(id)==="key"?"your own key":"the shared key";
     const model=id==="claude"?A.modelLabel():A.getOModel();
     line.textContent=name+" ("+model+", "+mode+"): testing...";
@@ -2140,7 +2140,7 @@ async function testEverything(){
   {const A=Connectors.ai;
    for(const p of ["claude","chatgpt"]){
      const nm=A.names[p]+(p===A.active()?" (in use)":"");
-     if(!A.avail(p)){add(nm,"na","Not connected"+(p==="chatgpt"?" (optional).":".")+(!sample&&p==="claude"?" Sorting uses simple rules until an AI is connected.":""));continue}
+     if(!A.avail(p)){const ms=A.missing(p);add(nm,ms.length?"warn":"na","Not connected"+(ms.length?". Vercel is missing "+ms.join(" and ")+". Add it under Settings, Environment Variables, then Redeploy.":(p==="chatgpt"?" (optional).":"."))+(!sample&&p==="claude"?" Sorting uses simple rules until an AI is connected.":""));continue}
      const mode=A.mode(p);
      try{const r=await sample("Reply with the single word OK.",{provider:p,cache:false,noFallback:true});Connectors.ai.clearDown(p);add(nm,"ok",(mode==="shared"?"Working through the shared connection":"Working with your own key")+", using "+(p==="chatgpt"?A.getOModel():A.modelLabel())+". It answered: "+clip(r.text,20)+".")}
      catch(e){add(nm,"bad",A.names[p]+" is switched on but failed ("+msg(e)+")."+(mode==="shared"?" Check the key, credit and ALLOWED_EMAILS in Vercel.":" Check your key, the model name and credit under Connections, Personalise."))}

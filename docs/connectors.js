@@ -503,7 +503,7 @@
 
   /* ---------- AI assistants: Claude and ChatGPT (each with the owner's shared key or the person's own), plus any AI added by link ---------- */
   KEY.provider = "wyz-ai-provider"; KEY.openai = "wyz-openai-key"; KEY.omodel = "wyz-openai-model"; KEY.links = "wyz-ai-links";
-  var MODEL_LIST = [["claude-sonnet-5-5", "Sonnet 5.5 (standard)"], ["claude-haiku-5-5", "Haiku 5.5 (fastest, lowest cost)"], ["claude-opus-5-5", "Opus 5.5 (strongest, costs the most)"]];
+  var MODEL_LIST = [["claude-sonnet-5-5", "Sonnet 5.5 (standard)"], ["claude-haiku-4-5-20251001", "Haiku 4.5 (fastest, lowest cost)"], ["claude-opus-5-5", "Opus 5.5 (strongest, costs the most)"]];
   var OMODELS = ["gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.6-luna", "gpt-6-astra"];   /* suggestions only: the person can type any model their OpenAI account offers */
   function getModel() { var m = ls.get(KEY.model); return MODEL_LIST.some(function (x) { return x[0] === m; }) ? m : MODEL_LIST[0][0]; }
   function getOModel() { return ls.get(KEY.omodel) || OMODELS[0]; }
@@ -524,10 +524,11 @@
   /* Shared AI: the site owner's key sits on the server (api/claude.js and api/chatgpt.js). Signed-in people use it with no key of their own. */
   var shared = { claude: false, chatgpt: false };
   var down = {};
+  var missing = { claude: [], chatgpt: [] };
   function creditLike(e) { var m = String((e && e.message) || ""); return /no credit|credit left|credit balance|billing|quota|insufficient|rejected the API key/i.test(m) || !!(e && (e.code === "not_granted" || e.code === "rate_limited")); }
   function announce() { try { window.dispatchEvent(new CustomEvent("wyz-ai-status")); } catch (e) {} }
   function detectShared() {
-    var probe = function (p, url) { return fetch(url, { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : { ok: false }; }).then(function (j) { shared[p] = !!(j && j.ok); }, function () { shared[p] = false; }); };
+    var probe = function (p, url) { return fetch(url, { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : { ok: false }; }).then(function (j) { shared[p] = !!(j && j.ok); missing[p] = (j && Array.isArray(j.missing)) ? j.missing : []; }, function () { shared[p] = false; missing[p] = []; }); };
     return Promise.all([probe("claude", "/api/claude"), probe("chatgpt", "/api/chatgpt")]).then(function () { return shared.claude || shared.chatgpt; });
   }
   var keyOf = function (p) { return ls.get(p === "chatgpt" ? KEY.openai : KEY.ai); };
@@ -619,7 +620,7 @@
     makeSample: makeSample,
     todoist: { has: function () { return !!ls.get(KEY.todo); }, set: function (t) { ls.set(KEY.todo, String(t || "").trim()); }, clear: function () { ls.del(KEY.todo); } },
     ai: {
-      detect: detectShared, names: NAMES,
+      detect: detectShared, names: NAMES, missing: function (p) { return missing[p] || []; },
       chosen: chosen, setChosen: function (p) { ls.set(KEY.provider, p === "chatgpt" ? "chatgpt" : "claude"); },
       active: active, avail: avail, mode: modeOf,
       down: function (p) { return down[p] && down[p].until > Date.now() ? down[p] : null; }, clearDown: function (p) { delete down[p]; announce(); },

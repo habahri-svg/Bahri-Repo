@@ -14,8 +14,9 @@ const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-5.6-terra";
 const allowedModels = function () { return S.list(process.env.ALLOWED_OPENAI_MODELS || DEFAULT_MODEL); };
 
 module.exports = async function handler(req, res) {
-  const ready = !!(process.env.OPENAI_API_KEY && process.env.GOOGLE_CLIENT_ID);
-  const ctx = await S.gate(req, res, ready, overLimit);
+  const missing = ["OPENAI_API_KEY", "GOOGLE_CLIENT_ID"].filter(function (k) { return !String(process.env[k] || "").trim(); });
+  const ready = !missing.length;
+  const ctx = await S.gate(req, res, ready, overLimit, { missing: missing });
   if (!ctx) return;
   const b = ctx.body;
   const wanted = String(b.model || "").toLowerCase();
