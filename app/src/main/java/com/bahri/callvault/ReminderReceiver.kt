@@ -28,7 +28,7 @@ class ReminderReceiver : BroadcastReceiver() {
     }
 
     companion object {
-        /** Inexact alarms avoid the exact-alarm permission. Reminders are lost after a reboot. */
+        /** Inexact alarms avoid the exact-alarm permission. Reminders are saved and re-armed after a reboot. */
         fun schedule(ctx: Context, title: String, text: String, at: Long, persist: Boolean = true) {
             if (persist) save(ctx, title, text, at)
             val id = (title + text + at).hashCode()
@@ -38,7 +38,6 @@ class ReminderReceiver : BroadcastReceiver() {
             val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
         }
-    }
 
         private fun store(ctx: Context) = ctx.getSharedPreferences("reminders", Context.MODE_PRIVATE)
 
