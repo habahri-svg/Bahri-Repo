@@ -74,6 +74,9 @@ function gateMcp(m){return Object.assign({},m,{
   callTool:async(s,t,a,o)=>{const k=SRC_OF[s];if(k&&srcOff(k)&&readTool(t))return {payload:SRC_EMPTY[k]};return m.callTool(s,t,a,o)},
   server:async s=>{const o=await m.server(s),k=SRC_OF[s];if(!k)return o;const w={};Object.keys(o).forEach(t=>{w[t]=a=>srcOff(k)&&readTool(t)?Promise.resolve(SRC_EMPTY[k]):o[t](a)});return w}})}
 const _mkSample=Connectors.makeSample;Connectors.makeSample=function(){return srcOff("ai")?null:_mkSample.apply(this,arguments)};
+const GTABS=[["updates","Gmail Updates tab","Receipts, statements, bookings, notifications",1],["forums","Gmail Forums tab","Groups and mailing lists",1],["promotions","Gmail Promotions tab","Offers and newsletters",0],["social","Gmail Social tab","Social networks",0]];
+const tabOn=k=>{const v=state.tabs&&state.tabs[k];return v===undefined?!!(GTABS.find(t=>t[0]===k)||[])[3]:!!v};
+const inboxQuery=()=>"in:inbox newer_than:7d"+GTABS.filter(([k])=>!tabOn(k)).map(([k])=>" -category:"+k).join("");
 const SOURCES=[["gmail","Email","Your inbox and sent mail"],["calendar","Calendar","Today's and this week's meetings"],["drive","Google Drive","Your recent files"],["contacts","Contacts","Address suggestions while you write"],["todoist","Todoist","Today's Todoist tasks"],["ai","AI assistant","Smart sorting, drafts and Ask"],["research","ChatGPT and Claude research","Follow-ups from your chats"],["alerts","Alerts on this browser","Pop-up alerts for urgent email"]];
 function renderSources(){
   const host=$("srcList");if(!host)return;host.replaceChildren();
@@ -84,6 +87,7 @@ function renderSources(){
     row(!srcOff(k),label,sub,on=>{state.off=state.off||{};state.off[k]=on?0:1;persist();if(k==="ai"){sample=Connectors.makeSample();try{renderAI();setAIButton()}catch(e){}}
       const r=document.querySelector('[data-sec="research"]');if(r)r.hidden=srcOff("research");refreshAll(true);toast(label+(on?" is on.":" is off. Turn it back on here any time."))},k);
   });
+  if(G.mainType()!=="ms")GTABS.forEach(([k,label,sub])=>row(tabOn(k),label,sub,on=>{state.tabs=state.tabs||{};state.tabs[k]=on?1:0;persist();refreshAll(true);toast(label+(on?" is included.":" is left out."))},"tab:"+k));
   G.accounts().slice(1).filter(x=>x.email).forEach(x=>row(G.accountOn(x.email),"Email account: "+x.email,"Its mail, meetings and files",on=>{G.setAccountOn(x.email,on);refreshAll(true)},"acct:"+x.email));
   const list=ordered(rows,l=>l.dataset.key,state.srcOrder),keys=list.map(l=>l.dataset.key);
   list.forEach((l,i)=>{l.append(arrows(()=>{moveIn("srcOrder",keys,l.dataset.key,-1);renderSources()},()=>{moveIn("srcOrder",keys,l.dataset.key,1);renderSources()},i===0,i===list.length-1));host.append(l)});
@@ -646,7 +650,7 @@ async function loadMail(force){
   try{
     const g=await mcp.server("Gmail").catch(e=>{throw e});
     const [inb,snt,snt2]=await Promise.all([
-      g.search_threads({query:"in:inbox newer_than:7d -category:promotions -category:social",pageSize:30},{cache:false}),
+      g.search_threads({query:inboxQuery(),pageSize:30},{cache:false}),
       g.search_threads({query:"in:sent newer_than:3d -to:me",pageSize:40},{cache:false}).catch(()=>({})),
       g.search_threads({query:"in:sent older_than:3d newer_than:21d -to:me",pageSize:40},{cache:false}).catch(()=>({}))
     ]);
