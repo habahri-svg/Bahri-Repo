@@ -171,3 +171,15 @@ One time, by the owner. About 10 minutes.
 The Continue with Microsoft button and Add Microsoft account appear once MS_CLIENT_ID is set.
 Work accounts whose company blocks new apps need their IT to approve the app once.
 The shared AI accepts Microsoft sign-ins too (the server checks the person with Microsoft Graph), so add their email to ALLOWED_EMAILS.
+
+## Fix the app (owner only)
+
+The owner sees a "🛠 Fix the app" button next to Invite someone. Type what should change, Claude reads the code on GitHub and prepares the change, and nothing goes live until you press Go live. Each publish raises the version number, and the last one can be undone.
+
+Needs these in Vercel, Settings, Environment Variables, then a redeploy:
+- OWNER_EMAILS: the Google accounts allowed to use it.
+- ANTHROPIC_API_KEY and GOOGLE_CLIENT_ID: already there for the shared AI.
+- GITHUB_TOKEN: a fine-grained GitHub token for this repository only, with Contents set to Read and write. Add Deployments set to Read-only to get preview links.
+- Optional: FIX_MODEL (default claude-sonnet-5-5), FIX_BRANCH, GITHUB_REPO.
+
+Locked on purpose: api/_shared.js, api/fix.js, api/admin.js, api/seen.js, docs/config.js. Those hold sign-in and safety checks and can only be changed by a developer.
