@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>WYZ Rent Execution Page</title>
 <meta name="theme-color" content="#104b70">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Execution Page">
@@ -489,6 +491,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       <h2>Put your execution page on your home screen</h2>
       <p class="sub">There's nothing to download. It's this page, pinned so it opens like an app. Everyone uses the same link and each person sees only their own email and calendar.</p>
       <div class="ask"><input class="in" id="link" readonly aria-label="Link to this page"><button class="btn" type="button" id="copy">Copy link</button></div>
+      <div class="ask"><button class="btn solid" type="button" id="installApp" hidden>Install as an app</button><span class="status" id="installNote" role="status"></span></div>
     </div></div>
     <div class="two">
       <div class="card"><div class="pad">
@@ -565,7 +568,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
         <textarea class="in" id="thrPaste" rows="4" placeholder="Paste the answer here" aria-label="Paste the answer here"></textarea>
         <button class="btn small solid" type="button" id="thrPasteUse">Use as my reply</button>
       </div>
-      <div class="headrow"><select class="in" id="thrAIpick" aria-label="Which AI writes it" style="flex:0 1 130px;padding:5px 8px" hidden></select><button class="btn small" type="button" id="thrAI">Write it for me</button><button class="btn small ghost" type="button" id="thrFreeBtn" title="Write it with your free ChatGPT or Claude chat, no API credit">No credit? Use a free chat</button><button class="btn solid" type="button" id="thrSend">Send</button><button class="btn" type="button" id="thrSave">Save to Gmail drafts</button><button class="btn ghost" type="button" id="thrFwd">Forward</button><button class="btn ghost" type="button" id="thrWA">Send on WhatsApp</button></div>
+      <div class="headrow"><select class="in" id="thrAIpick" aria-label="Which AI writes it" style="flex:0 1 130px;padding:5px 8px" hidden></select><button class="btn small" type="button" id="thrAI">Write it for me</button><button class="btn small" type="button" id="thrMic" title="Press, speak your answer, press again to stop" aria-pressed="false" hidden>🎤 Speak</button><select class="in" id="thrLang" aria-label="Language you speak" style="flex:0 1 120px;padding:5px 8px" hidden><option value="en-GB">English</option><option value="ar-AE">العربية</option></select><button class="btn small ghost" type="button" id="thrExact" hidden>Use my exact words</button><button class="btn small ghost" type="button" id="thrFreeBtn" title="Write it with your free ChatGPT or Claude chat, no API credit">No credit? Use a free chat</button><button class="btn solid" type="button" id="thrSend">Send</button><button class="btn" type="button" id="thrSave">Save to Gmail drafts</button><button class="btn ghost" type="button" id="thrFwd">Forward</button><button class="btn ghost" type="button" id="thrWA">Send on WhatsApp</button></div>
     </div>
   </div></div>
 </div>

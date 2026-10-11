@@ -292,6 +292,7 @@ async function afterConnect(){
   try{localStorage.setItem("wyz-last-name",myName)}catch(e){}
   LS="wyzcc-v1-"+uid;loadContactsCache();
   $("welcome").hidden=true;renderHello();
+  try{G.token().then(t=>fetch("/api/seen",{method:"POST",headers:{Authorization:"Bearer "+t}})).catch(()=>{})}catch(e){}
   const snap=lsGet();if(snap&&snap.state)restore(snap);
   await loadResearch();renderTasks();renderSetup();loadContacts();
   if(!state.onboarded)onbOpen();
@@ -804,6 +805,7 @@ async function openThread(id,o){
   $("thrGmail").href=t.url||"https://mail.google.com/";
   $("thrSnooze").replaceChildren(snoozeDrop(id,thrClose));$("thrAIbox").hidden=true;$("thrAIbox").open=false;
   $("thrBody").replaceChildren(el("p","sub","Loading the conversation..."));
+  try{if(voice.on){voice.on=false;rec.abort()}}catch(e){}micState(false);$("thrExact").hidden=true;
   $("thrFree").hidden=true;$("thrPaste").value="";$("thrReply").hidden=true;$("thrSt").textContent="";$("thrSt").className="status";$("thrText").value="";$("thrAll").checked=false;
   ["thrSend","thrSave","thrText","thrTo","thrCc"].forEach(k=>$(k).disabled=false);
   $("thrSend").textContent="Send";
@@ -858,6 +860,36 @@ $("thrPasteUse").onclick=()=>{
   $("thrText").value=body;if(subj&&!$("thrSubj").value.trim())$("thrSubj").value=subj;
   $("thrFree").hidden=true;$("thrPaste").value="";$("thrSt").className="status";$("thrSt").textContent="Edit it, then send it or save it as a draft.";$("thrText").focus();
 };
+/* speak your reply: the browser's own speech recognition, then the AI tidies it into an email */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let rec=null,voice={raw:"",on:false};
+function micState(on){voice.on=on;$("thrMic").textContent=on?"⏹ Stop":"🎤 Speak";$("thrMic").setAttribute("aria-pressed",String(on))}
+async function tidyVoice(){
+  const raw=voice.raw.trim(),st=$("thrSt"),ta=$("thrText");
+  if(!raw){st.className="status err";st.textContent="I didn't hear anything. Check your microphone and try again.";return}
+  ta.value=raw;$("thrExact").hidden=true;
+  if(!sample){st.className="status";st.textContent="Here is what you said. Edit it, then send it.";return}
+  st.className="status";st.textContent="Turning what you said into an email...";
+  try{
+    const first=(myName||"").split(" ")[0],reply=thr.mode==="reply";
+    const r=await creditFallback(prov=>sample("Turn this spoken note into a clean email "+(reply?"reply":"")+" for "+(myName||"me")+" at WYZ Rent. Keep every fact and the meaning. Fix grammar, remove filler words, make it short and warm. Use contractions. No em dashes, no semicolons. Plain text only. "+(sigText()?"No sign-off and no name, the signature is added automatically.":"Sign with the first name"+(first?" "+first:"")+".")+" Return only the email body.\n\nWhat they said:\n"+raw+(reply?"\n\nThe email they are answering:\n"+threadBlock(thr.msgs).slice(-2500):""),{cache:false,provider:prov}));
+    const t=String(r.text||"").trim();if(t){ta.value=t;$("thrExact").hidden=false}
+    st.className="status";st.textContent="Edit it, then send it or save it as a draft.";
+  }catch(e){st.className="status err";st.textContent="I couldn't tidy it ("+clip((e&&e.message)||"unknown reason",90)+"). Your exact words are in the box."}
+}
+function startVoice(){
+  if(!SR)return;
+  voice.raw="";rec=new SR();rec.lang=$("thrLang").value;rec.continuous=true;rec.interimResults=true;
+  let finals="";
+  rec.onresult=e=>{let interim="";for(let i=e.resultIndex;i<e.results.length;i++){const t=e.results[i][0].transcript;if(e.results[i].isFinal)finals+=t+" ";else interim+=t}voice.raw=(finals+interim).trim();$("thrSt").className="status";$("thrSt").textContent="Listening: "+clip(voice.raw,200)};
+  rec.onerror=e=>{micState(false);const st=$("thrSt");st.className="status err";st.textContent=e&&e.error==="not-allowed"?"The microphone is blocked. Allow it in your browser's address bar, then try again.":e&&e.error==="no-speech"?"I didn't hear anything.":"The microphone stopped ("+((e&&e.error)||"unknown reason")+")."};
+  rec.onend=()=>{if(voice.on){micState(false);tidyVoice()}};
+  try{rec.start();micState(true);$("thrSt").className="status";$("thrSt").textContent="Listening... speak now, then press Stop."}catch(e){micState(false)}
+}
+$("thrMic").onclick=()=>{if(voice.on){voice.on=false;micState(false);try{rec.stop()}catch(e){}tidyVoice()}else startVoice()};
+$("thrExact").onclick=()=>{$("thrText").value=voice.raw.trim();$("thrExact").hidden=true};
+if(SR){$("thrMic").hidden=false;$("thrLang").hidden=false;try{const l=localStorage.getItem("wyz-voice-lang");if(l)$("thrLang").value=l}catch(e){}}
+$("thrLang").onchange=()=>{try{localStorage.setItem("wyz-voice-lang",$("thrLang").value)}catch(e){}};
 function thrChase(){const l=lastMsg();return thr.item.st==="follow"||thr.item.st==="wait"||addrOf(l.sender).toLowerCase()===myAddr()}
 async function thrDraft(){
   const ta=$("thrText"),st=$("thrSt"),chase=thrChase();
@@ -890,7 +922,7 @@ function setMode(m){
   $("thrFwd").hidden=nw;
   $("thrFwd").textContent=fwd?"Back to reply":"Forward";
   $("thrSumWrap").hidden=!(fwd&&sample);$("thrRemWrap").hidden=fwd;$("thrAll").parentElement.hidden=fwd||nw;
-  $("thrAI").hidden=fwd;$("thrFreeBtn").hidden=fwd;if(fwd)$("thrFree").hidden=true;if(!fwd)$("thrSum").checked=false;
+  $("thrAI").hidden=fwd;$("thrFreeBtn").hidden=fwd;if(SR){$("thrMic").hidden=fwd;$("thrLang").hidden=fwd}if(fwd)$("thrFree").hidden=true;if(!fwd)$("thrSum").checked=false;
 }
 $("thrFwd").onclick=()=>{
   if(thr.mode==="forward"){setMode("reply");fillTargets();return}
@@ -1474,6 +1506,17 @@ async function attachmentLoader(m,f){
   return {data:b64,mime:kind==="pdf"?"application/pdf":(/^image\//.test(f.type)?f.type.replace("jpg","jpeg"):IMG_EXT[ext]||"image/png")};
 }
 
+/* ---------- install as an app (home screen icon, full screen) ---------- */
+let installEv=null;
+const standalone=()=>window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
+if("serviceWorker" in navigator&&(location.protocol==="https:"||location.hostname==="localhost")){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}))}
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();installEv=e;$("installApp").hidden=false;$("installNote").textContent="One tap puts it on your home screen."});
+window.addEventListener("appinstalled",()=>{installEv=null;$("installApp").hidden=true;$("installNote").textContent="Installed. Open it from your home screen or apps list."});
+$("installApp").onclick=async()=>{if(!installEv)return;installEv.prompt();try{await installEv.userChoice}catch(e){}installEv=null;$("installApp").hidden=true};
+if(standalone())$("installNote").textContent="You are already using the installed app.";
+else if(/iphone|ipad|ipod/i.test(navigator.userAgent))$("installNote").textContent="On iPhone or iPad: tap Share, then Add to Home Screen.";
+if(location.hash==="#new-email"){window.addEventListener("load",()=>setTimeout(()=>{try{if(G.connected())openCompose()}catch(e){}},2500))}
+
 /* ---------- quick links ---------- */
 const LINKS=[
   ["WYZ Dashboard","https://dashboard.wyzrent.com"],
@@ -1604,7 +1647,7 @@ async function weeklyReview(){
 $("weekGo").onclick=weeklyReview;
 
 /* ---------- system check: test every connection, read-only ---------- */
-const SCOPE_LABEL={contacts:"see your contacts",otherContacts:"see people you have emailed",calEvents:"create and move calendar events",gmailRead:"read your email",gmailDraft:"save drafts and send replies",gmailModify:"archive and mark as read",cal:"read your calendar",drive:"list your Drive files"};
+const SCOPE_LABEL={contacts:"see your contacts",otherContacts:"see people you have emailed",calEvents:"create and move calendar events",gmailRead:"read your email",gmailDraft:"save drafts and send replies",cal:"read your calendar",drive:"list your Drive files",driveRead:"read a Drive file when you ask the AI about it",gmailModify:"archive, star, label, bin and mark as read"};
 let lastReport="";
 async function testEverything(){
   const out=$("testOut"),sum=$("testSum"),btn=$("testGo");

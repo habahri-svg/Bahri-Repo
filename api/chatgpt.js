@@ -36,6 +36,7 @@ module.exports = async function handler(req, res) {
       return res.status(r.status === 429 ? 429 : 502).json({ error: nice });
     }
     const j = JSON.parse(out);
+    try { await S.record(ctx.who.email, "chatgpt", { in: j.usage && j.usage.prompt_tokens, out: j.usage && j.usage.completion_tokens }); } catch (e) {}
     const text = (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "";
     return res.status(200).json({ content: [{ type: "text", text: String(text) }] });
   } catch (e) {

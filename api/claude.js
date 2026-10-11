@@ -32,6 +32,7 @@ module.exports = async function handler(req, res) {
     let msg = "";
     if (!r.ok) { try { msg = (JSON.parse(out).error || {}).message || ""; } catch (e) {} }
     const nice = /credit balance/i.test(msg) ? "Claude has no credit left. The owner needs to add credit in the Anthropic console." : "Claude couldn't answer (" + r.status + ")." + (msg ? " " + String(msg).slice(0, 120) : "");
+    if (r.ok) { try { const u = JSON.parse(out).usage || {}; await S.record(ctx.who.email, "claude", { in: u.input_tokens, out: u.output_tokens }); } catch (e) {} }
     res.status(r.ok ? 200 : (r.status === 429 || r.status === 529 ? 429 : 502)).setHeader("content-type", "application/json");
     return res.send(r.ok ? out : JSON.stringify({ error: nice }));
   } catch (e) {

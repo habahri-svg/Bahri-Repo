@@ -63,6 +63,7 @@ Anthropic doesn't offer a "Sign in with Claude" for other websites, and using so
    | `ALLOWED_EMAILS` | optional, comma-separated Google addresses allowed to use Claude |
    | `ALLOWED_DOMAINS` | optional, for example `wyzrent.com` |
    | `DAILY_LIMIT` | optional, calls per person per day (default 50) |
+   | `OWNER_EMAILS` | optional, who may open `/admin` (see Owner usage panel below) |
 
    Then redeploy. You pay for the usage, so set a spending limit in the Anthropic console and use `ALLOWED_EMAILS` or `ALLOWED_DOMAINS` so only your team can use it. The function (`api/claude.js`) checks every request against the person's Google sign-in and refuses tokens issued to any other app.
    **ChatGPT works the same way.** Add these in Vercel to let everyone use your ChatGPT too:
@@ -75,6 +76,26 @@ Anthropic doesn't offer a "Sign in with Claude" for other websites, and using so
 
    The same `GOOGLE_CLIENT_ID`, `ALLOWED_EMAILS`, `ALLOWED_DOMAINS` and `DAILY_LIMIT` apply to both. The standard Claude model is Sonnet 5.5. People can switch model, or switch between Claude and ChatGPT, under Connections, Personalise. Other AIs (Perplexity, Gemini and so on) can be added there by web address and open in a new tab with the question filled in.
 2. **Their own key (fallback).** On GitHub Pages there is no server, and on Vercel the function stays off until you add the variables. In both cases the guided screen asks each person for their own key instead.
+
+## Owner usage panel (optional)
+Open `https://YOUR-SITE/admin` to see who uses the shared Claude and ChatGPT, how many calls each person made today and in total, the tokens used, and a **Switch off** button per person. It also makes the daily limit exact.
+
+1. In Vercel add the environment variable `OWNER_EMAILS` with your Google email (several are fine, separated by commas).
+2. In Vercel open **Storage**, create **Upstash Redis** (the free plan is enough) and connect it to the project. Vercel adds `KV_REST_API_URL` and `KV_REST_API_TOKEN` for you.
+3. Redeploy. Usage is counted from then on.
+
+Without step 2 everything still works. The page then explains what is missing, and daily limits are only approximate. "Switch off" stops that person's use of the shared AI. It can't lock them out of their own Gmail, because the page reads that directly from their Google account.
+
+## What was added after the first version
+- **Real email view.** Emails open as designed, with clickable links, pictures on request, and attachments you can download.
+- **More mail actions** in the thread's More menu: star, mark unread, move to a label, unsubscribe, move to bin.
+- **Select several** emails, then Done, Snooze, Archive or Mute them together.
+- **Draft all replies** writes a draft for each email that needs an answer and saves it to Gmail drafts. It never sends. Tick the box under Replies and rules to do this once a day when the page opens. This runs when the page is open. A true overnight run would need a server job.
+- **Ask AI about a file.** Email attachments and Drive files (PDF, pictures, text, Google Docs, Sheets and Slides). PDFs and pictures need Claude. Files over 3 MB are skipped.
+- **No credit?** If Claude has no credit the page tries ChatGPT. If neither works, "No credit? Use a free chat" opens your own ChatGPT or Claude chat with the email filled in. Paste the answer back. Pick Sonnet 5.5 in Claude's model menu.
+- **Speak your reply.** Works in Chrome, Edge and Safari. English and Arabic. The AI tidies what you said.
+- **Install as an app** on a phone or computer, from the Install tab. It needs internet.
+- **Five colour themes** under Connections, Personalise, each with light and dark.
 
 ## What happens when someone opens it
 1. First visit: a "Connect your accounts" card with one **Continue with Google** button. Nothing opens until they tap it.
