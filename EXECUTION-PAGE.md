@@ -96,6 +96,12 @@ Without step 2 everything still works. The page then explains what is missing, a
 - **Speak your reply.** Works in Chrome, Edge and Safari. English and Arabic. The AI tidies what you said.
 - **Install as an app** on a phone or computer, from the Install tab. It needs internet.
 - **Five colour themes** under Connections, Personalise, each with light and dark.
+- **Version label.** The top of the page shows the version name and when it was last updated. Edit `docs/version.js` each time you publish.
+- **Suggested answer in the thread.** Open an email and an AI-written reply appears under the last message, written by the AI you pick (Claude, ChatGPT or a free chat). Turn the automatic suggestion off under Replies and rules.
+- **Undo send and a check before sending.** After you press Send there is a countdown (default 10 seconds, changeable) with an Undo button. Quick checks catch a missing attachment or a leftover [DATE]. "Check it first" asks the AI to read the email.
+- **Top 3 for today** at the top of the Today tab, chosen by the AI from your mail, tasks and next meetings.
+- **Prep brief** on every meeting, **person card** (click "About" a sender, or More, About this person), and **Search everything** (mail, files, meetings, tasks and people in one box).
+- **Hand off to a team member.** More, Hand off sends the email to Karim or Louloua (edit the team under Replies and rules) and tracks it under "Waiting on the team" until they answer. You can nudge them from there.
 
 ## What happens when someone opens it
 1. First visit: a "Connect your accounts" card with one **Continue with Google** button. Nothing opens until they tap it.

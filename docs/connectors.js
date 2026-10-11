@@ -328,14 +328,15 @@
         return { id: j.id, htmlLink: j.htmlLink };
       },
       list_events: async function (a) {
-        var q = "singleEvents=true&orderBy=startTime&maxResults=" + (a.pageSize || 40) +
+        var q = (a.q ? "q=" + encodeURIComponent(a.q) + "&" : "") + "singleEvents=true&orderBy=startTime&maxResults=" + (a.pageSize || 40) +
           "&timeMin=" + encodeURIComponent(new Date(a.startTime).toISOString()) +
           "&timeMax=" + encodeURIComponent(new Date(a.endTime).toISOString());
         var j = await gfetch("https://www.googleapis.com/calendar/v3/calendars/primary/events?" + q, null, SC.cal);
         return {
           events: (j.items || []).map(function (e) {
             var video = e.conferenceData && (e.conferenceData.entryPoints || []).find(function (x) { return x.entryPointType === "video"; });
-            return { id: e.id, status: e.status, summary: e.summary, location: e.location, start: e.start, end: e.end, htmlLink: e.htmlLink, conferenceUrl: e.hangoutLink || (video && video.uri) || "" };
+            return { id: e.id, status: e.status, summary: e.summary, description: String(e.description || "").slice(0, 1500), location: e.location, start: e.start, end: e.end, htmlLink: e.htmlLink, conferenceUrl: e.hangoutLink || (video && video.uri) || "",
+              attendees: (e.attendees || []).map(function (x) { return { email: String(x.email || "").toLowerCase(), name: x.displayName || "", self: !!x.self, resource: !!x.resource }; }), organizer: e.organizer && e.organizer.email || "" };
           })
         };
       }
@@ -370,7 +371,7 @@
       search_files: async function (a) {
         var term = String(a.query || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
         var q = "pageSize=" + (a.pageSize || 15) + "&orderBy=" + encodeURIComponent("modifiedTime desc") +
-          "&q=" + encodeURIComponent("trashed=false and name contains '" + term + "'") + "&fields=" + encodeURIComponent("files(id,name,modifiedTime,mimeType,fileExtension)");
+          "&q=" + encodeURIComponent(a.raw ? String(a.raw) : "trashed=false and name contains '" + term + "'") + "&fields=" + encodeURIComponent("files(id,name,modifiedTime,mimeType,fileExtension)");
         var j = await gfetch("https://www.googleapis.com/drive/v3/files?" + q, null, SC.drive);
         return { files: (j.files || []).map(function (f) { return { id: f.id, title: f.name, modifiedTime: f.modifiedTime, mimeType: f.mimeType, fileExtension: f.fileExtension }; }) };
       },

@@ -165,6 +165,21 @@ ol.steps li::marker{color:var(--gold);font-weight:700}
 .msg pre{white-space:pre-wrap;font:inherit;overflow-wrap:anywhere;margin:8px 0 4px}
 .msg .meta{font-size:13px;color:var(--soft);font-weight:400}
 .found{display:flex;flex-direction:column}
+.t3row{display:grid;grid-template-columns:28px minmax(0,1fr);gap:4px 10px;padding:10px 0;border-top:1px solid var(--line)}
+.t3row:first-child{border-top:0}
+.t3row .main{display:flex;flex-direction:column;gap:3px;min-width:0}
+.t3row .t{font-weight:600}
+.t3row .s{color:var(--soft);font-size:14px}
+.t3n{width:26px;height:26px;border-radius:50%;background:var(--navy);color:var(--onnavy);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
+.infosec h3{margin:6px 0 2px;font-size:14px;color:var(--navy)}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:1px 8px;border-radius:999px;background:var(--sky);color:var(--navy)}
+.pill.ok{background:var(--navy);color:var(--onnavy)}
+.suggest{border:1.5px dashed var(--navy);border-radius:10px;background:var(--sky);padding:10px 12px;margin:10px 0;display:flex;flex-direction:column;gap:8px}
+.suggest .sghead{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.suggest .sghead b{font-size:14px;color:var(--navy)}
+.suggest .sghead .meta{flex:1 1 auto}
+.suggest .mailtext{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:0}
+.suggest .chip[aria-pressed="true"]{background:var(--navy);color:var(--onnavy);border-color:var(--navy)}
 .verbar{display:flex;gap:6px;flex-wrap:wrap;align-items:baseline;font-size:12.5px;color:var(--soft);margin:0 0 8px}
 .verbar b{color:var(--navy);font-weight:700}
 .selbox{width:18px;height:18px;margin:0 8px 0 0;vertical-align:-3px;accent-color:var(--navy);cursor:pointer}
@@ -325,6 +340,20 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       </div>
     </div>
 
+    <div class="card note" id="top3" hidden><div class="pad">
+      <div class="headrow"><h2 style="flex:1 1 200px">Top 3 for today</h2><button class="btn small ghost" type="button" id="top3Refresh" title="Ask the AI to choose again">Pick again</button></div>
+      <div id="top3List"></div>
+    </div></div>
+    <div class="card note" id="handoffCard" hidden><div class="pad">
+      <h2>Waiting on the team</h2>
+      <span class="status">Emails you handed to a team member. They leave your board until they answer.</span>
+      <div id="handoffList"></div>
+    </div></div>
+    <div class="card note" id="allSearch"><div class="pad">
+      <div class="ask"><input class="in" id="allQ" placeholder="Search everything: mail, files, meetings, tasks, people" aria-label="Search everything"><button class="btn solid" type="button" id="allGo">Search</button></div>
+      <div id="allRes"></div>
+    </div></div>
+
     <div id="secs" class="wrap" style="gap:16px">
     <div class="sec wrap" data-sec="setup" style="gap:14px">
     <div class="card note" id="setupCard">
@@ -477,7 +506,12 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       <h2>Replies and rules</h2>
       <span class="status">Your signature. It is added to the end of every reply you send from the page.</span>
       <textarea id="sigText" aria-label="Signature" style="min-height:90px" placeholder="Houssam Bahri&#10;WYZ Rent"></textarea>
+      <label class="status" style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" id="autoSuggest" checked style="margin-top:3px"><span>When I open an email, suggest an answer in the thread straight away. Turn this off to suggest only when I ask.</span></label>
       <label class="status" style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" id="autoDraft" style="margin-top:3px"><span>Write draft replies for me when I open the page, once a day. They go to Gmail drafts and are never sent.</span></label>
+      <div class="ask"><label class="status" for="undoSecs">Undo send. After you press Send, wait this long before it really goes</label><select class="in" id="undoSecs" style="flex:0 1 150px"><option value="0">Send at once</option><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="20">20 seconds</option><option value="30">30 seconds</option></select></div>
+      <span class="status">Team. People you can hand an email to. They get it by email and you see when they answer.</span>
+      <div id="teamList"></div>
+      <div class="ask"><input class="in" id="teamName" placeholder="Name" aria-label="Team member name" style="flex:0 1 140px"><input class="in" id="teamEmail" placeholder="Email address" aria-label="Team member email"><button class="btn" type="button" id="teamAdd">Add</button></div>
       <span class="status">Reply templates. Use {name} for the person's first name.</span>
       <div id="tplList"></div>
       <div class="ask"><input class="in" id="tplName" placeholder="Template name" aria-label="Template name" style="flex:1 1 160px"><input class="in" id="tplText" placeholder="Text of the reply" aria-label="Template text" style="flex:3 1 260px"><button class="btn" type="button" id="tplAdd">Add</button></div>
@@ -565,14 +599,21 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       <label class="status chk" id="thrSumWrap" hidden><input type="checkbox" id="thrSum"> Send a short AI summary instead of the full email</label>
       <label class="status chk" id="thrRemWrap">Remind me if no reply in <select id="thrRemind"><option value="0">never</option><option value="2">2 days</option><option value="3" selected>3 days</option><option value="7">1 week</option></select></label>
       <p class="status" id="thrSt"></p>
+      <div class="freebox" id="thrCheckOut" hidden role="status"></div>
       <div class="freebox" id="thrFree" hidden>
         <p><b>No credit needed.</b> Use your own ChatGPT or Claude chat on their website. The email and your instruction are filled in for you. Copy the answer it gives, then paste it below.</p>
         <div class="headrow"><button class="btn small" type="button" id="thrFreeGPT">Open ChatGPT</button><button class="btn small" type="button" id="thrFreeClaude">Open Claude (choose Sonnet 5.5)</button></div>
         <textarea class="in" id="thrPaste" rows="4" placeholder="Paste the answer here" aria-label="Paste the answer here"></textarea>
         <button class="btn small solid" type="button" id="thrPasteUse">Use as my reply</button>
       </div>
-      <div class="headrow"><select class="in" id="thrAIpick" aria-label="Which AI writes it" style="flex:0 1 130px;padding:5px 8px" hidden></select><button class="btn small" type="button" id="thrAI">Write it for me</button><button class="btn small" type="button" id="thrMic" title="Press, speak your answer, press again to stop" aria-pressed="false" hidden>🎤 Speak</button><select class="in" id="thrLang" aria-label="Language you speak" style="flex:0 1 120px;padding:5px 8px" hidden><option value="en-GB">English</option><option value="ar-AE">العربية</option></select><button class="btn small ghost" type="button" id="thrExact" hidden>Use my exact words</button><button class="btn small ghost" type="button" id="thrFreeBtn" title="Write it with your free ChatGPT or Claude chat, no API credit">No credit? Use a free chat</button><button class="btn solid" type="button" id="thrSend">Send</button><button class="btn" type="button" id="thrSave">Save to Gmail drafts</button><button class="btn ghost" type="button" id="thrFwd">Forward</button><button class="btn ghost" type="button" id="thrWA">Send on WhatsApp</button></div>
+      <div class="headrow"><select class="in" id="thrAIpick" aria-label="Which AI writes it" style="flex:0 1 130px;padding:5px 8px" hidden></select><button class="btn small" type="button" id="thrAI">Write it for me</button><button class="btn small" type="button" id="thrMic" title="Press, speak your answer, press again to stop" aria-pressed="false" hidden>🎤 Speak</button><select class="in" id="thrLang" aria-label="Language you speak" style="flex:0 1 120px;padding:5px 8px" hidden><option value="en-GB">English</option><option value="ar-AE">العربية</option></select><button class="btn small ghost" type="button" id="thrExact" hidden>Use my exact words</button><button class="btn small ghost" type="button" id="thrFreeBtn" title="Write it with your free ChatGPT or Claude chat, no API credit">No credit? Use a free chat</button><button class="btn solid" type="button" id="thrSend">Send</button><button class="btn" type="button" id="thrCheck" title="The AI reads your email before you send it and points out mistakes">Check it first</button><button class="btn" type="button" id="thrSave">Save to Gmail drafts</button><button class="btn ghost" type="button" id="thrFwd">Forward</button><button class="btn ghost" type="button" id="thrWA">Send on WhatsApp</button></div>
     </div>
+  </div></div>
+</div>
+<div id="info" class="onb" hidden role="dialog" aria-modal="true" aria-labelledby="infoTitle">
+  <div class="onbbox card"><div class="pad">
+    <div class="headrow"><h2 id="infoTitle" style="flex:1 1 200px;overflow-wrap:anywhere"></h2><button class="btn small" type="button" id="infoClose">Close</button></div>
+    <div id="infoBody" style="display:flex;flex-direction:column;gap:10px"></div>
   </div></div>
 </div>
 <div id="fileAI" class="onb" hidden role="dialog" aria-modal="true" aria-labelledby="fileAITitle">
