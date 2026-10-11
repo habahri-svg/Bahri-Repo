@@ -2,7 +2,7 @@
    Environment variables (Vercel, Settings, Environment Variables):
      OPENAI_API_KEY         required. The owner's OpenAI API key. Never sent to the browser.
      GOOGLE_CLIENT_ID       required. The same Client ID as docs/config.js.
-     ALLOWED_EMAILS / ALLOWED_DOMAINS / DAILY_LIMIT   same as the Claude function.
+     ALLOWED_EMAILS / ALLOWED_DOMAINS (one is required) / DAILY_LIMIT   same as the Claude function.
      OPENAI_MODEL           optional. The standard model. Defaults to gpt-5.6-terra (change it if OpenAI renames it).
      ALLOWED_OPENAI_MODELS  optional. Models people may choose. Defaults to the standard model only.
    The answer is returned in the same shape as the Claude function, so the page treats both alike. */
@@ -14,7 +14,7 @@ const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-5.6-terra";
 const allowedModels = function () { return S.list(process.env.ALLOWED_OPENAI_MODELS || DEFAULT_MODEL); };
 
 module.exports = async function handler(req, res) {
-  const missing = ["OPENAI_API_KEY", "GOOGLE_CLIENT_ID"].filter(function (k) { return !String(process.env[k] || "").trim(); });
+  const missing = S.missingFor("OPENAI_API_KEY");
   const ready = !missing.length;
   const ctx = await S.gate(req, res, ready, overLimit, { missing: missing });
   if (!ctx) return;

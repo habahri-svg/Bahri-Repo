@@ -23,7 +23,7 @@ async function verify(token) {
 
 function allowed(email) {
   const emails = list(process.env.ALLOWED_EMAILS), domains = list(process.env.ALLOWED_DOMAINS);
-  if (!emails.length && !domains.length) return true;
+  if (!emails.length && !domains.length) return false;   /* no list = nobody, so the owner's credit can't be used by strangers */
   return emails.indexOf(email) >= 0 || domains.indexOf(email.split("@")[1]) >= 0;
 }
 
@@ -106,13 +106,20 @@ async function gate(req, res, ready, overLimit, opts) {
   if (!who) { res.status(401).json({ error: "Your Google sign-in isn't valid for this site." }); return null; }
   if (!allowed(who.email)) { res.status(403).json({ error: "This AI isn't turned on for your account." }); return null; }
   if (await isBlocked(who.email)) { res.status(403).json({ error: "The owner has switched off your access to the shared AI." }); return null; }
-  if (await overLimit(who.email)) { res.status(429).json({ error: "Daily limit reached. Try again tomorrow." }); return null; }
   const b = typeof req.body === "string" ? safeParse(req.body) : (req.body || {});
   const msgs = Array.isArray(b.messages) ? b.messages : [];
   const valid = msgs.length && msgs.every(function (m) { return m && (m.role === "user" || m.role === "assistant") && okContent(m.content, blocks && m.role === "user"); });
   const size = valid ? msgs.reduce(function (n, m) { const w = weigh(m.content); n.text += w.text; n.files += w.files; return n; }, { text: 0, files: 0 }) : { text: 0, files: 0 };
   if (!valid || size.text > 250000 || size.files > 4300000) { res.status(400).json({ error: "Bad request." }); return null; }
+  if (await overLimit(who.email)) { res.status(429).json({ error: "Daily limit reached. Try again tomorrow." }); return null; }
   return { who: who, msgs: msgs, body: b };
 }
 
-module.exports = { list, safeParse, verify, allowed, makeLimiter, gate, store, redis, today, record, isBlocked };
+/* Names (never values) of the settings a shared AI still needs in Vercel. */
+function missingFor(keyName) {
+  const m = [keyName, "GOOGLE_CLIENT_ID"].filter(function (k) { return !String(process.env[k] || "").trim(); });
+  if (!list(process.env.ALLOWED_EMAILS).length && !list(process.env.ALLOWED_DOMAINS).length) m.push("ALLOWED_EMAILS");
+  return m;
+}
+
+module.exports = { missingFor, list, safeParse, verify, allowed, makeLimiter, gate, store, redis, today, record, isBlocked };

@@ -140,7 +140,7 @@ function renderSetup(){
 let ONB=["claude","todoist","research","done"];
 let onbI=0;
 const firstName=()=>(myName||"").split(" ")[0]||"there";
-function onbOpen(){ONB=(Connectors.ai.mode()==="shared"?["todoist","research"]:["claude","todoist","research"]).concat(DASH?["dash"]:[],["done"]);onbI=0;$("onb").hidden=false;$("onbMsg").textContent="";onbRender()}
+function onbOpen(){ONB=(Connectors.ai.mode()==="shared"?["todoist","research"]:["claude","todoist","research"]).concat(DASH?["dash"]:[],standalone()?[]:["install"],["done"]);onbI=0;$("onb").hidden=false;$("onbMsg").textContent="";onbRender()}
 function onbClose(finished){$("onb").hidden=true;if(finished){state.onboarded=1;persist()}renderSetup()}
 function onbGo(n){onbI=Math.min(n,ONB.length-1);$("onbMsg").textContent="";onbRender()}
 function onbLink(href,text){const a=el("a","btn small",text);a.href=href;a.target="_blank";a.rel="noopener";return a}
@@ -190,6 +190,13 @@ function onbRender(){
       row.append(el("span","status",r&&r.at?(r.convs||[]).length+" conversations imported.":"Open the export page, request your data, then import the .zip from the email."));
       const a=el("div","acts");a.append(onbLink(url,"Open "+label+" export page"),onbBtn(r&&r.at?"Import again":"Import file",()=>$(fid).click()));row.append(a);body.append(row)});
     acts.append(onbBtn("Continue",()=>onbGo(onbI+1),"solid"));
+  }else if(k==="install"){
+    $("onbTitle").textContent="Put it on this "+(DEV.phone?"phone":"computer");
+    p("Install it once and it opens like an app, straight from your "+(DEV.phone?"home screen":"dock or taskbar")+". Nothing to download from a store.");
+    installGuide(body);
+    p("Then do the same on your "+(DEV.phone?"computer":"phone")+". Send yourself the link:");
+    const r=el("div","acts");r.append(onbBtn("Send to myself on WhatsApp",()=>window.open(waLink("My execution page: "+SITE_URL+"\nOpen it, sign in with Google, then install it."),"_blank","noopener")),onbLink("mailto:?subject="+encodeURIComponent("My execution page")+"&body="+encodeURIComponent("Open this, sign in with Google, then install it:\n"+SITE_URL),"Email it to myself"));body.append(r);
+    acts.append(onbBtn("Done",()=>onbGo(onbI+1),"solid"),onbBtn("Later",()=>onbGo(onbI+1),"ghost"));
   }else if(k==="dash"){
     $("onbTitle").textContent="Share a daily summary with the company";
     p("Optional. Turn this on to send a short daily summary to the WYZ Rent dashboard, so the team can see how the day is going.");
@@ -248,6 +255,7 @@ const niceErr=e=>{const c=e&&e.code;
 const lastName=()=>{try{return localStorage.getItem("wyz-last-name")||""}catch(e){return ""}};
 function showWelcome(){
   const w=$("welcome");w.hidden=false;
+  if(typeof DEV!=="undefined"&&DEV.inApp){$("wMsg").textContent="You opened this inside another app, and Google doesn't allow sign-in there. Tap the menu (three dots) and choose Open in "+(DEV.ios?"Safari":"Chrome")+", or copy the link into "+(DEV.ios?"Safari":"Chrome")+"."}
   if(!G.configured()){$("wTitle").textContent="One-time setup needed";$("wText").textContent="Google needs to know this site before anyone can sign in. Follow the steps below once, paste the Client ID, and the Continue with Google button turns on.";$("wBtn").disabled=true;$("wSetup").hidden=false;$("wOrigin").textContent=location.origin;return}
   $("wBtn").disabled=false;
   if(!G.fromConfigFile()){$("wFamily").hidden=false;$("wFamLink").value=location.origin+location.pathname+"#cid="+encodeURIComponent(G.clientId())}
@@ -376,7 +384,7 @@ function applyPageName(){
   bar.title="You are using version "+v.version+(when?", updated "+when:"")+". If it looks old, refresh the page.";
 })();
 /* colour palette and light/dark look, saved per device and applied before first paint by a tiny script in index.html */
-const PAL_META={ocean:"#104b70",emerald:"#0f6b52",indigo:"#3b3fa8",sunset:"#b4492b",plum:"#7a2e8e"};
+const PAL_META={ocean:"#104b70",ivory:"#16324e"};
 function lookNow(){try{return JSON.parse(localStorage.getItem("wyz-look")||"{}")}catch(e){return {}}}
 function applyLook(l){
   const r=document.documentElement,p=PAL_META[l.p]?l.p:"ocean";
@@ -419,7 +427,7 @@ $("wBtn").onclick=()=>connectGoogle();
 const copyBtn=(id,text,label)=>{$(id).onclick=()=>navigator.clipboard.writeText(text()).then(()=>{$(id).textContent="Copied";setTimeout(()=>$(id).textContent=label,1500)}).catch(()=>{$(id).textContent="Copy by hand"})};
 copyBtn("wFamCopy",()=>$("wFamLink").value,"Copy link");
 copyBtn("wCopyOrigin",()=>location.origin,"Copy address");
-copyBtn("wCopyScopes",()=>["https://www.googleapis.com/auth/gmail.readonly","https://www.googleapis.com/auth/gmail.compose","https://www.googleapis.com/auth/gmail.modify","https://www.googleapis.com/auth/calendar.readonly","https://www.googleapis.com/auth/drive.metadata.readonly"].join("\n"),"Copy scopes");
+copyBtn("wCopyScopes",()=>G.scopeUrls().join("\n"),"Copy scopes");
 $("wSave").onclick=()=>{const v=$("wClient").value.trim();if(!/\.apps\.googleusercontent\.com$/.test(v)){$("wMsg").textContent="That doesn't look like a Client ID. It ends in .apps.googleusercontent.com";return}G.setClientId(v);location.reload()};
 $("signOut").onclick=$("manage").onclick=async()=>{await G.signOut();try{localStorage.removeItem("wyz-last-name")}catch(e){}location.reload()};
 
@@ -1069,7 +1077,7 @@ $("thrFiles").onchange=async e=>{
   $("thrFileList").textContent=thr.files.map(f=>f.name+" ("+Math.max(1,Math.round(f.size/1024))+" KB)").join(", ");
 };
 /* Sending: quick local checks, then an Undo countdown, then the real send */
-const undoSecs=()=>{const n=state.undoSecs;return Number.isInteger(n)&&n>=0&&n<=60?n:10};
+const undoSecs=()=>{const n=state.undoSecs;return Number.isInteger(n)&&n>=0&&n<=60?n:0};
 function sendChecks(a){
   const issues=[],typed=$("thrText").value;
   if(/\b(attach(ed|ment|ments)?|enclosed|PFA)\b/i.test(typed.split(/\n\s*On .{5,120}wrote:/)[0])&&!thr.files.length)issues.push("You mention an attachment, but nothing is attached.");
@@ -1098,6 +1106,13 @@ async function thrAct(kind){
     }
   }
   thr.skipChecks=false;
+  const who0=a.to[0]+(a.to.length>1?" +"+(a.to.length-1):"");
+  if(!thr.armed){
+    thr.armed=1;$("thrSend").textContent="Confirm: send to "+who0;
+    st.className="status";st.replaceChildren(document.createTextNode("Check the email, then press Confirm to send it. "));
+    const c=el("button","btn small ghost","Cancel");c.type="button";c.onclick=()=>{thr.armed=0;$("thrSend").textContent="Send";st.textContent="Not sent."};st.append(c);return;
+  }
+  thr.armed=0;
   const secs=undoSecs();
   if(!secs)return thrDeliver("send",a);
   let left=secs;thr.counting=true;setSendButtons(true);
@@ -1217,7 +1232,8 @@ function thrMore(){
 }
 function thrClose(){if(thr.counting){thrNote("Your email is about to be sent. Press Undo to stop it, or wait a few seconds.");return}$("thr").hidden=true}
 $("thrClose").onclick=thrClose;$("thrAI").onclick=()=>{if(thr.mode==="new")composeDraft();else if($("thrAIpick").value==="free")showFree();else suggestReply({prov:aiPickValue(),force:true})};$("thrAll").onchange=fillTargets;
-$("thrSend").onclick=()=>thrAct("send");$("thrSave").onclick=()=>thrAct("save");
+$("thrSend").onclick=()=>thrAct("send");
+["thrText","thrTo","thrCc"].forEach(k=>$(k).addEventListener("input",()=>{if(thr.armed&&!thr.counting){thr.armed=0;$("thrSend").textContent="Send";$("thrSt").textContent=""}}));$("thrSave").onclick=()=>thrAct("save");
 $("thrWA").onclick=()=>window.open(waLink($("thrText").value),"_blank","noopener");
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("thr").hidden)thrClose()});
 $("thr").addEventListener("click",e=>{if(e.target===$("thr"))thrClose()});
@@ -1698,6 +1714,24 @@ const standalone=()=>window.matchMedia&&window.matchMedia("(display-mode: standa
 if("serviceWorker" in navigator&&(location.protocol==="https:"||location.hostname==="localhost")){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}))}
 window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();installEv=e;$("installApp").hidden=false;$("installNote").textContent="One tap puts it on your home screen."});
 window.addEventListener("appinstalled",()=>{installEv=null;$("installApp").hidden=true;$("installNote").textContent="Installed. Open it from your home screen or apps list."});
+/* ---------- device-aware install guide, used in the first-run steps and the Install tab ---------- */
+const SITE_URL=location.origin+"/";
+const DEV=(()=>{const u=navigator.userAgent||"",ios=/iphone|ipad|ipod/i.test(u)||(/Macintosh/.test(u)&&navigator.maxTouchPoints>1);
+  return {ios,android:/android/i.test(u),phone:ios||/android|mobile/i.test(u),iosOther:ios&&/CriOS|FxiOS|EdgiOS|OPiOS/.test(u),
+    macSafari:!ios&&/Macintosh/.test(u)&&/Safari/.test(u)&&!/Chrome|Chromium|Edg\//.test(u),edge:/Edg\//.test(u),
+    inApp:/FBAN|FBAV|Instagram|LinkedInApp|Line\/|Snapchat|TikTok|MicroMessenger|; wv\)/.test(u)}})();
+function installGuide(host){
+  const steps=(...t)=>{const ol=el("ol","steps");t.forEach(x=>ol.append(el("li","",x)));host.append(ol)};
+  if(standalone()){host.append(el("p","status","✅ It's installed. You're using the app now."));return}
+  if(installEv){const b=el("button","btn solid","Install now");b.type="button";b.onclick=async()=>{installEv.prompt();try{const c=await installEv.userChoice;if(c&&c.outcome==="accepted")b.replaceWith(el("p","status","✅ Installed. Open it from your "+(DEV.phone?"home screen":"apps")+"."))}catch(e){}installEv=null};host.append(b);return}
+  if(DEV.ios&&DEV.iosOther)steps("Tap the Share button (square with an arrow) at the top or bottom.","Tap Add to Home Screen. If you don't see it, open this page in Safari instead.","Tap Add.");
+  else if(DEV.ios)steps("Tap the Share button (square with an arrow) at the bottom of Safari.","Scroll down and tap Add to Home Screen.","Tap Add. The icon appears on your home screen.");
+  else if(DEV.android)steps("Tap the three dots at the top right of Chrome.","Tap Install app (or Add to Home screen).","Tap Install.");
+  else if(DEV.macSafari)steps("In the menu bar choose File, then Add to Dock.","Click Add. It opens from the Dock like any app.");
+  else steps("Click the install icon at the right end of the address bar (a screen with an arrow).",DEV.edge?"Or open the three dots menu, Apps, then Install this site as an app.":"Or open the three dots menu, Cast, save and share, then Install page as app.","Click Install. Right-click its icon to pin it to the "+(/Mac/.test(navigator.platform)?"Dock":"taskbar")+".");
+}
+const renderInstHere=()=>{const h=$("instHere");if(h){h.replaceChildren();installGuide(h)}};
+$("t-inst").addEventListener("click",renderInstHere);
 $("installApp").onclick=async()=>{if(!installEv)return;installEv.prompt();try{await installEv.userChoice}catch(e){}installEv=null;$("installApp").hidden=true};
 if(standalone())$("installNote").textContent="You are already using the installed app.";
 else if(/iphone|ipad|ipod/i.test(navigator.userAgent))$("installNote").textContent="On iPhone or iPad: tap Share, then Add to Home Screen.";
@@ -2049,6 +2083,19 @@ async function refreshAll(force){
   if(state.shareDash&&Date.now()-(state.dashAt||0)>1800000)shareSummary();
 }
 $("refresh").onclick=()=>refreshAll(false);
+/* ---------- new version check: an open page or installed app never stays on an old copy ---------- */
+let newVer="";
+async function checkVersion(){
+  try{const t=await (await fetch("version.js?t="+Date.now(),{cache:"no-store"})).text();const m=t.match(/version:\s*"([^"]+)"/);
+    const cur=(window.WYZ_VERSION&&window.WYZ_VERSION.version)||"";
+    if(m&&cur&&m[1]!==cur&&!newVer){newVer=m[1];
+      const busy=()=>!$("thr").hidden||!$("onb").hidden;
+      if(!busy()&&document.hidden){location.reload();return}
+      const bar=el("div","updbar");bar.setAttribute("role","status");bar.append(el("span","","A new version ("+newVer+") is ready."));
+      const b=el("button","btn small solid","Update now");b.type="button";b.onclick=()=>{if(thr&&thr.counting)return;location.reload()};bar.append(b);document.body.append(bar);
+      document.addEventListener("visibilitychange",()=>{if(document.hidden&&!busy())location.reload()})}}catch(e){}
+}
+setInterval(checkVersion,180000);document.addEventListener("visibilitychange",()=>{if(!document.hidden)checkVersion()});
 (async()=>{
   await lockGate();
   collapsed.delete("c-inbox");collapsed.delete("setupCard");ORDER.forEach(k=>collapsed.delete("g-"+k));saveCol();
@@ -2079,8 +2126,9 @@ const ZOOMS=[1,1.15,1.3];
 function applyZoom(){let z=1;try{z=+localStorage.getItem("wyz-zoom")||1}catch(e){}document.body.style.zoom=z;$("zoomBtn").textContent=z>1?"Text size "+Math.round(z*100)+"%":"Text size"}
 $("zoomBtn").onclick=()=>{let z=1;try{z=+localStorage.getItem("wyz-zoom")||1}catch(e){}const n=ZOOMS[(ZOOMS.indexOf(z)+1)%ZOOMS.length];try{localStorage.setItem("wyz-zoom",String(n))}catch(e){}applyZoom()};
 applyZoom();
-$("inviteBtn").onclick=()=>{
-  const txt="Hi! Here is the WYZ Rent Execution Page. It shows your inbox sorted by what needs action, today's meetings and recent files, all from your own Google account.\n\n1. Open this link in Chrome or Safari:\n"+PAGE_URL+"\n\n2. Tap \"Continue with Google\" and sign in with your own account.\n\n3. If Google says it hasn't verified the app, tap Advanced, then Go to WYZ Execution Page. That is normal.\n\n4. Tick every box and tap Continue, then follow the short steps on screen.\n\nOnly you can see your own data. If anything doesn't work, send me a screenshot.";
+$("inviteBtn").onclick=async()=>{
+  const txt="Hi! This is your own Execution Page. It sorts your inbox by what needs you, and shows today's meetings, tasks and recent files, all from your own Google account. Only you see your data.\n\n"+SITE_URL+"\n\n1. Open the link. On iPhone use Safari, on Android or a computer use Chrome.\n2. Tap Continue with Google and sign in with your own account.\n3. If Google says it hasn't verified the app, tap Advanced, then Go to (unsafe). That's normal for a private company app.\n4. Tick every box and tap Continue.\n5. Follow the short steps on screen. The last one puts it on your home screen or computer like an app.\n6. Then open the same link on your other device (phone or computer) and sign in there too.\n\nAny problem, send me a screenshot.";
+  if(DEV.phone&&navigator.share){try{await navigator.share({title:"Your Execution Page",text:txt});return}catch(e){if(e&&e.name==="AbortError")return}}
   window.open(waLink(txt),"_blank","noopener");
 };
 async function weeklyReview(){

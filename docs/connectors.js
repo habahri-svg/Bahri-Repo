@@ -42,6 +42,29 @@
   /* ---------- Google sign-in (token model) ---------- */
   var tok = { access: "", exp: 0, scope: "" };
   var inflight = null;
+  var redirectErr = "";
+  /* Coming back from a full-page Google sign-in: the token sits in the address after #. */
+  try {
+    if (/[#&](access_token|error)=/.test(location.hash)) {
+      var hp = new URLSearchParams(location.hash.slice(1)), want = sessionStorage.getItem("wyz-oauth-state");
+      sessionStorage.removeItem("wyz-oauth-state");
+      if (hp.get("access_token") && want && hp.get("state") === want) {
+        tok = { access: hp.get("access_token"), exp: Date.now() + Math.max(60, (+hp.get("expires_in") || 3600) - 90) * 1000, scope: hp.get("scope") || "" };
+        localStorage.setItem("wyz-google-flag", "1");
+      } else if (hp.get("error")) redirectErr = hp.get("error") === "access_denied" ? "consent_required" : "google_error";
+      history.replaceState(null, "", location.pathname + location.search);
+    }
+  } catch (e) {}
+  var iosApp = function () { return navigator.standalone === true || (/iphone|ipad|ipod/i.test(navigator.userAgent) && window.matchMedia && matchMedia("(display-mode: standalone)").matches); };
+  function redirectSignIn(consent) {
+    var st = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    try { sessionStorage.setItem("wyz-oauth-state", st); } catch (e) {}
+    var q = { client_id: clientId(), redirect_uri: location.origin + "/", response_type: "token", scope: SCOPES, include_granted_scopes: "true", state: st };
+    if (consent) q.prompt = "consent";
+    var h = ls.get(KEY.hint); if (h) q.login_hint = h;
+    location.href = "https://accounts.google.com/o/oauth2/v2/auth?" + new URLSearchParams(q).toString();
+    return new Promise(function () {});
+  }
 
   function gisReady() {
     return new Promise(function (res, rej) {
@@ -57,22 +80,26 @@
   function requestToken(prompt) {
     return gisReady().then(function () {
       return new Promise(function (resolve, reject) {
+        var settled = false;
+        var timer = setTimeout(function () { if (settled) return; settled = true; reject(cerr(prompt === "none" ? "needs_reauth" : "popup_closed", "Google sign-in didn't finish")); }, prompt === "none" ? 20000 : 180000);
+        var ok = function (v) { if (settled) return; settled = true; clearTimeout(timer); resolve(v); };
+        var no = function (e) { if (settled) return; settled = true; clearTimeout(timer); reject(e); };
         var c = google.accounts.oauth2.initTokenClient({
           client_id: clientId(),
           scope: SCOPES,
           include_granted_scopes: true,
           callback: function (r) {
             if (r.error) {
-              reject(cerr(r.error === "access_denied" ? "consent_required" : prompt === "none" ? "needs_reauth" : r.error, r.error_description || r.error));
+              no(cerr(r.error === "access_denied" ? "consent_required" : prompt === "none" ? "needs_reauth" : r.error, r.error_description || r.error));
               return;
             }
             tok = { access: r.access_token, exp: Date.now() + Math.max(60, (+r.expires_in || 3600) - 90) * 1000, scope: r.scope || "" };
             ls.set(KEY.flag, "1");
-            resolve(tok.access);
+            ok(tok.access);
           },
           error_callback: function (e) {
             var t = e && e.type;
-            reject(cerr(t === "popup_closed" ? "popup_closed" : t === "popup_failed_to_open" ? "popup_failed_to_open" : prompt === "none" ? "needs_reauth" : "google_error", (e && e.message) || "Google sign-in failed"));
+            no(cerr(prompt === "none" ? "needs_reauth" : t === "popup_closed" ? "popup_closed" : t === "popup_failed_to_open" ? "popup_failed_to_open" : "google_error", prompt === "none" ? "Google sign-in needs a tap to renew" : (e && e.message) || "Google sign-in failed"));
           }
         });
         var o = { prompt: prompt };
@@ -481,12 +508,16 @@
     /* interactive=true opens Google's window (needs a tap). false tries silently. consent=true forces the permission screen. */
     connect: function (interactive, consent) {
       if (!configured()) return Promise.reject(cerr("not_configured", "Google sign-in isn't set up yet."));
+      if (!consent && tok.access && Date.now() < tok.exp) return Promise.resolve(tok.access);
+      if (redirectErr && !interactive) { var re = redirectErr; redirectErr = ""; return Promise.reject(cerr(re, "Google sign-in was not completed")); }
+      if (interactive && iosApp() && CFG.IPHONE_APP_REDIRECT) return redirectSignIn(consent);
       return requestToken(interactive ? (consent ? "consent" : "") : "none");
     },
     profile: profile,
     token: ensure,
     hasScope: function (name) { return tok.scope.split(" ").indexOf(SC[name]) >= 0; },
     scopeNames: function () { return Object.keys(SC); },
+    scopeUrls: function () { return Object.keys(SC).map(function (k) { return SC[k]; }); },
     hasAllScopes: function () { var have = tok.scope.split(" "); return [SC.gmailRead, SC.gmailDraft, SC.cal, SC.drive].every(function (s) { return have.indexOf(s) >= 0; }); },
     signOut: async function () {
       try { if (tok.access && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(tok.access, function () {}); } catch (e) {}

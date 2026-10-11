@@ -2,7 +2,7 @@
    Environment variables (Vercel, Settings, Environment Variables):
      ANTHROPIC_API_KEY   required. The owner's Claude API key. Never sent to the browser.
      GOOGLE_CLIENT_ID    required. The same Client ID as docs/config.js. Tokens issued to any other app are refused.
-     ALLOWED_EMAILS      optional. Comma-separated list. If set, only these Google accounts can use it.
+     ALLOWED_EMAILS      required (or ALLOWED_DOMAINS). Comma-separated list. If set, only these Google accounts can use it.
      ALLOWED_DOMAINS     optional. Comma-separated list such as wyzrent.com.
      DAILY_LIMIT         optional. Calls per person per day (default 50).
      CLAUDE_MODEL        optional. The standard model. Defaults to claude-sonnet-5-5.
@@ -18,7 +18,7 @@ const DEFAULT_MODEL = process.env.CLAUDE_MODEL || "claude-sonnet-5-5";
 const allowedModels = function () { return S.list(process.env.ALLOWED_MODELS || "claude-sonnet-5-5,claude-haiku-5-5,claude-haiku-4-5-20251001"); };
 
 module.exports = async function handler(req, res) {
-  const missing = ["ANTHROPIC_API_KEY", "GOOGLE_CLIENT_ID"].filter(function (k) { return !String(process.env[k] || "").trim(); });
+  const missing = S.missingFor("ANTHROPIC_API_KEY");
   const ready = !missing.length;
   const ctx = await S.gate(req, res, ready, overLimit, { blocks: true, missing: missing });
   if (!ctx) return;
