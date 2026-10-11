@@ -349,7 +349,7 @@ function renderCal(){
     if(!list.length){host.append(el("p","sub","Nothing scheduled."));return}
     list.forEach(x=>{const r=el("div","ev");r.append(el("b","",x.start.date?"All day":fmtTime(x.start.dateTime)+(x.end&&x.end.dateTime?"–"+fmtTime(x.end.dateTime):"")));
       const s=el("span");const a=x.conferenceUrl||x.htmlLink;if(a){const l=el("a","",x.summary||"(No title)");l.href=a;l.target="_blank";l.rel="noopener";l.style.color="var(--fg)";s.append(l)}else s.append(x.summary||"(No title)");
-      if(x.location)s.append(el("small",""," · "+x.location));if(x.conferenceUrl){const j=el("a","btn small","Join");j.href=x.conferenceUrl;j.target="_blank";j.rel="noopener";j.style.marginLeft="8px";s.append(j)}r.append(s);host.append(r)});
+      if(x.location)s.append(el("small",""," · "+x.location));if(x.id&&x.start&&x.start.dateTime){const rs=el("button","btn small ghost","Reschedule");rs.type="button";rs.style.marginLeft="8px";rs.onclick=()=>openEvent(x);s.append(rs)}if(x.conferenceUrl){const j=el("a","btn small","Join");j.href=x.conferenceUrl;j.target="_blank";j.rel="noopener";j.style.marginLeft="8px";s.append(j)}r.append(s);host.append(r)});
   });
 }
 
@@ -431,7 +431,7 @@ function heuristicBoard(sig,final){
 }
 function templateDraft(i,chase){
   const t=tById(i.id)||{};const first=(nameOf(t.lastFromMe?(t.lastTo||[])[0]:t.from)||"").split(" ")[0];const me=(myName||"").split(" ")[0];
-  return "Hi "+(first||"there")+",\n\n"+(chase?"Just following up on \""+(t.subject||"my last email")+"\". Could you let me know where this stands? [DETAIL]":"Thanks for your message about \""+(t.subject||"this")+"\". [DETAIL]")+"\n\nBest,\n"+me;
+  return "Hi "+(first||"there")+",\n\n"+(chase?"Just following up on \""+(t.subject||"my last email")+"\". Could you let me know where this stands? [DETAIL]":"Thanks for your message about \""+(t.subject||"this")+"\". [DETAIL]")+(sigText()?"":"\n\nBest,\n"+me);
 }
 
 /* ---------- snooze: tomorrow, 3 days, 1 week or a date you pick ---------- */
@@ -504,7 +504,7 @@ function buildInstruct(i,box,getText,useReply){
       const txt=cached||await getText();cached=txt||"";
       const first=(myName||"").split(" ")[0];
       const tone=/reply|draft|write|answer|respond/i.test(q)?await toneExamples():"";
-      const r=await sample.json("You are the personal assistant of "+(myName||"a manager")+" at WYZ Rent, a Dubai holiday home management company. Today is "+new Date().toDateString()+".\n\nEmail thread (latest last):\n"+cached+"\n\nTheir instruction: "+q+"\n\nReturn JSON only: {\"answer\": a short plain answer, max 120 words, no em dashes, \"reply\": a ready-to-send reply email body in their voice (contractions, signed with the first name"+(first?" "+first:"")+") or an empty string when no reply is needed, \"tasks\": [ {\"title\": short, \"due\": \"YYYY-MM-DD\" or \"\"} ] only when they ask for a task or one is clearly needed, \"snooze_days\": a whole number of days to snooze this email, or 0, \"event\": null, or {\"title\", \"start\": \"YYYY-MM-DDTHH:MM\", \"end\": \"YYYY-MM-DDTHH:MM\", \"location\"} only when the email proposes or confirms a meeting }."+(tone?"\n\n"+tone:""),{modelTier:"default",cache:false});
+      const r=await sample.json("You are the personal assistant of "+(myName||"a manager")+" at WYZ Rent, a Dubai holiday home management company. Today is "+new Date().toDateString()+".\n\nEmail thread (latest last):\n"+cached+"\n\nTheir instruction: "+q+"\n\nReturn JSON only: {\"answer\": a short plain answer, max 120 words, no em dashes, \"reply\": a ready-to-send reply email body in their voice (contractions, "+(sigText()?"no sign-off or name, their signature is added automatically":"signed with the first name"+(first?" "+first:""))+") or an empty string when no reply is needed, \"tasks\": [ {\"title\": short, \"due\": \"YYYY-MM-DD\" or \"\"} ] only when they ask for a task or one is clearly needed, \"snooze_days\": a whole number of days to snooze this email, or 0, \"event\": null, or {\"title\", \"start\": \"YYYY-MM-DDTHH:MM\", \"end\": \"YYYY-MM-DDTHH:MM\", \"location\"} only when the email proposes or confirms a meeting }."+(tone?"\n\n"+tone:""),{modelTier:"default",cache:false});
       result(r||{});
     }catch(e){out.replaceChildren(el("p","status err","Couldn't do that ("+clip((e&&e.message)||"unknown reason",110)+")."))}
     go.disabled=false;
@@ -561,7 +561,7 @@ function renderThread(){
 async function openThread(id,o){
   o=o||{};const t=tById(id)||{};
   thr={id,msgs:[],item:o.item||{id,st:"reply",title:t.subject||"",summary:t.snippet||""},armed:0,done:false,mode:"reply",files:[]};
-  setMode("reply");$("thrFiles").value="";$("thrFileList").textContent="";$("thrArchive").disabled=false;$("thrArchive").textContent="Archive";$("thrRemind").value="3";
+  setMode("reply");renderTplSelect();syncRuleBtns();$("thrFiles").value="";$("thrFileList").textContent="";$("thrArchive").disabled=false;$("thrArchive").textContent="Archive";$("thrRemind").value="3";
   $("thr").hidden=false;$("thrTitle").textContent=t.subject||"Conversation";
   $("thrGmail").href=t.url||"https://mail.google.com/";
   $("thrSnooze").replaceChildren(snoozeDrop(id,thrClose));$("thrAIbox").hidden=true;$("thrAIbox").open=false;
@@ -573,7 +573,7 @@ async function openThread(id,o){
   renderThread();
   if(thr.msgs.length&&(lastMsg().labelIds||[]).includes("UNREAD"))mcp.callTool("Gmail","mark_read",{threadId:id}).catch(()=>{});
   if(thr.msgs.length){
-    $("thrReply").hidden=false;fillTargets();
+    $("thrReply").hidden=false;fillTargets();syncRuleBtns();
     $("thrAIbox").hidden=false;
     buildInstruct(thr.item,$("thrInstruct"),()=>threadBlock(thr.msgs),text=>{$("thrText").value=text;$("thrSt").className="status";$("thrSt").textContent="Edit it, then send it or save it as a draft.";$("thrText").focus()});
     if(o.text){$("thrText").value=o.text;$("thrSt").textContent="Edit it, then send it or save it as a draft."}
@@ -588,7 +588,7 @@ async function thrDraft(){
   const text=threadBlock(thr.msgs);
   try{
     const tone=sample?await toneExamples():"";
-    const r=!sample?{text:templateDraft(thr.item,chase)}:await sample((chase?"Write a short, polite follow-up email chasing an answer that is still owed, ":"Write a reply email ")+"for "+(myName||"me")+" at WYZ Rent. Plain text only, ready to edit, signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":"")+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject, no quoted text."+(tone?"\n\n"+tone:"")+"\n\nWhat it's about: "+(thr.item.title||"")+". "+(thr.item.summary||"")+"\n\nThread (latest last):\n"+text,{cache:false,onText:u=>{ta.value=u.text}});
+    const r=!sample?{text:templateDraft(thr.item,chase)}:await sample((chase?"Write a short, polite follow-up email chasing an answer that is still owed, ":"Write a reply email ")+"for "+(myName||"me")+" at WYZ Rent. Plain text only, ready to edit, "+(sigText()?"with no sign-off and no name, because their signature is added automatically":"signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject, no quoted text."+(tone?"\n\n"+tone:"")+"\n\nWhat it's about: "+(thr.item.title||"")+". "+(thr.item.summary||"")+"\n\nThread (latest last):\n"+text,{cache:false,onText:u=>{ta.value=u.text}});
     ta.value=r.text;st.textContent="Edit it, then send it or save it as a draft."
   }catch(e){st.className="status err";st.textContent="Couldn't write a draft ("+clip((e&&e.message)||"unknown reason",110)+"). Write your own here."}
 }
@@ -596,9 +596,11 @@ function thrArgs(){
   const last=lastMsg(),subj=String(tById(thr.id)&&tById(thr.id).subject||$("thrTitle").textContent||"");
   const split=v=>String(v||"").split(/[,;]/).map(x=>x.trim()).filter(Boolean);
   const files=thr.files.map(f=>({name:f.name,type:f.type,data:f.data}));
-  if(thr.mode==="forward")return {to:split($("thrTo").value),cc:split($("thrCc").value),subject:/^fwd?:/i.test(subj)?subj:"Fwd: "+subj,body:$("thrText").value.trimEnd()+forwardBlock(),attachments:files};
-  return {to:split($("thrTo").value),cc:split($("thrCc").value),subject:/^re:/i.test(subj)?subj:"Re: "+subj,body:$("thrText").value.trimEnd()+quoteOf(last),replyToMessageId:last.id,attachments:files};
+  const withSig=()=>{const t=$("thrText").value.trimEnd(),sg=sigText();return sg&&!t.includes(sg)?t+"\n\n"+sg:t};
+  if(thr.mode==="forward")return {to:split($("thrTo").value),cc:split($("thrCc").value),subject:/^fwd?:/i.test(subj)?subj:"Fwd: "+subj,body:withSig()+forwardBlock(),attachments:files};
+  return {to:split($("thrTo").value),cc:split($("thrCc").value),subject:/^re:/i.test(subj)?subj:"Re: "+subj,body:withSig()+quoteOf(last),replyToMessageId:last.id,attachments:files};
 }
+const withSigText=()=>{const t=$("thrText").value.trimEnd(),sg=sigText();return sg&&!t.includes(sg)?t+"\n\n"+sg:t};
 function forwardBlock(){
   return "\n\n---------- Forwarded message ----------\n"+thr.msgs.slice(-3).map(m=>"From: "+(m.sender||"")+"\nDate: "+(m.date?new Date(m.date).toLocaleString("en-GB",{dateStyle:"medium",timeStyle:"short"}):"")+"\nSubject: "+$("thrTitle").textContent+"\n\n"+String(m.plaintextBody||m.snippet||"").slice(0,6000)).join("\n\n---\n\n");
 }
@@ -633,7 +635,7 @@ async function thrAct(kind){
   try{
     if(thr.mode==="forward"&&$("thrSum").checked&&sample){
       const sm=await sample("Summarize this email conversation for someone who has not seen it, in 4 short bullet lines, plain words, no em dashes.\n\n"+threadBlock(thr.msgs),{cache:false});
-      a.body=$("thrText").value.trimEnd()+"\n\nSummary:\n"+sm.text.trim();
+      a.body=withSigText()+"\n\nSummary:\n"+sm.text.trim();
     }
     const r=await mcp.callTool("Gmail",kind==="send"?"send_message":"create_draft",a);
     thr.done=true;["thrSend","thrSave","thrText","thrTo","thrCc"].forEach(k=>$(k).disabled=true);
@@ -701,7 +703,13 @@ function reminderItems(){
   });
   return out;
 }
-const allItems=()=>{const rem=board?reminderItems():[];const ids=new Set(rem.map(r=>r.id));return (board&&board.items||[]).filter(x=>!ids.has(x.id)).concat(rem)};
+const ruleAddr=t=>t?addrOf(t.lastFromMe?(t.lastTo||[])[0]:t.from).toLowerCase():"";
+const ruleHit=(list,a)=>!!a&&(list||[]).some(r=>r===a||(r.charAt(0)==="@"&&a.endsWith(r)));
+function applyRules(items){
+  const r=state.rules||{};if(!(r.vip&&r.vip.length)&&!(r.mute&&r.mute.length))return items;
+  return items.filter(i=>!ruleHit(r.mute,ruleAddr(tById(i.id)))).map(i=>ruleHit(r.vip,ruleAddr(tById(i.id)))?Object.assign({},i,{g:4,vip:1,st:(i.st==="fyi"||i.st==="wait"||i.st==="work")?"reply":i.st}):i);
+}
+const allItems=()=>{const rem=board?reminderItems():[];const ids=new Set(rem.map(r=>r.id));return applyRules((board&&board.items||[]).filter(x=>!ids.has(x.id)).concat(rem))};
 const backFirst=i=>state.snooze[i.id]===todayKey()?1:0;
 function logDone(i,kind){state.log=(state.log||[]).concat({t:String(i.title||i.id).slice(0,120),at:Date.now(),k:kind||""}).slice(-300)}
 function markDone(i){
@@ -732,7 +740,7 @@ function itemRow(i){
   row.append(el("span","dot "+i.st));const m=el("div","main");
   m.append(el("span","t",i.title||t.subject||""));
   if(i.summary)m.append(el("span","s",i.summary));
-  const meta=el("span","m");const u=el("span","urg u"+i.g,UR[i.g]||"");meta.append(u,(state.snooze[i.id]===todayKey()?" · Back today":"")+(state.repeat&&state.repeat[i.id]?" · Weekly":"")+" · "+(t.lastFromMe?"You wrote to "+(nameOf((t.lastTo||[])[0])||"them"):(nameOf(t.from)||""))+(i.when?" · "+i.when:t.date?" · "+fmtWhen(t.date):""));m.append(meta);
+  const meta=el("span","m");const u=el("span","urg u"+i.g,UR[i.g]||"");meta.append(u,(i.vip?" · \u2605 VIP":"")+(state.snooze[i.id]===todayKey()?" · Back today":"")+(state.repeat&&state.repeat[i.id]?" · Weekly":"")+" · "+(t.lastFromMe?"You wrote to "+(nameOf((t.lastTo||[])[0])||"them"):(nameOf(t.from)||""))+(i.when?" · "+i.when:t.date?" · "+fmtWhen(t.date):""));m.append(meta);
   const a=el("div","acts");
   if(t.url){const o=el("a","btn small","Open in Gmail");o.href=t.url;o.target="_blank";o.rel="noopener";a.append(o)}
   {const rd=el("button","btn small","Read thread");rd.type="button";rd.onclick=()=>openThread(i.id,{item:i});a.append(rd)}
@@ -750,7 +758,7 @@ async function draftFor(i,host,btn){
   const box=el("div","draftbox");const ta=el("textarea");ta.id="d-"+i.id;ta.value="";const st=el("span","status","Writing a draft");
   box.append(st,ta);host.append(box);btn.textContent="Writing";
   try{
-    const chase=(i.st==="follow"||i.st==="wait");const r=!sample?{text:templateDraft(i,chase)}:await sample((chase?"Write a short, polite follow-up email chasing an answer that is still owed, ":"Write a reply email ")+"for "+(myName||"me")+" at WYZ Rent. Plain text only, ready to edit, signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":"")+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject.\n\nWhat it's about: "+(i.title||"")+". "+(i.summary||"")+"\n\nThread (latest last):\n"+(text||tById(i.id)?.snippet||""),{cache:false,onText:u=>{ta.value=u.text}});
+    const chase=(i.st==="follow"||i.st==="wait");const r=!sample?{text:templateDraft(i,chase)}:await sample((chase?"Write a short, polite follow-up email chasing an answer that is still owed, ":"Write a reply email ")+"for "+(myName||"me")+" at WYZ Rent. Plain text only, ready to edit, "+(sigText()?"with no sign-off and no name, because their signature is added automatically":"signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject.\n\nWhat it's about: "+(i.title||"")+". "+(i.summary||"")+"\n\nThread (latest last):\n"+(text||tById(i.id)?.snippet||""),{cache:false,onText:u=>{ta.value=u.text}});
     ta.value=r.text;st.textContent="Edit it, then save it to your Gmail drafts.";
   }catch(e){st.textContent="Couldn't write a draft just now ("+clip((e&&e.message)||"unknown reason",110)+"). Write your own here, then save it.";st.className="status err"}
   btn.remove();
@@ -1035,8 +1043,14 @@ function makeCollapsible(card,key,hdr){card.dataset.col=key;hdr.classList.add("h
   const t=()=>{collapsed.has(key)?collapsed.delete(key):collapsed.add(key);saveCol();applyCol()};
   hdr.onclick=t;hdr.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();t()}}}
 ["setupCard","c-links","c-cal","c-tasks","c-inbox","c-res","c-docs"].forEach(id=>{const c=$(id);const h=c&&c.querySelector(".pad > h2");if(h)makeCollapsible(c,id,h)});
-$("colAll").onclick=()=>{document.querySelectorAll("#p-today [data-col]").forEach(c=>collapsed.add(c.dataset.col));ORDER.forEach(k=>collapsed.add("g-"+k));saveCol();applyCol()};
+$("colAll").onclick=()=>{document.querySelectorAll("section:not([hidden]) [data-col]").forEach(c=>collapsed.add(c.dataset.col));if(!$("p-today").hidden)ORDER.forEach(k=>collapsed.add("g-"+k));saveCol();applyCol()};
 $("expAll").onclick=()=>{collapsed.clear();saveCol();applyCol()};
+/* every other card on every tab gets the same tap-the-heading collapse */
+document.querySelectorAll(".card").forEach(c=>{
+  if(c.dataset.col||c.classList.contains("group")||c.closest(".onb,.thr,#report"))return;
+  const h=c.querySelector(":scope > .pad > h2");if(!h)return;
+  makeCollapsible(c,"x-"+(c.id||h.textContent.trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,30)),h);
+});
 /* ---------- move sections up and down ---------- */
 const SEC_DEFAULT=["setup","inbox","cal","tasks","research","docs","links"];
 let setupComplete=false;   /* once every setup step is done or skipped, the setup card drops to the last row */
@@ -1044,7 +1058,7 @@ function secOrder(){let o=((state&&state.order)||[]).filter(k=>SEC_DEFAULT.inclu
   if(setupComplete)o=o.filter(k=>k!=="setup").concat("setup");return o}
 const movableKeys=()=>secOrder().filter(k=>!(setupComplete&&k==="setup"));
 function updMoveBtns(){const o=secOrder(),m=movableKeys();o.forEach(k=>{const ix=m.indexOf(k);const e=document.querySelector('[data-sec="'+k+'"]');if(!e)return;e.querySelectorAll(".mv button").forEach(b=>{b.disabled=ix<0||(b.dataset.d==="-1"&&ix===0)||(b.dataset.d==="1"&&ix===m.length-1)})})}
-const SEC_LABEL={setup:"Setup",inbox:"Inbox",cal:"Today and tomorrow",tasks:"My tasks",research:"Research",docs:"Documents",links:"Quick links"};
+const SEC_LABEL={setup:"Setup",inbox:"Inbox",cal:"Your week",tasks:"My tasks",research:"Research",docs:"Documents",links:"Quick links"};
 const SEC_CARD={setup:"setupCard",inbox:"c-inbox",cal:"c-cal",tasks:"c-tasks",research:"c-res",docs:"c-docs",links:"c-links"};
 function renderNav(){const n=$("secNav");n.replaceChildren();secOrder().forEach(k=>{const b=el("button","navchip",SEC_LABEL[k]);b.type="button";
   b.onclick=()=>{collapsed.delete(SEC_CARD[k]);if(k==="inbox")ORDER.forEach(x=>collapsed.delete("g-"+x));saveCol();applyCol();
@@ -1116,7 +1130,7 @@ async function weeklyReview(){
 $("weekGo").onclick=weeklyReview;
 
 /* ---------- system check: test every connection, read-only ---------- */
-const SCOPE_LABEL={gmailRead:"read your email",gmailDraft:"save drafts and send replies",gmailModify:"archive and mark as read",cal:"read your calendar",drive:"list your Drive files"};
+const SCOPE_LABEL={calEvents:"create and move calendar events",gmailRead:"read your email",gmailDraft:"save drafts and send replies",gmailModify:"archive and mark as read",cal:"read your calendar",drive:"list your Drive files"};
 let lastReport="";
 async function testEverything(){
   const out=$("testOut"),sum=$("testSum"),btn=$("testGo");
@@ -1171,3 +1185,143 @@ async function testEverything(){
 }
 $("testGo").onclick=testEverything;
 $("testCopy").onclick=()=>navigator.clipboard.writeText(lastReport).then(()=>{$("testCopy").textContent="Copied";setTimeout(()=>$("testCopy").textContent="Copy the report",1500)}).catch(()=>{$("testCopy").textContent="Select the text above"});
+
+/* ---------- signature, reply templates, VIP and mute rules ---------- */
+const sigText=()=>String(state.sig||"").trim();
+const DEFAULT_TPLS=[
+  {id:"t1",name:"Thanks, will do",text:"Hi {name},\n\nThanks for this. I'll take care of it and come back to you shortly."},
+  {id:"t2",name:"Need a bit more time",text:"Hi {name},\n\nThanks for your message. I need a little more time on this and will get back to you by [DATE]."},
+  {id:"t3",name:"Please send details",text:"Hi {name},\n\nCould you send me a few more details on this, please? [DETAIL]"}];
+const tpls=()=>state.tpls||(state.tpls=DEFAULT_TPLS.map(x=>Object.assign({},x)));
+function recipFirst(){const l=lastMsg(),fromMe=addrOf(l.sender).toLowerCase()===myAddr();return (nameOf(fromMe?(l.toRecipients||[])[0]:l.sender)||"").split(" ")[0]||"there"}
+const fillTpl=t=>String(t).replace(/\{name\}/g,recipFirst()).replace(/\{me\}/g,(myName||"").split(" ")[0]);
+function renderTplSelect(){
+  const sel=$("thrTpl");sel.replaceChildren(new Option("Insert a template...",""));
+  tpls().forEach(t=>sel.append(new Option(t.name,t.id)));
+}
+$("thrTpl").onchange=()=>{
+  const t=tpls().find(x=>x.id===$("thrTpl").value);$("thrTpl").value="";if(!t)return;
+  const ta=$("thrText"),add=fillTpl(t.text);ta.value=ta.value.trim()?ta.value.trimEnd()+"\n\n"+add:add;ta.focus();
+};
+$("thrTplSave").onclick=()=>{
+  const text=$("thrText").value.trim();if(!text){$("thrSt").className="status err";$("thrSt").textContent="Write the reply first, then save it as a template.";return}
+  const name=prompt("Name this template");if(!name||!name.trim())return;
+  tpls().push({id:newId(),name:clip(name,40),text});persist();renderTplSelect();renderTplList();$("thrSt").className="status";$("thrSt").textContent="Saved as a template.";
+};
+function renderTplList(){
+  const host=$("tplList");host.replaceChildren();
+  tpls().forEach(t=>{const r=el("div","tplrow");r.append(el("b","",t.name),el("span","status",clip(t.text.replace(/\n+/g," "),90)));const b=el("button","btn small ghost","Delete");b.type="button";b.onclick=()=>{state.tpls=tpls().filter(x=>x.id!==t.id);persist();renderTplList();renderTplSelect()};r.append(b);host.append(r)});
+}
+$("tplAdd").onclick=()=>{const n=$("tplName").value.trim(),t=$("tplText").value.trim();if(!n||!t)return;tpls().push({id:newId(),name:clip(n,40),text:t});$("tplName").value="";$("tplText").value="";persist();renderTplList();renderTplSelect()};
+$("sigText").addEventListener("input",()=>{state.sig=$("sigText").value;persist()});
+function renderRules(){
+  const host=$("ruleList");host.replaceChildren();const r=state.rules||{};
+  [["vip","VIP"],["mute","Muted"]].forEach(([k,label])=>(r[k]||[]).forEach(a=>{const row=el("div","tplrow");row.append(el("b","",label),el("span","",a));const b=el("button","btn small ghost","Remove");b.type="button";b.onclick=()=>{state.rules[k]=state.rules[k].filter(x=>x!==a);persist();renderRules();renderBoard();syncRuleBtns()};row.append(b);host.append(row)}));
+  if(!host.childNodes.length)host.append(el("p","status","No rules yet."));
+}
+function addRule(kind,addr){
+  addr=String(addr||"").trim().toLowerCase();if(!/^@?[^\s@]+(\.[^\s@]+)+$|^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr))return false;
+  state.rules=state.rules||{vip:[],mute:[]};const other=kind==="vip"?"mute":"vip";
+  state.rules[other]=(state.rules[other]||[]).filter(x=>x!==addr);
+  state.rules[kind]=state.rules[kind]||[];if(!state.rules[kind].includes(addr))state.rules[kind].push(addr);
+  persist();renderRules();renderBoard();return true;
+}
+$("ruleAdd").onclick=()=>{if(addRule($("ruleKind").value,$("ruleIn").value))$("ruleIn").value=""};
+const thrSender=()=>{const l=lastMsg(),fromMe=addrOf(l.sender).toLowerCase()===myAddr();return (addrOf(fromMe?(l.toRecipients||[])[0]:l.sender)||"").toLowerCase()};
+function syncRuleBtns(){
+  const a=thrSender(),r=state.rules||{};
+  $("thrVip").textContent=ruleHit(r.vip,a)?"★ VIP on":"VIP";$("thrMute").textContent=ruleHit(r.mute,a)?"Muted":"Mute";
+}
+$("thrVip").onclick=()=>{const a=thrSender();if(!a)return;const r=state.rules||{};if(ruleHit(r.vip,a)){state.rules.vip=state.rules.vip.filter(x=>x!==a);persist();renderRules();renderBoard()}else addRule("vip",a);syncRuleBtns()};
+$("thrMute").onclick=()=>{const a=thrSender();if(!a)return;const r=state.rules||{};if(ruleHit(r.mute,a)){state.rules.mute=state.rules.mute.filter(x=>x!==a);persist();renderRules();renderBoard();syncRuleBtns()}else{addRule("mute",a);syncRuleBtns();$("thrSt").className="status";$("thrSt").textContent="Muted. This sender is now hidden from your board. Undo it under Connections, Replies and rules."}};
+renderTplSelect();renderTplList();renderRules();$("sigText").value=sigText();
+
+/* ---------- create and move calendar events ---------- */
+let evtEdit=null;
+const two=n=>String(n).padStart(2,"0");
+function openEvent(ev){
+  evtEdit=ev||null;
+  $("evtTitle").textContent=ev?"Reschedule meeting":"New meeting";$("evtSave").textContent=ev?"Move meeting":"Create meeting";
+  $("evtMsg").textContent="";$("evtMsg").className="status";$("evtSave").disabled=false;
+  const s=ev&&ev.start&&ev.start.dateTime?new Date(ev.start.dateTime):(()=>{const d=new Date();d.setMinutes(0,0,0);d.setHours(d.getHours()+1);return d})();
+  const e=ev&&ev.end&&ev.end.dateTime?new Date(ev.end.dateTime):new Date(s.getTime()+36e5);
+  $("evtName").value=ev?(ev.summary||""):"";$("evtDate").value=ymd(s);$("evtStart").value=two(s.getHours())+":"+two(s.getMinutes());$("evtEnd").value=two(e.getHours())+":"+two(e.getMinutes());
+  $("evtWhere").value=ev?(ev.location||""):"";$("evtGuests").value="";$("evtVideo").checked=false;
+  [...document.querySelectorAll("#evt [data-new]")].forEach(x=>x.hidden=!!ev);
+  $("evt").hidden=false;$("evtName").focus();
+}
+function closeEvent(){$("evt").hidden=true}
+async function saveEvent(){
+  const m=$("evtMsg"),b=$("evtSave");m.className="status";
+  const title=$("evtName").value.trim(),date=$("evtDate").value,st=$("evtStart").value,en=$("evtEnd").value;
+  if(!title||!date||!st||!en){m.className="status err";m.textContent="Add a title, a date and the start and end times.";return}
+  if(en<=st){m.className="status err";m.textContent="The end time must be after the start time.";return}
+  const guests=$("evtGuests").value.split(/[,;]/).map(x=>x.trim()).filter(Boolean);
+  if(guests.some(x=>!/^\S+@\S+\.\S+$/.test(x))){m.className="status err";m.textContent="Check the guest email addresses.";return}
+  b.disabled=true;m.textContent=evtEdit?"Moving it...":"Creating it...";
+  try{
+    const a={title,start:date+"T"+st,end:date+"T"+en,location:$("evtWhere").value.trim()};
+    if(evtEdit)await mcp.callTool("Google Calendar","move_event",Object.assign({eventId:evtEdit.id},a));
+    else await mcp.callTool("Google Calendar","create_event",Object.assign({attendees:guests,video:$("evtVideo").checked},a));
+    closeEvent();await loadCal();
+  }catch(e){
+    b.disabled=false;m.className="status err";
+    if(e&&e.code==="consent_required"){m.textContent="Calendar changes need one more Google permission. ";const l=el("button","btn small solid","Allow");l.type="button";l.onclick=()=>{closeEvent();connectGoogle(true)};m.append(l)}
+    else m.textContent="Couldn't save it ("+clip((e&&e.message)||"unknown reason",100)+"). Only the organiser can move a meeting."
+  }
+}
+$("evtNew").onclick=()=>openEvent(null);$("evtCancel").onclick=closeEvent;$("evtSave").onclick=saveEvent;
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("evt").hidden)closeEvent()});
+
+/* ---------- plan my day and end-of-day wrap ---------- */
+const hhmm=s=>fmtTime(s);
+function reportData(){
+  const today=ymd(new Date()),tm=new Date();tm.setDate(tm.getDate()+1);const tmr=ymd(tm);
+  const onDay=day=>(events||[]).filter(x=>x.start&&(x.start.date?x.start.date===day:ymd(new Date(x.start.dateTime))===day)).sort((a,b)=>String(a.start.dateTime||a.start.date).localeCompare(String(b.start.dateTime||b.start.date)));
+  const items=allItems().filter(i=>!isOff(i));
+  const t0=new Date();t0.setHours(0,0,0,0);
+  const doneToday=(state.log||[]).filter(x=>x.at>=t0.getTime());
+  const tasks=[...(state.tasks||[]).filter(t=>!t.done).map(t=>({t:t.t,due:String(t.due||"").slice(0,10),p:t.p||1})),...(todo.state==="ok"?todo.tasks.map(t=>({t:t.t,due:String(t.due||"").slice(0,10),p:t.p>=3?2:1})):[])];
+  return {today,meetings:onDay(today).map(x=>({time:x.start.date?"All day":hhmm(x.start.dateTime),title:x.summary||"Meeting"})),tomorrow:onDay(tmr).map(x=>({time:x.start.date?"All day":hhmm(x.start.dateTime),title:x.summary||"Meeting"})),
+    reply:items.filter(i=>i.st==="reply").sort((a,b)=>b.g-a.g).slice(0,8).map(i=>({title:i.title,urgency:UR[i.g]||"",vip:!!i.vip})),
+    chase:items.filter(i=>i.st==="follow").sort((a,b)=>b.g-a.g).slice(0,6).map(i=>({title:i.title})),
+    tasksDue:tasks.filter(t=>t.due&&t.due<=today).map(t=>({title:t.t,due:t.due,high:t.p>1})),tasksOpen:tasks.length,doneToday:doneToday.map(x=>x.t)};
+}
+function plainReport(kind,d){
+  const L=[];const head=new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"});
+  if(kind==="plan"){
+    L.push("Plan for "+head,"");
+    L.push("Meetings");d.meetings.length?d.meetings.forEach(m=>L.push("  "+m.time+"  "+m.title)):L.push("  None today.");
+    L.push("","Reply first");d.reply.length?d.reply.forEach((r,i)=>L.push("  "+(i+1)+". "+r.title+(r.vip?" (VIP)":r.urgency?" ("+r.urgency+")":""))):L.push("  Nothing waiting.");
+    if(d.chase.length){L.push("","Chase");d.chase.forEach((r,i)=>L.push("  "+(i+1)+". "+r.title))}
+    if(d.tasksDue.length){L.push("","Tasks due or overdue");d.tasksDue.forEach(t=>L.push("  "+t.title+(t.high?" (high priority)":"")+", due "+niceDay(t.due)))}
+  }else{
+    L.push("End of day, "+head,"");
+    L.push("Finished today: "+d.doneToday.length);d.doneToday.slice(0,12).forEach(t=>L.push("  - "+t));
+    L.push("","Still waiting");L.push("  "+d.reply.length+" to reply to, "+d.chase.length+" to chase, "+d.tasksOpen+" open tasks");
+    L.push("","Tomorrow");d.tomorrow.length?d.tomorrow.forEach(m=>L.push("  "+m.time+"  "+m.title)):L.push("  No meetings.");
+  }
+  return L.join("\n");
+}
+async function aiReport(kind,d){
+  const r=await sample((kind==="plan"?"Write a plan for today for ":"Write an end-of-day wrap for ")+(myName||"the reader")+" at WYZ Rent, a Dubai holiday home management company. Plain text only, no markdown, no em dashes, short lines, max 18 lines. "+(kind==="plan"?"Put meetings in time order, then the order to tackle emails and tasks with a few words on why each comes first. Finish with one line on what to protect time for.":"Say what got done, what is still open and the top three things to do first tomorrow, using tomorrow's meetings.")+"\n\nData (JSON):\n"+JSON.stringify(d),{cache:false});
+  return r.text.trim();
+}
+let repText="";
+async function showReport(kind){
+  const box=$("report"),body=$("repBody"),acts=$("repActs");
+  box.hidden=false;$("repTitle").textContent=kind==="plan"?"Your plan for today":"End-of-day wrap";
+  body.replaceChildren(el("p","status","Working on it..."));acts.replaceChildren();
+  window.scrollTo({top:0,behavior:"smooth"});
+  const d=reportData();let text;
+  try{text=sample?await aiReport(kind,d):plainReport(kind,d)}catch(e){text=plainReport(kind,d)+"\n\n(Claude couldn't write this ("+clip((e&&e.message)||"unknown reason",80)+"), so this is the simple version.)"}
+  repText=text;body.replaceChildren(el("div","ans",text));
+  const btn=(t,fn,c)=>{const b=el("button","btn small "+(c||""),t);b.type="button";b.onclick=()=>fn(b);acts.append(b)};
+  btn("Copy",b=>navigator.clipboard.writeText(repText).then(()=>b.textContent="Copied").catch(()=>b.textContent="Select the text to copy"));
+  btn("Save as PDF",()=>{document.body.classList.add("printing");setTimeout(()=>{window.print();document.body.classList.remove("printing")},50)});
+  btn("Send on WhatsApp",()=>window.open(waLink(repText),"_blank","noopener"));
+  btn("Email it to me",async b=>{b.disabled=true;b.textContent="Sending...";try{await mcp.callTool("Gmail","send_message",{to:[email],subject:$("repTitle").textContent+", "+new Date().toLocaleDateString("en-GB"),body:repText});b.textContent="Sent to "+email}catch(e){b.disabled=false;b.textContent="Couldn't send. Try again"}},"solid");
+}
+$("planBtn").onclick=()=>{if(!G.connected()){showWelcome();return}showReport("plan")};
+$("wrapBtn").onclick=()=>{if(!G.connected()){showWelcome();return}showReport("wrap")};
+$("repClose").onclick=()=>{$("report").hidden=true};

@@ -11,9 +11,10 @@
     gmailDraft: "https://www.googleapis.com/auth/gmail.compose",
     gmailModify: "https://www.googleapis.com/auth/gmail.modify",
     cal: "https://www.googleapis.com/auth/calendar.readonly",
+    calEvents: "https://www.googleapis.com/auth/calendar.events",
     drive: "https://www.googleapis.com/auth/drive.metadata.readonly"
   };
-  var SCOPES = ["openid", "email", "profile", SC.gmailRead, SC.gmailDraft, SC.gmailModify, SC.cal, SC.drive].join(" ");
+  var SCOPES = ["openid", "email", "profile", SC.gmailRead, SC.gmailDraft, SC.gmailModify, SC.cal, SC.calEvents, SC.drive].join(" ");
   var KEY = { flag: "wyz-google-flag", hint: "wyz-google-hint", todo: "wyz-todoist-token", ai: "wyz-claude-key", cid: "wyz-google-client-id" };
 
   var ls = {
@@ -256,6 +257,22 @@
       }
     },
     "Google Calendar": {
+      create_event: async function (a) {
+        var tz = "Asia/Dubai", fix = function (v) { return String(v).length === 16 ? v + ":00" : v; };
+        var body = { summary: a.title || "Meeting", location: a.location || "", description: a.description || "", start: { dateTime: fix(a.start), timeZone: tz }, end: { dateTime: fix(a.end), timeZone: tz } };
+        if (a.attendees && a.attendees.length) body.attendees = a.attendees.map(function (e) { return { email: e }; });
+        if (a.video) body.conferenceData = { createRequest: { requestId: "wyz" + Date.now(), conferenceSolutionKey: { type: "hangoutsMeet" } } };
+        var j = await gfetch("https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1&sendUpdates=all", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, SC.calEvents);
+        return { id: j.id, htmlLink: j.htmlLink };
+      },
+      move_event: async function (a) {
+        var tz = "Asia/Dubai", fix = function (v) { return String(v).length === 16 ? v + ":00" : v; };
+        var body = { start: { dateTime: fix(a.start), timeZone: tz }, end: { dateTime: fix(a.end), timeZone: tz } };
+        if (a.title) body.summary = a.title;
+        if (a.location != null) body.location = a.location;
+        var j = await gfetch("https://www.googleapis.com/calendar/v3/calendars/primary/events/" + encodeURIComponent(a.eventId) + "?sendUpdates=all", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, SC.calEvents);
+        return { id: j.id, htmlLink: j.htmlLink };
+      },
       list_events: async function (a) {
         var q = "singleEvents=true&orderBy=startTime&maxResults=" + (a.pageSize || 40) +
           "&timeMin=" + encodeURIComponent(new Date(a.startTime).toISOString()) +
@@ -264,7 +281,7 @@
         return {
           events: (j.items || []).map(function (e) {
             var video = e.conferenceData && (e.conferenceData.entryPoints || []).find(function (x) { return x.entryPointType === "video"; });
-            return { status: e.status, summary: e.summary, location: e.location, start: e.start, end: e.end, htmlLink: e.htmlLink, conferenceUrl: e.hangoutLink || (video && video.uri) || "" };
+            return { id: e.id, status: e.status, summary: e.summary, location: e.location, start: e.start, end: e.end, htmlLink: e.htmlLink, conferenceUrl: e.hangoutLink || (video && video.uri) || "" };
           })
         };
       }

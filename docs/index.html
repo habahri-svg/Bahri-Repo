@@ -138,6 +138,9 @@ ol.steps li::marker{color:var(--gold);font-weight:700}
 .msg pre{white-space:pre-wrap;font:inherit;overflow-wrap:anywhere;margin:8px 0 4px}
 .msg .meta{font-size:13px;color:var(--soft);font-weight:400}
 .found{display:flex;flex-direction:column}
+@media print{body.printing *{visibility:hidden!important}body.printing #report,body.printing #report *{visibility:visible!important}body.printing #report{position:absolute;left:0;top:0;width:100%;border:0;box-shadow:none}body.printing #repActs,body.printing #repClose{display:none!important}}
+.tplrow{display:flex;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}
+.tplrow span{flex:1;min-width:0;overflow-wrap:anywhere;font-size:14px}
 .chk-row{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:2px 10px;align-items:start;padding:9px 0;border-top:1px solid var(--line)}
 .chk-row:first-child{border-top:0}
 .chk-row .ic{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:700;color:#fff}
@@ -217,6 +220,8 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
     <div class="herostats" id="heroStats"></div>
     <div class="herorefresh">
       <button class="btn" type="button" id="refresh">Refresh now</button>
+      <button class="btn" type="button" id="planBtn" title="A plan for today from your meetings, emails and tasks">Plan my day</button>
+      <button class="btn" type="button" id="wrapBtn" title="What got done today and what is next">End-of-day wrap</button>
       <button class="btn" type="button" id="zoomBtn" title="Make the text bigger or smaller">Text size</button>
       <button class="btn" type="button" id="inviteBtn" title="Send someone the link and steps on WhatsApp">Invite someone</button>
       <span class="status" id="fresh">Not loaded yet</span>
@@ -231,7 +236,12 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
 
   <!-- TODAY -->
   <section id="p-today" role="tabpanel" aria-labelledby="t-today" class="wrap" style="gap:16px">
-    <div class="toolbar" id="toolbar" role="toolbar" aria-label="Sections"><button class="btn ghost small" type="button" id="expAll">Expand all</button><button class="btn ghost small" type="button" id="colAll">Collapse all</button><span class="tsep" aria-hidden="true"></span><span id="secNav" class="secnav"></span></div>
+    <div class="card note" id="report" hidden><div class="pad">
+      <div class="headrow"><h2 id="repTitle" style="flex:1 1 200px"></h2><button class="btn small ghost" type="button" id="repClose">Close</button></div>
+      <div id="repBody"></div>
+      <div class="headrow" id="repActs"></div>
+    </div></div>
+    <div class="toolbar" id="toolbar" role="toolbar" aria-label="Sections"><button class="btn ghost small" type="button" id="expAll" title="Open every part">Expand all</button><button class="btn ghost small" type="button" id="colAll">Collapse all</button><span class="tsep" aria-hidden="true"></span><span id="secNav" class="secnav"></span></div>
     <div class="card note" id="welcome" hidden><div class="pad">
       <h2 id="wTitle">Connect your accounts to start</h2>
       <p class="sub" id="wText">Sign in with Google once. Your inbox, meetings and recent documents load straight away, and the page is then set up just for you. Nobody else can see your data.</p>
@@ -297,7 +307,8 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
     <div class="sec wrap" data-sec="cal" style="gap:14px">
     <div class="card" id="c-cal">
       <div class="pad">
-        <h2>Today and tomorrow</h2>
+        <h2>Your week</h2>
+        <div class="headrow"><button class="btn small solid" type="button" id="evtNew">New meeting</button></div>
         <div id="cal"><p class="sub">Your meetings show here once Google Calendar is connected.</p></div>
       </div>
     </div>
@@ -385,6 +396,17 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
         <div class="right"><button class="btn small ghost" type="button" id="wipeRes">Delete my research data</button></div>
       </div>
     </div>
+    <div class="card note"><div class="pad">
+      <h2>Replies and rules</h2>
+      <span class="status">Your signature. It is added to the end of every reply you send from the page.</span>
+      <textarea id="sigText" aria-label="Signature" style="min-height:90px" placeholder="Houssam Bahri&#10;WYZ Rent"></textarea>
+      <span class="status">Reply templates. Use {name} for the person's first name.</span>
+      <div id="tplList"></div>
+      <div class="ask"><input class="in" id="tplName" placeholder="Template name" aria-label="Template name" style="flex:1 1 160px"><input class="in" id="tplText" placeholder="Text of the reply" aria-label="Template text" style="flex:3 1 260px"><button class="btn" type="button" id="tplAdd">Add</button></div>
+      <span class="status">VIP senders always show as urgent. Muted senders are hidden from your board. Use a full address or a whole company like @wyzrent.com.</span>
+      <div id="ruleList"></div>
+      <div class="ask"><input class="in" id="ruleIn" placeholder="name@company.com or @company.com" aria-label="Address or company" style="flex:2 1 220px"><select class="in" id="ruleKind" aria-label="Rule" style="flex:0 1 120px"><option value="vip">VIP</option><option value="mute">Mute</option></select><button class="btn" type="button" id="ruleAdd">Add</button></div>
+    </div></div>
     <div class="headrow"><button class="btn solid" type="button" id="onbAgain">Connect Claude, Todoist and research</button> <button class="btn ghost" type="button" id="manage">Sign out and disconnect Google</button></div>
   </section>
 
@@ -448,7 +470,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
 </div>
 <div id="thr" class="thr" hidden role="dialog" aria-modal="true" aria-labelledby="thrTitle">
   <div class="thrbox card"><div class="pad">
-    <div class="headrow"><h2 id="thrTitle" style="flex:1 1 200px;overflow-wrap:anywhere"></h2><span id="thrSnooze"></span><button class="btn small" type="button" id="thrArchive">Archive</button><a id="thrGmail" class="btn small" target="_blank" rel="noopener">Open in Gmail</a><button class="btn small" type="button" id="thrClose">Close</button></div>
+    <div class="headrow"><h2 id="thrTitle" style="flex:1 1 200px;overflow-wrap:anywhere"></h2><span id="thrSnooze"></span><button class="btn small" type="button" id="thrVip" title="Always show this sender as urgent">VIP</button><button class="btn small" type="button" id="thrMute" title="Hide this sender from your board">Mute</button><button class="btn small" type="button" id="thrArchive">Archive</button><a id="thrGmail" class="btn small" target="_blank" rel="noopener">Open in Gmail</a><button class="btn small" type="button" id="thrClose">Close</button></div>
     <div id="thrBody"></div>
     <details class="msg" id="thrAIbox" hidden><summary>Instruct AI about this email</summary><div id="thrInstruct" class="instr"></div></details>
     <div id="thrReply" hidden>
@@ -458,11 +480,24 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       <div id="thrCcWrap" hidden><span class="status">Cc</span><input class="in" id="thrCc" aria-label="Cc" autocomplete="off"></div>
       <textarea id="thrText" aria-label="Your reply"></textarea>
       <div class="headrow"><label class="btn small ghost" style="cursor:pointer">Attach files<input type="file" id="thrFiles" multiple hidden></label><span class="status" id="thrFileList"></span></div>
+      <div class="headrow"><select class="in" id="thrTpl" aria-label="Insert a template" style="flex:1 1 200px"></select><button class="btn small ghost" type="button" id="thrTplSave">Save as template</button></div>
       <label class="status chk" id="thrSumWrap" hidden><input type="checkbox" id="thrSum"> Send a short AI summary instead of the full email</label>
       <label class="status chk" id="thrRemWrap">Remind me if no reply in <select id="thrRemind"><option value="0">never</option><option value="2">2 days</option><option value="3" selected>3 days</option><option value="7">1 week</option></select></label>
       <p class="status" id="thrSt"></p>
       <div class="headrow"><button class="btn small" type="button" id="thrAI">Write it for me</button><button class="btn solid" type="button" id="thrSend">Send</button><button class="btn" type="button" id="thrSave">Save to Gmail drafts</button><button class="btn ghost" type="button" id="thrFwd">Forward</button><button class="btn ghost" type="button" id="thrWA">Send on WhatsApp</button></div>
     </div>
+  </div></div>
+</div>
+<div id="evt" class="onb" hidden role="dialog" aria-modal="true" aria-labelledby="evtTitle">
+  <div class="onbbox card"><div class="pad">
+    <h2 id="evtTitle">New meeting</h2>
+    <span class="status">Title</span><input class="in" id="evtName" autocomplete="off">
+    <div class="two"><div><span class="status">Date</span><input class="in" id="evtDate" type="date"></div><div><span class="status">Starts</span><input class="in" id="evtStart" type="time"></div><div><span class="status">Ends</span><input class="in" id="evtEnd" type="time"></div></div>
+    <span class="status">Where</span><input class="in" id="evtWhere" autocomplete="off">
+    <div data-new style="display:flex;flex-direction:column;gap:10px"><span class="status">Guests (email addresses, separated by commas)</span><input class="in" id="evtGuests" autocomplete="off">
+    <label class="status chk"><input type="checkbox" id="evtVideo"> Add a Google Meet video link</label></div>
+    <p class="status" id="evtMsg"></p>
+    <div class="headrow"><button class="btn solid" type="button" id="evtSave">Create meeting</button><button class="btn ghost" type="button" id="evtCancel">Cancel</button></div>
   </div></div>
 </div>
 <noscript><p style="padding:16px">This page needs JavaScript.</p></noscript>
