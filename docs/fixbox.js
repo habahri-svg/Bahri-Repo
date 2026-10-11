@@ -55,13 +55,32 @@
     drawRun();
   }
 
+  /* One-tap shortcuts to the places the owner needs for setup and upkeep. */
+  function shortcuts(setup) {
+    var V = "https://vercel.com/d?to=" + encodeURIComponent("/[team]/[project]/");
+    var links = [
+      ["🔑 Create GitHub token", "https://github.com/settings/personal-access-tokens/new", "Opens GitHub's new token page. Choose only " + ((info && info.repo) || "this repository") + ", Contents: Read and write"],
+      ["⚙️ Vercel settings", V + "settings/environment-variables", "Where GITHUB_TOKEN and OWNER_EMAILS go. Vercel asks you to pick the project"],
+      ["🚀 Vercel deployments", V + "deployments", "See each publish and press Redeploy"],
+      ["📁 App code on GitHub", "https://github.com/" + ((info && info.repo) || ""), "Every change made to the app"],
+      ["💳 Claude credit", "https://console.anthropic.com/settings/billing", "Top up the credit the AI uses"],
+      ["👥 Who uses the AI", "/admin", "Your owner page"]
+    ];
+    var box = el("div", "infosec"); box.append(el("h3", "", setup ? "Shortcuts to set it up" : "Shortcuts"));
+    var a = el("div", "acts");
+    links.forEach(function (l) { var n = el("a", "btn small" + (setup && a.childNodes.length < 2 ? " solid" : ""), l[0]); n.href = l[1]; n.target = "_blank"; n.rel = "noopener"; n.title = l[2]; a.append(n); });
+    box.append(a); return box;
+  }
+
   function drawSetup() {
     host.append(p("status err", "One setting is still missing before the Fix box can work."));
     host.append(p("", "In Vercel, open this project, then Settings, then Environment Variables, and add: " + (info.missing || []).join(", ") + ". Then redeploy."));
     if ((info.missing || []).indexOf("GITHUB_TOKEN") >= 0) {
       host.append(p("status", "GITHUB_TOKEN is a key that lets this box save changes to the app's code. Create it at github.com, Settings, Developer settings, Fine-grained tokens. Give it access to only the repository " + info.repo + ", with the permission Contents set to Read and write. Add Deployments set to Read-only if you want preview links."));
     }
-    var a = el("div", "acts"); a.append(btn("Check again", "solid", function () { api("GET").then(function (j) { info = j; draw(); }).catch(function (e) { toast(e.message); }); })); host.append(a);
+    host.append(shortcuts(true));
+    host.append(p("status", "Order: 1. Create the GitHub token and copy it. 2. Open Vercel settings, add it as GITHUB_TOKEN and save. 3. Open Vercel deployments and press Redeploy on the newest one. 4. Come back and press Check again."));
+    var a = el("div", "acts"); a.append(btn("Check again", "", function () { api("GET").then(function (j) { info = j; draw(); }).catch(function (e) { toast(e.message); }); })); host.append(a);
   }
 
   function drawStart() {
@@ -91,6 +110,7 @@
       box.append(p("status", "Version " + last.version + ", \"" + last.name + "\", published " + dubai(last.updated) + "."));
       var ua = el("div", "acts"); ua.append(undoBtn()); box.append(ua); host.append(box);
     }
+    host.append(shortcuts(false));
     host.append(p("status", "Each fix uses a little of your Claude credit. Changes to sign-in, security or who can use the AI are refused here on purpose."));
   }
 
