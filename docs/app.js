@@ -2157,8 +2157,13 @@ const LINKS=[
 function renderLinks(){
   const host=$("links");host.replaceChildren();
   const mine=(state.links||[]);
+  /* Gmail, Calendar and Drive are already on this page: those chips jump to the section instead of leaving */
+  const HERE={"mail.google.com":["inbox","Email"],"calendar.google.com":["cal","Calendar"],"drive.google.com":["docs","Files"],"outlook.office.com":["inbox","Email"],"outlook.live.com":["inbox","Email"]};
   [...LINKS.map(([n,u])=>({n,u})),...mine.map((l,ix)=>Object.assign({ix},l))].forEach(l=>{
-    const a=el("a","chip",l.n);a.href=l.u;a.target="_blank";a.rel="noopener";a.style.textDecoration="none";host.append(a);
+    let host_="";try{host_=new URL(l.u).hostname}catch(e){}
+    const here=HERE[host_];
+    if(here){const b=el("button","chip solidchip",l.n+" (on this page)");b.type="button";b.title="Your "+here[1].toLowerCase()+" is already on this page";b.onclick=()=>{show("t-today");goSec(here[0])};host.append(b)}
+    else{const a=el("a","chip",l.n+" ↗");a.href=l.u;a.target="_blank";a.rel="noopener";a.style.textDecoration="none";a.title="Opens "+l.n+" on its own site";host.append(a)}
     if(l.ix!=null){const x=el("button","chip","Remove "+l.n);x.type="button";x.style.fontSize="12px";x.onclick=()=>{state.links.splice(l.ix,1);persist();renderLinks()};host.append(x)}
   });
 }

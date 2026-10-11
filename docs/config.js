@@ -7,6 +7,8 @@ window.WYZ_CONFIG = {
   /* Company dashboard intake, for example https://YOUR-APP.lovable.app/api/public/ingest-execution-summary
      Each person chooses whether to share. Empty = feature hidden. */
   DASHBOARD_URL: "",
+  /* The company dashboard people open from their page */
+  DASHBOARD_LINK: "https://dashboard.wyzrent.com",
   /* true once https://99946693.vercel.app/ is listed under "Authorized redirect URIs" on the Google Client ID.
      The installed iPhone app then signs in with a full-page Google screen, which is more reliable there than a popup. */
   IPHONE_APP_REDIRECT: false,
