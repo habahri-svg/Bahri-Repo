@@ -2455,9 +2455,9 @@ async function gmailFind(q,n){
 /* ---------- Top 3 for today ---------- */
 function top3Candidates(){
   const out=[],today=todayKey(),in2=(()=>{const d=new Date();d.setDate(d.getDate()+2);return ymd(d)})();
-  allItems().filter(i=>!isOff(i)&&["reply","follow","work"].includes(i.st)).forEach(i=>{
+  allItems().filter(i=>!isOff(i)&&["reply","follow","work","wait"].includes(i.st)).forEach(i=>{
     const t=tById(i.id)||{};
-    out.push({kind:"mail",ref:i.id,title:i.title||t.subject||"(No subject)",why:i.summary||"",score:(i.g||1)*10+(i.st==="reply"?6:i.st==="follow"?4:2)+(i.vip?8:0)+backFirst(i)*5,item:i});
+    out.push({kind:"mail",ref:i.id,title:i.title||t.subject||"(No subject)",why:(i.st==="wait"?"Waiting on them. ":"")+(i.summary||""),score:(i.g||1)*10+(i.st==="reply"?6:i.st==="follow"?4:i.st==="work"?2:-4)+(i.vip?8:0)+backFirst(i)*5,item:i});
   });
   (state.tasks||[]).filter(t=>!t.done).forEach(t=>{
     let sc=(t.p||1)*4,why="";
@@ -2466,7 +2466,7 @@ function top3Candidates(){
   });
   const now=Date.now();
   (events||[]).forEach(e=>{
-    const s=e.start&&e.start.dateTime&&Date.parse(e.start.dateTime);if(!s||s<now-15*60000||s>now+5*3600000||e.status==="cancelled")return;
+    const s=e.start&&e.start.dateTime&&Date.parse(e.start.dateTime);if(!s||s<now-15*60000||ymd(new Date(s))!==today||e.status==="cancelled")return;
     out.push({kind:"event",ref:e.id,title:e.summary||"(No title)",why:"Starts at "+fmtTime(e.start.dateTime)+(e.location?" · "+e.location:""),score:36-((s-now)/3600000)*3,ev:e});
   });
   const hide=(state.topHide&&state.topHide.day===today&&state.topHide.ids)||[];
@@ -2502,7 +2502,8 @@ function renderTop3(){
   if(!G.connected()||(!board&&!(state.tasks||[]).length)){card.hidden=true;return}
   const rows=top3Rows(),open=!state.top3Col;
   card.hidden=!rows.length;host.replaceChildren();
-  $("top3Title").textContent=topN()===1?"Top priority for today":"Top "+topN()+" for today";$("top3N").value=String(topN());
+  $("top3Title").textContent=topN()===1?"Top priority for today":"Top "+topN()+" for today";
+  if(open&&rows.length<topN()){const n=el("p","status","Only "+rows.length+" thing"+(rows.length>1?"s":"")+" need"+(rows.length>1?"":"s")+" you today. Everything else is done, snoozed or just for your information.");host.append(n)}$("top3N").value=String(topN());
   $("top3Tog").setAttribute("aria-expanded",String(open));host.hidden=!open;
   $("top3Sum").hidden=open;$("top3Sum").textContent=rows.length+" item"+(rows.length>1?"s":"")+". First: "+(rows[0]?rows[0].title:"")+". Tap the heading to open.";
   rows.forEach((x,i)=>{
