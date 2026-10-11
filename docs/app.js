@@ -2469,7 +2469,8 @@ function top3Candidates(){
     const s=e.start&&e.start.dateTime&&Date.parse(e.start.dateTime);if(!s||s<now-15*60000||s>now+5*3600000||e.status==="cancelled")return;
     out.push({kind:"event",ref:e.id,title:e.summary||"(No title)",why:"Starts at "+fmtTime(e.start.dateTime)+(e.location?" · "+e.location:""),score:36-((s-now)/3600000)*3,ev:e});
   });
-  return out.sort((a,b)=>b.score-a.score);
+  const hide=(state.topHide&&state.topHide.day===today&&state.topHide.ids)||[];
+  return out.filter(x=>!hide.includes(x.kind+":"+x.ref)).sort((a,b)=>b.score-a.score);
 }
 let top3Busy=false,top3Fail=0;
 const topN=()=>{const n=+state.topN;return Number.isInteger(n)&&n>=1&&n<=10?n:10};
@@ -2492,7 +2493,7 @@ function top3Rows(){
   const c=state.top3;
   if(c&&c.day===todayKey()&&c.n===N&&c.picks&&c.picks.length){
     const mapped=c.picks.map(p=>{const x=cand.find(y=>y.kind===p.kind&&y.ref===p.ref);return x?Object.assign({},x,{why:p.why||x.why}):null}).filter(Boolean);
-    if(mapped.length>=Math.min(N,cand.length))rows=mapped.slice(0,N);
+    if(mapped.length)rows=mapped.concat(cand.filter(y=>!mapped.some(m=>m.kind===y.kind&&m.ref===y.ref))).slice(0,N);
   }
   return rows;
 }
@@ -2508,12 +2509,35 @@ function renderTop3(){
     const r=el("div","t3row");r.append(el("span","t3n",String(i+1)));const m=el("div","main");
     m.append(el("span","t",x.title));if(x.why)m.append(el("span","s",x.why));
     const a=el("div","acts");
+    a.append(onbBtn("✓ Done",()=>topDone(x),"small solid"),topDelBtn(x));
     if(x.kind==="mail"){a.append(onbBtn("Read thread",()=>openThread(x.ref,{item:x.item}),"small"),onbBtn("Draft a reply",()=>openThread(x.ref,{item:x.item,draft:true}),"small solid"))}
-    else if(x.kind==="task"){a.append(onbBtn("Mark done",()=>{const t=(state.tasks||[]).find(y=>y.id===x.ref);if(t){t.done=1;persist();renderTasks();renderTop3()}},"small solid"))}
+    else if(x.kind==="task"){}
     else{if(x.ev)a.append(onbBtn("Prep brief",()=>openBrief(x.ev),"small solid"));if(x.ev&&x.ev.conferenceUrl){const j=el("a","btn small","Join");j.href=x.ev.conferenceUrl;j.target="_blank";j.rel="noopener";a.append(j)}}
     m.append(a);r.append(m);host.append(r);
   });
   pickTop3(false);
+}
+function topHideToday(x){const d=todayKey();if(!state.topHide||state.topHide.day!==d)state.topHide={day:d,ids:[]};state.topHide.ids.push(x.kind+":"+x.ref)}
+function topRefresh(){persist();try{renderBoard()}catch(e){}try{renderTasks()}catch(e){}renderTop3()}
+function topDone(x){
+  if(x.kind==="mail"){state.done[x.ref]=1;logDone(x.item||{id:x.ref,title:x.title})}
+  else if(x.kind==="task"){const t=(state.tasks||[]).find(y=>y.id===x.ref);if(t)t.done=1;logDone({id:x.ref,title:x.title},"task")}
+  else{topHideToday(x);logDone({id:x.ref,title:x.title},"meeting")}
+  topRefresh();
+}
+/* Delete asks once more, like Send. Emails leave the page but stay in Gmail. */
+function topDelBtn(x){
+  const b=onbBtn("Delete",null,"small ghost");b.title=x.kind==="mail"?"Removes it from your page. The email stays in Gmail.":x.kind==="task"?"Deletes this task.":"Removes it from today's list.";
+  let armed=0,tm=0;
+  b.onclick=()=>{
+    if(!armed){armed=1;b.textContent="Tap again to delete";tm=setTimeout(()=>{armed=0;b.textContent="Delete"},8000);return}
+    clearTimeout(tm);
+    if(x.kind==="mail"){state.done[x.ref]=1;logDone(x.item||{id:x.ref,title:x.title},"removed")}
+    else if(x.kind==="task"){state.tasks=(state.tasks||[]).filter(y=>y.id!==x.ref)}
+    else topHideToday(x);
+    topRefresh();
+  };
+  return b;
 }
 $("top3Tog").onclick=()=>{state.top3Col=state.top3Col?0:1;persist();renderTop3()};
 $("top3N").onchange=()=>{state.topN=+$("top3N").value;state.top3Col=0;persist();renderTop3()};
