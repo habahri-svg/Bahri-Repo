@@ -12,6 +12,8 @@
 <meta name="apple-mobile-web-app-title" content="Execution Page">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23104b70'/%3E%3Cpath d='M18 34l10 10 18-22' fill='none' stroke='%23d8a23c' stroke-width='7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<script>/* demo (?demo): brand-new in-memory storage, so it never touches your real setup */
+if(/[?&]demo\b/.test(location.search)){try{var M={},S={getItem:function(k){return k in M?M[k]:null},setItem:function(k,v){M[k]=String(v)},removeItem:function(k){delete M[k]},clear:function(){M={}},key:function(i){return Object.keys(M)[i]||null},get length(){return Object.keys(M).length}};Object.defineProperty(window,"localStorage",{value:S,configurable:true})}catch(e){}}</script>
 <script>try{var L=JSON.parse(localStorage.getItem("wyz-look")||"{}");if(L.p)document.documentElement.setAttribute("data-palette",L.p);if(L.m==="light"||L.m==="dark")document.documentElement.setAttribute("data-theme",L.m)}catch(e){}</script>
 <style>
 /* Layout: one column run sheet. Header, three tabs (Today, Connections, Install). Colour lives in status dots only. WYZ navy, gold, sky. */
@@ -214,6 +216,8 @@ label.chk{display:flex;gap:6px;align-items:center}
 .onbbox{width:100%;max-width:520px;max-height:100%;overflow:auto;box-shadow:0 12px 40px rgba(14,34,56,.35)}
 .t3tog{display:flex;align-items:center;gap:8px;flex:1 1 200px;background:none;border:0;padding:0;color:inherit;font:inherit;cursor:pointer;text-align:left}
 .t3tog h2{margin:0}.t3tog span{color:var(--soft);transition:transform .15s}.t3tog[aria-expanded="false"] span{transform:rotate(-90deg)}
+.demobar{position:sticky;top:0;z-index:40;background:var(--gold);color:#0e2238;font-size:13.5px;padding:8px 16px;text-align:center}
+.demobar a{color:#0e2238;font-weight:700}
 .updbar{position:fixed;left:16px;right:16px;margin-inline:auto;width:fit-content;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:30;display:flex;gap:10px;align-items:center;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-left:4px solid var(--gold);border-radius:12px;padding:10px 14px;box-shadow:0 8px 24px rgba(0,0,0,.18);max-width:calc(100% - 32px)}
 .onbrow{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-top:1px solid var(--line)}
 .onbrow:first-child{border-top:0}
@@ -672,6 +676,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
 <script src="version.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="connectors.js"></script>
+<script src="demo.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
