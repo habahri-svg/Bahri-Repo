@@ -1930,7 +1930,7 @@ $("goCheck").onclick=()=>{
 $("aiTest").onclick=async()=>{
   const out=$("aiTestOut"),btn=$("aiTest");out.replaceChildren();btn.disabled=true;btn.textContent="Testing...";
   const A=Connectors.ai;
-  const rows=[["claude","Claude"],["chatgpt","ChatGPT"]];
+  const rows=[["claude","Claude"],["chatgpt","ChatGPT"]],res={};
   for(const [id,name] of rows){
     const line=el("p","status");out.append(line);
     if(!A.avail(id)){line.className="status err";const ms=A.missing(id);line.textContent=name+": not connected. "+(ms.length?"Vercel is missing "+ms.join(" and ")+". Add "+(ms.length>1?"them":"it")+" in Vercel under Settings, Environment Variables (tick Production), then open Deployments and press Redeploy. A new setting only works after a redeploy. Or paste your own key above.":(id==="claude"?"The owner has not added ANTHROPIC_API_KEY in Vercel, or you have not pasted your own key above.":"The owner has not added OPENAI_API_KEY in Vercel, or you have not pasted your own key above."));continue}
@@ -1939,12 +1939,16 @@ $("aiTest").onclick=async()=>{
     line.textContent=name+" ("+model+", "+mode+"): testing...";
     try{
       const s=Connectors.makeSample();
-      const t0=Date.now(),r=await s("Reply with exactly: OK",{cache:false,provider:id,noFallback:true});A.clearDown(id);
+      const t0=Date.now(),r=await s("Reply with exactly: OK",{cache:false,provider:id,noFallback:true});A.clearDown(id);res[id]="ok";
       line.className="status";line.textContent="✅ "+name+" ("+model+", "+mode+"): working. Answered in "+((Date.now()-t0)/1000).toFixed(1)+" seconds.";
     }catch(e){
+      res[id]=/credit|billing|quota|insufficient/i.test((e&&e.message)||"")?"credit":"bad";
       line.className="status err";line.textContent="❌ "+name+" ("+model+", "+mode+"): "+((e&&e.message)||"failed");
       if(/no credit|credit|billing|quota|rejected/i.test((e&&e.message)||"")){const o=id==="claude"?"chatgpt":"claude";line.textContent+=A.avail(o)?" "+A.names[o]+" will answer instead.":" Nothing else is connected to answer instead."}
     }
+  }
+  for(const [p,o] of [["claude","chatgpt"],["chatgpt","claude"]]){
+    if(res[p]==="credit"&&res[o]==="ok"&&A.chosen()===p){A.autoSwitch(p,o);out.append(el("p","status","✅ "+A.names[o]+" is now your main AI, because "+A.names[p]+" has no credit. "+A.names[p]+" takes over again by itself once its credit is fixed."))}
   }
   btn.disabled=false;btn.textContent="Test Claude and ChatGPT now";
 };
@@ -2137,13 +2141,16 @@ async function testEverything(){
     catch(e){add("Google Drive","bad","Couldn't read Drive ("+msg(e)+").")}
   }
   // 7 claude
-  {const A=Connectors.ai;
+  {const A=Connectors.ai,res={};
    for(const p of ["claude","chatgpt"]){
      const nm=A.names[p]+(p===A.active()?" (in use)":"");
      if(!A.avail(p)){const ms=A.missing(p);add(nm,ms.length?"warn":"na","Not connected"+(ms.length?". Vercel is missing "+ms.join(" and ")+". Add it under Settings, Environment Variables, then Redeploy.":(p==="chatgpt"?" (optional).":"."))+(!sample&&p==="claude"?" Sorting uses simple rules until an AI is connected.":""));continue}
      const mode=A.mode(p);
-     try{const r=await sample("Reply with the single word OK.",{provider:p,cache:false,noFallback:true});Connectors.ai.clearDown(p);add(nm,"ok",(mode==="shared"?"Working through the shared connection":"Working with your own key")+", using "+(p==="chatgpt"?A.getOModel():A.modelLabel())+". It answered: "+clip(r.text,20)+".")}
-     catch(e){add(nm,"bad",A.names[p]+" is switched on but failed ("+msg(e)+")."+(mode==="shared"?" Check the key, credit and ALLOWED_EMAILS in Vercel.":" Check your key, the model name and credit under Connections, Personalise."))}
+     try{const r=await sample("Reply with the single word OK.",{provider:p,cache:false,noFallback:true});Connectors.ai.clearDown(p);res[p]="ok";add(nm,"ok",(mode==="shared"?"Working through the shared connection":"Working with your own key")+", using "+(p==="chatgpt"?A.getOModel():A.modelLabel())+". It answered: "+clip(r.text,20)+".")}
+     catch(e){res[p]=/credit|billing|quota|insufficient/i.test(msg(e))?"credit":"bad";add(nm,"bad",A.names[p]+" is switched on but failed ("+msg(e)+")."+(mode==="shared"?" Check the key, credit and ALLOWED_EMAILS in Vercel.":" Check your key, the model name and credit under Connections, Personalise."))}
+   }
+   for(const [p,o] of [["claude","chatgpt"],["chatgpt","claude"]]){
+     if(res[p]==="credit"&&res[o]==="ok"&&A.chosen()===p){A.autoSwitch(p,o);add("AI in use","ok",A.names[p]+" has no credit, so "+A.names[o]+" is now your main AI. "+A.names[p]+" takes over again by itself once its credit is fixed.")}
    }}
   // 8 todoist
   if(!Connectors.todoist.has())add("Todoist","na","Not connected (optional).");

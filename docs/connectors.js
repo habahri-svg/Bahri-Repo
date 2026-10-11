@@ -502,7 +502,7 @@
   };
 
   /* ---------- AI assistants: Claude and ChatGPT (each with the owner's shared key or the person's own), plus any AI added by link ---------- */
-  KEY.provider = "wyz-ai-provider"; KEY.openai = "wyz-openai-key"; KEY.omodel = "wyz-openai-model"; KEY.links = "wyz-ai-links";
+  KEY.provider = "wyz-ai-provider"; KEY.auto = "wyz-ai-auto-switched"; KEY.openai = "wyz-openai-key"; KEY.omodel = "wyz-openai-model"; KEY.links = "wyz-ai-links";
   var MODEL_LIST = [["claude-sonnet-5-5", "Sonnet 5.5 (standard)"], ["claude-haiku-4-5-20251001", "Haiku 4.5 (fastest, lowest cost)"], ["claude-opus-5-5", "Opus 5.5 (strongest, costs the most)"]];
   var OMODELS = ["gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.6-luna", "gpt-6-astra"];   /* suggestions only: the person can type any model their OpenAI account offers */
   function getModel() { var m = ls.get(KEY.model); return MODEL_LIST.some(function (x) { return x[0] === m; }) ? m : MODEL_LIST[0][0]; }
@@ -526,6 +526,10 @@
   var down = {};
   var missing = { claude: [], chatgpt: [] };
   function creditLike(e) { var m = String((e && e.message) || ""); return /no credit|credit left|credit balance|billing|quota|insufficient|rejected the API key/i.test(m) || !!(e && (e.code === "not_granted" || e.code === "rate_limited")); }
+  /* When the chosen AI has no credit and the other one works, make the working one the default for good.
+     If the switch was automatic, the first AI gets its place back as soon as it works again. */
+  function autoSwitch(from, to) { if (chosen() !== from) return; ls.set(KEY.provider, to); ls.set(KEY.auto, from); announce(); }
+  function autoRestore(p) { if (ls.get(KEY.auto) === p && chosen() !== p) { ls.set(KEY.provider, p); ls.del(KEY.auto); announce(); } }
   function announce() { try { window.dispatchEvent(new CustomEvent("wyz-ai-status")); } catch (e) {} }
   function detectShared() {
     var probe = function (p, url) { return fetch(url, { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : { ok: false }; }).then(function (j) { shared[p] = !!(j && j.ok); missing[p] = (j && Array.isArray(j.missing)) ? j.missing : []; }, function () { shared[p] = false; missing[p] = []; }); };
@@ -578,12 +582,13 @@
       var canSwitch = !(opts && opts.noFallback) && !files && avail(other);
       var run = function (pp) { return keyOf(pp) ? callDirect(pp, messages) : callShared(pp, messages); };
       if (canSwitch && down[p] && down[p].until > Date.now() && !(down[other] && down[other].until > Date.now())) {
-        try { var r0 = await run(other); r0.usedOther = other; r0.skipped = p; return r0; }
+        try { var r0 = await run(other); r0.usedOther = other; r0.skipped = p; if (down[p].credit) autoSwitch(p, other); return r0; }
         catch (e0) { if (!creditLike(e0)) throw e0; down[other] = { until: Date.now() + 2 * 60000, why: String(e0.message || "").slice(0, 160), credit: /credit|billing|quota/i.test(String(e0.message || "")) }; announce(); throw e0; }
       }
       try {
         var ok = await run(p);
         if (down[p]) { delete down[p]; announce(); }
+        autoRestore(p);
         return ok;
       } catch (e) {
         if (!creditLike(e)) throw e;
@@ -591,7 +596,7 @@
         down[p] = { until: Date.now() + (credit || e.code === "not_granted" ? 10 : 2) * 60000, why: String(e.message || "").slice(0, 160), credit: credit };
         announce();
         if (!canSwitch) throw e;
-        try { var r = await run(other); r.usedOther = other; r.skipped = p; return r; }
+        try { var r = await run(other); r.usedOther = other; r.skipped = p; if (credit) autoSwitch(p, other); return r; }
         catch (e2) {
           if (creditLike(e2)) { var c2 = /credit|billing|quota|insufficient/i.test(String(e2.message || "")); down[other] = { until: Date.now() + (c2 || e2.code === "not_granted" ? 10 : 2) * 60000, why: String(e2.message || "").slice(0, 160), credit: c2 }; announce(); }
           throw e2;
@@ -621,7 +626,8 @@
     todoist: { has: function () { return !!ls.get(KEY.todo); }, set: function (t) { ls.set(KEY.todo, String(t || "").trim()); }, clear: function () { ls.del(KEY.todo); } },
     ai: {
       detect: detectShared, names: NAMES, missing: function (p) { return missing[p] || []; },
-      chosen: chosen, setChosen: function (p) { ls.set(KEY.provider, p === "chatgpt" ? "chatgpt" : "claude"); },
+      chosen: chosen, setChosen: function (p) { ls.set(KEY.provider, p === "chatgpt" ? "chatgpt" : "claude"); ls.del(KEY.auto); },
+      autoSwitch: autoSwitch, autoRestore: autoRestore, autoSwitched: function () { return ls.get(KEY.auto) || ""; },
       active: active, avail: avail, mode: modeOf,
       down: function (p) { return down[p] && down[p].until > Date.now() ? down[p] : null; }, clearDown: function (p) { delete down[p]; announce(); },
       /* Claude */
