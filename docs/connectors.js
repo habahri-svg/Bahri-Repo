@@ -12,9 +12,11 @@
     gmailModify: "https://www.googleapis.com/auth/gmail.modify",
     cal: "https://www.googleapis.com/auth/calendar.readonly",
     calEvents: "https://www.googleapis.com/auth/calendar.events",
-    drive: "https://www.googleapis.com/auth/drive.metadata.readonly"
+    drive: "https://www.googleapis.com/auth/drive.metadata.readonly",
+    contacts: "https://www.googleapis.com/auth/contacts.readonly",
+    otherContacts: "https://www.googleapis.com/auth/contacts.other.readonly"
   };
-  var SCOPES = ["openid", "email", "profile", SC.gmailRead, SC.gmailDraft, SC.gmailModify, SC.cal, SC.calEvents, SC.drive].join(" ");
+  var SCOPES = ["openid", "email", "profile", SC.gmailRead, SC.gmailDraft, SC.gmailModify, SC.cal, SC.calEvents, SC.drive, SC.contacts, SC.otherContacts].join(" ");
   var KEY = { flag: "wyz-google-flag", hint: "wyz-google-hint", todo: "wyz-todoist-token", ai: "wyz-claude-key", cid: "wyz-google-client-id", model: "wyz-claude-model" };
 
   var ls = {
@@ -157,6 +159,17 @@
       .replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\n{3,}/g, "\n\n").trim();
   }
   function bodyOf(p) { return findPart(p, "text/plain") || htmlText(findPart(p, "text/html")); }
+  function filesOf(p, out) {
+    out = out || [];
+    if (!p) return out;
+    var h = (p.headers || []).reduce(function (a, x) { a[String(x.name).toLowerCase()] = x.value; return a; }, {});
+    var cid = String(h["content-id"] || "").replace(/[<>]/g, "");
+    if ((p.filename || cid) && p.body && (p.body.attachmentId || p.body.data) && !/^(text\/(plain|html)|multipart\/)/.test(p.mimeType || "")) {
+      out.push({ name: p.filename || "", type: p.mimeType || "application/octet-stream", id: p.body.attachmentId || "", data: p.body.attachmentId ? "" : (p.body.data || ""), cid: cid, size: p.body.size || 0 });
+    }
+    (p.parts || []).forEach(function (c) { filesOf(c, out); });
+    return out;
+  }
   function attachmentsOf(p, out) {
     out = out || [];
     if (!p) return out;
@@ -173,6 +186,8 @@
     };
     if (withBody) {
       o.plaintextBody = bodyOf(m.payload);
+      o.html = findPart(m.payload, "text/html").slice(0, 800000);
+      o.files = filesOf(m.payload);
       o.ccRecipients = splitAddrs(hdr(m, "Cc"));
       o.replyTo = hdr(m, "Reply-To");
       o.attachments = attachmentsOf(m.payload);
@@ -239,6 +254,11 @@
         var d = await gfetch(GM + "/drafts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: msg }) }, SC.gmailDraft);
         return { id: d.id, viewUrl: "https://mail.google.com/mail/?authuser=" + encodeURIComponent(mailTo()) + "#drafts" };
       },
+      get_attachment: async function (a) {
+        await profile();
+        var j = await gfetch(GM + "/messages/" + encodeURIComponent(a.messageId) + "/attachments/" + encodeURIComponent(a.attachmentId), null, SC.gmailRead);
+        return { data: j.data || "" };
+      },
       archive_thread: async function (a) {
         await profile();
         await gfetch(GM + "/threads/" + encodeURIComponent(a.threadId) + "/modify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ removeLabelIds: ["INBOX"] }) }, SC.gmailModify);
@@ -284,6 +304,32 @@
             return { id: e.id, status: e.status, summary: e.summary, location: e.location, start: e.start, end: e.end, htmlLink: e.htmlLink, conferenceUrl: e.hangoutLink || (video && video.uri) || "" };
           })
         };
+      }
+    },
+    "Google Contacts": {
+      list_contacts: async function () {
+        var people = [], pick = function (p) {
+          var e = (p.emailAddresses || []).map(function (x) { return x.value; }).filter(Boolean);
+          var n = (p.names && p.names[0] && p.names[0].displayName) || "";
+          e.forEach(function (a) { people.push({ name: n, email: String(a).toLowerCase() }); });
+        };
+        var have = { c: false, o: false }, err = null;
+        try {
+          var tok = "";
+          for (var i = 0; i < 3; i++) {
+            var j = await gfetch("https://people.googleapis.com/v1/people/me/connections?personFields=names,emailAddresses&sortOrder=LAST_MODIFIED_DESCENDING&pageSize=1000" + (tok ? "&pageToken=" + encodeURIComponent(tok) : ""), null, SC.contacts);
+            (j.connections || []).forEach(pick); have.c = true; tok = j.nextPageToken; if (!tok) break;
+          }
+        } catch (e) { err = e; }
+        try {
+          var tok2 = "";
+          for (var k = 0; k < 3; k++) {
+            var o = await gfetch("https://people.googleapis.com/v1/otherContacts?readMask=names,emailAddresses&pageSize=1000" + (tok2 ? "&pageToken=" + encodeURIComponent(tok2) : ""), null, SC.otherContacts);
+            (o.otherContacts || []).forEach(pick); have.o = true; tok2 = o.nextPageToken; if (!tok2) break;
+          }
+        } catch (e2) { err = err || e2; }
+        if (!have.c && !have.o && err) throw err;
+        return { people: people };
       }
     },
     "Google Drive": {

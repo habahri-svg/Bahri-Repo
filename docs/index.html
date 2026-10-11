@@ -138,6 +138,18 @@ ol.steps li::marker{color:var(--gold);font-weight:700}
 .msg pre{white-space:pre-wrap;font:inherit;overflow-wrap:anywhere;margin:8px 0 4px}
 .msg .meta{font-size:13px;color:var(--soft);font-weight:400}
 .found{display:flex;flex-direction:column}
+.mailframe{width:100%;border:1px solid var(--line);border-radius:8px;background:#fff;min-height:60px;display:block}
+.mailtext{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.55;margin:8px 0 4px;font-size:14px}
+.mailtext a,.lnk:hover{color:var(--navy)}
+.mailbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--soft);margin:6px 0}
+.mailfiles{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.lnk{color:var(--fg);text-decoration:none;cursor:pointer}
+.lnk:hover{text-decoration:underline}
+.acwrap{position:relative}
+.acbox{position:absolute;left:0;right:0;top:100%;z-index:40;background:var(--panel);border:1px solid var(--navy);border-radius:8px;max-height:260px;overflow:auto;box-shadow:0 8px 22px rgba(14,34,56,.25);margin-top:2px}
+.acbox button{display:flex;flex-direction:column;align-items:flex-start;width:100%;border:0;background:none;color:var(--fg);text-align:left;padding:8px 12px;cursor:pointer;font:inherit}
+.acbox button b{font-size:14px}.acbox button span{font-size:12px;color:var(--soft)}
+.acbox button.on,.acbox button:hover{background:var(--sky)}
 @media print{body.printing *{visibility:hidden!important}body.printing #report,body.printing #report *{visibility:visible!important}body.printing #report{position:absolute;left:0;top:0;width:100%;border:0;box-shadow:none}body.printing #repActs,body.printing #repClose{display:none!important}}
 .tplrow{display:flex;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}
 .tplrow span{flex:1;min-width:0;overflow-wrap:anywhere;font-size:14px}
@@ -256,7 +268,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       <div id="wSetup" hidden>
         <p class="sub"><b>Set up Google sign-in (about 5 minutes, one time).</b></p>
         <ol class="steps">
-          <li><a class="btn small" href="https://console.cloud.google.com/flows/enableapi?apiid=gmail.googleapis.com,calendar-json.googleapis.com,drive.googleapis.com" target="_blank" rel="noopener">Turn on Gmail, Calendar and Drive</a> Pick or create a project and tap Enable.</li>
+          <li><a class="btn small" href="https://console.cloud.google.com/flows/enableapi?apiid=gmail.googleapis.com,calendar-json.googleapis.com,drive.googleapis.com,people.googleapis.com" target="_blank" rel="noopener">Turn on Gmail, Calendar, Drive and Contacts</a> Pick or create a project and tap Enable.</li>
           <li><a class="btn small" href="https://console.cloud.google.com/auth/overview" target="_blank" rel="noopener">Set up the consent screen</a> Choose External, add an app name and your email. On the Data access page add these scopes: <button class="btn small ghost" type="button" id="wCopyScopes">Copy scopes</button></li>
           <li><a class="btn small" href="https://console.cloud.google.com/auth/clients/create" target="_blank" rel="noopener">Create the Client ID</a> Choose Web application and add this address under Authorized JavaScript origins: <button class="btn small ghost" type="button" id="wCopyOrigin">Copy address</button> <code id="wOrigin"></code></li>
           <li>On the Audience page tap <b>Publish app</b> so anyone with a Google account can sign in (no test-user list).</li>
@@ -494,12 +506,12 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
 </div>
 <div id="thr" class="thr" hidden role="dialog" aria-modal="true" aria-labelledby="thrTitle">
   <div class="thrbox card"><div class="pad">
-    <div class="headrow"><h2 id="thrTitle" style="flex:1 1 200px;overflow-wrap:anywhere"></h2><span id="thrSnooze"></span><button class="btn small" type="button" id="thrVip" title="Always show this sender as urgent">VIP</button><button class="btn small" type="button" id="thrMute" title="Hide this sender from your board">Mute</button><button class="btn small" type="button" id="thrArchive">Archive</button><a id="thrGmail" class="btn small" target="_blank" rel="noopener">Open in Gmail</a><button class="btn small" type="button" id="thrClose">Close</button></div>
+    <div class="headrow"><h2 id="thrTitle" style="flex:1 1 200px;overflow-wrap:anywhere"></h2><span class="status" id="thrPos"></span><button class="btn small" type="button" id="thrPrev" title="Previous email (left arrow)" aria-label="Previous email">‹ Prev</button><button class="btn small" type="button" id="thrNext" title="Next email (right arrow)" aria-label="Next email">Next ›</button><span id="thrSnooze"></span><button class="btn small" type="button" id="thrVip" title="Always show this sender as urgent">VIP</button><button class="btn small" type="button" id="thrMute" title="Hide this sender from your board">Mute</button><button class="btn small" type="button" id="thrArchive">Archive</button><a id="thrGmail" class="btn small" target="_blank" rel="noopener">Open in Gmail</a><button class="btn small" type="button" id="thrClose">Close</button></div>
     <div id="thrBody"></div>
     <details class="msg" id="thrAIbox" hidden><summary>Instruct AI about this email</summary><div id="thrInstruct" class="instr"></div></details>
     <div id="thrReply" hidden>
       <h2>Reply</h2>
-      <span class="status">To</span><input class="in" id="thrTo" aria-label="To" autocomplete="off" list="thrAddrs"><datalist id="thrAddrs"></datalist>
+      <span class="status">To</span><input class="in" id="thrTo" aria-label="To" autocomplete="off">
       <div id="thrSubjWrap" hidden><span class="status">Subject</span><input class="in" id="thrSubj" aria-label="Subject" autocomplete="off"></div>
       <textarea id="thrBrief" aria-label="What should the email say" placeholder="Tell the AI what the email should say, for example: ask Sara for the revised pool quote by Thursday" style="min-height:70px" hidden></textarea>
       <label class="status chk"><input type="checkbox" id="thrAll"> Reply all</label>

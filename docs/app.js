@@ -290,10 +290,10 @@ async function afterConnect(){
   const p=await G.profile();
   uid=p.sub;myName=p.name||"";email=p.email||"";pic=p.picture||"";
   try{localStorage.setItem("wyz-last-name",myName)}catch(e){}
-  LS="wyzcc-v1-"+uid;
+  LS="wyzcc-v1-"+uid;loadContactsCache();
   $("welcome").hidden=true;renderHello();
   const snap=lsGet();if(snap&&snap.state)restore(snap);
-  await loadResearch();renderTasks();renderSetup();
+  await loadResearch();renderTasks();renderSetup();loadContacts();
   if(!state.onboarded)onbOpen();
   await refreshAll(false);
   if(!loopOn){loopOn=true;
@@ -614,20 +614,172 @@ function fillTargets(){
   const all=$("thrAll").checked,t=replyTargets(all);
   $("thrTo").value=t.to.join(", ");$("thrCc").value=t.cc.join(", ");$("thrCcWrap").hidden=!all;
 }
+/* Real email view: HTML mail goes in a locked iframe (no scripts, links open in a new tab), plain text gets clickable links. */
+function linkify(txt){
+  const out=document.createDocumentFragment();let last=0;const re=/https?:\/\/[^\s<>"')\]]+|[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;let m;txt=String(txt);
+  while((m=re.exec(txt))){
+    let u=m[0];const tail=u.match(/[.,;:!?]+$/);if(tail){u=u.slice(0,-tail[0].length)}
+    if(m.index>last)out.append(document.createTextNode(txt.slice(last,m.index)));
+    const a=el("a","lnk");const mail=!/^https?:/.test(u);a.href=mail?"mailto:"+u:u;a.target="_blank";a.rel="noopener noreferrer";
+    a.textContent=mail?u:u.replace(/^https?:\/\/(www\.)?/,"").replace(/^([^/?#]+)([/?#].*)?$/,(x,h,r)=>h+(r&&r.length>1?(r.length>22?r.slice(0,20)+"…":r):""));
+    a.title=u;out.append(a);last=m.index+u.length;re.lastIndex=last;
+  }
+  if(last<txt.length)out.append(document.createTextNode(txt.slice(last)));
+  return out;
+}
+function splitQuoted(txt){
+  const lines=String(txt).split("\n");let cut=-1;
+  for(let i=0;i<lines.length;i++){
+    if(/^\s*(On .{5,120}wrote:|-{2,}\s*Original Message\s*-{2,}|-{3,}\s*Forwarded message)/i.test(lines[i])||(/^>/.test(lines[i])&&i>0&&lines.slice(i).filter(x=>x.trim()).every(x=>/^\s*>/.test(x)))){cut=i;break}
+  }
+  if(cut<=0)return {main:txt,quoted:""};
+  return {main:lines.slice(0,cut).join("\n").trimEnd(),quoted:lines.slice(cut).join("\n")};
+}
+function cleanHtml(html,cid,images){
+  const doc=new DOMParser().parseFromString(String(html),"text/html");
+  doc.querySelectorAll("script,iframe,frame,frameset,object,embed,applet,form,meta,link,base,noscript,audio,video,portal,dialog").forEach(n=>n.remove());
+  let blocked=0;
+  doc.querySelectorAll("*").forEach(n=>{
+    [...n.attributes].forEach(at=>{
+      const k=at.name.toLowerCase(),v=at.value;
+      if(k.startsWith("on")||k==="srcdoc"||k==="formaction"||k==="ping"){n.removeAttribute(at.name);return}
+      if((k==="href"||k==="src"||k==="background"||k==="action"||k==="xlink:href"||k==="poster")&&/^\s*(javascript|vbscript|data:text|data:application)/i.test(v))n.removeAttribute(at.name);
+    });
+    if(n.tagName==="A"){
+      const h=n.getAttribute("href")||"";
+      if(/^(https?:|mailto:|tel:)/i.test(h)){n.target="_blank";n.rel="noopener noreferrer"}else if(!/^#/.test(h))n.removeAttribute("href");
+    }
+    if(n.tagName==="IMG"){
+      const src=n.getAttribute("src")||"";
+      if(/^cid:/i.test(src)){const d=cid[src.slice(4).replace(/[<>]/g,"")];if(d)n.setAttribute("src",d);else n.removeAttribute("src")}
+      else if(/^https?:/i.test(src)){if(!images){n.setAttribute("data-src",src);n.removeAttribute("src");n.removeAttribute("srcset");blocked++}}
+      else if(!/^data:image\//i.test(src))n.removeAttribute("src");
+    }
+    const st=n.getAttribute&&n.getAttribute("style");
+    if(st){
+      if(/expression\s*\(|javascript:|behavior\s*:|-moz-binding/i.test(st))n.removeAttribute("style");
+      else if(!images&&/url\s*\(/i.test(st)&&!/url\s*\(\s*['"]?data:image/i.test(st)){n.setAttribute("style",st.replace(/url\s*\([^)]*\)/gi,"none"));blocked++}
+    }
+  });
+  const css=[...doc.querySelectorAll("style")].map(x=>{const t=x.textContent;x.remove();return images?t:t.replace(/url\s*\((?!\s*['"]?data:image)[^)]*\)/gi,"none")}).join("\n").replace(/@import[^;]*;?/gi,"");
+  return {body:doc.body?doc.body.innerHTML:"",css,blocked};
+}
+const B64U=s=>String(s).replace(/-/g,"+").replace(/_/g,"/");
+async function fetchFile(m,f){
+  if(f.data)return B64U(f.data);
+  const r=await mcp.callTool("Gmail","get_attachment",{messageId:m.id,attachmentId:f.id},{cache:false});
+  return B64U((r&&(r.data||(r.payload&&r.payload.data)))||"");
+}
+async function inlineImages(m){
+  const out={};const list=(m.files||[]).filter(f=>f.cid&&/^image\//.test(f.type)&&(!f.size||f.size<1500000)).slice(0,12);
+  await Promise.all(list.map(async f=>{try{const d=await fetchFile(m,f);if(d)out[f.cid]="data:"+f.type+";base64,"+d}catch(e){}}));
+  return out;
+}
+function mailFrame(m,box,cidMap,images){
+  const c=cleanHtml(m.html,cidMap,images);
+  const csp="default-src 'none'; img-src data:"+(images?" https: http:":"")+"; style-src 'unsafe-inline'; font-src data:";
+  const fr=document.createElement("iframe");fr.className="mailframe";fr.title="Email from "+(nameOf(m.sender)||m.sender||"");
+  fr.setAttribute("sandbox","allow-same-origin allow-popups allow-popups-to-escape-sandbox");fr.setAttribute("referrerpolicy","no-referrer");fr.loading="eager";
+  fr.srcdoc='<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="'+csp+'"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0}body{padding:14px;font:14px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#202124;background:#fff;overflow-wrap:anywhere;overflow-x:auto}img{max-width:100%;height:auto}a{color:#1a56c4}table{max-width:100%}pre{white-space:pre-wrap}</style><style>'+c.css.replace(/<\/style/gi,"")+'</style></head><body>'+c.body+'</body></html>';
+  const fit=()=>{try{const d=fr.contentDocument;if(d&&d.documentElement)fr.style.height=Math.min(Math.max(d.documentElement.scrollHeight,60),2400)+"px"}catch(e){}};
+  fr.onload=()=>{fit();setTimeout(fit,300);setTimeout(fit,1200);try{fr.contentDocument.querySelectorAll("img").forEach(i=>i.addEventListener("load",fit))}catch(e){}};
+  box.replaceChildren(fr);
+  return c.blocked;
+}
+function msgBody(m,d){
+  const box=el("div","mailbody");
+  const files=(m.files||[]).filter(f=>f.name&&!(f.cid&&/^image\//.test(f.type)&&m.html&&m.html.includes(f.cid)));
+  const draw=async()=>{
+    box.replaceChildren(el("p","status","Opening the email..."));
+    if(m.html&&m.html.trim()){
+      const cidMap=m._cid||(m._cid=await inlineImages(m));
+      const holder=el("div"),bar=el("div","mailbar");
+      const blocked=mailFrame(m,holder,cidMap,!!m._img);
+      box.replaceChildren(bar,holder);
+      if(blocked&&!m._img){
+        bar.append(document.createTextNode("Pictures are hidden to protect your privacy. "));
+        const b=el("button","btn small","Show pictures");b.type="button";b.onclick=()=>{m._img=true;draw()};bar.append(b);
+      }
+      const t=el("button","btn small ghost","Show as plain text");t.type="button";t.onclick=()=>{m._plain=true;draw()};
+      if(m.plaintextBody)bar.append(t);
+      if(m._plain)return plain();
+      return;
+    }
+    plain();
+  };
+  const plain=()=>{
+    const {main,quoted}=splitQuoted(String(m.plaintextBody||m.snippet||"(No text in this message)").trim());
+    const t=el("div","mailtext");t.append(linkify(main||"(No new text in this message)"));
+    box.replaceChildren(t);
+    if(m._plain){const bar=el("div","mailbar");const b=el("button","btn small ghost","Show the designed email");b.type="button";b.onclick=()=>{m._plain=false;draw()};bar.append(b);box.prepend(bar)}
+    if(quoted){
+      const q=el("details");q.append(el("summary","meta","Show earlier text in this message"));
+      const qt=el("div","mailtext");qt.style.opacity=".75";qt.append(linkify(quoted));q.append(qt);box.append(q);
+    }
+  };
+  let drawn=false;
+  const go=()=>{if(drawn)return;drawn=true;draw()};
+  d.addEventListener("toggle",()=>{if(d.open)go()});
+  if(d.open)go();
+  const wrap=el("div");wrap.append(box);
+  if(files.length||(m.attachments||[]).length){
+    const row=el("div","mailfiles");
+    (files.length?files:(m.attachments||[]).map(n=>({name:n}))).forEach(f=>{
+      const b=el("button","chip","📎 "+f.name+(f.size?" · "+(f.size>1048576?(f.size/1048576).toFixed(1)+" MB":Math.max(1,Math.round(f.size/1024))+" KB"):""));b.type="button";
+      if(!f.id&&!f.data){b.disabled=true;b.title="Open in Gmail to download"}
+      b.onclick=async()=>{
+        const old=b.textContent;b.textContent="Downloading...";
+        try{
+          const bin=atob(await fetchFile(m,f));const u8=Uint8Array.from(bin,c=>c.charCodeAt(0));
+          const url=URL.createObjectURL(new Blob([u8],{type:f.type||"application/octet-stream"}));
+          const a=document.createElement("a");a.href=url;a.download=f.name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000);b.textContent=old;
+        }catch(e){b.textContent="Couldn't download, open in Gmail"}
+      };
+      row.append(b);
+    });
+    wrap.append(row);
+  }
+  return wrap;
+}
 function renderThread(){
   const body=$("thrBody");body.replaceChildren();
   if(!thr.msgs.length){body.append(el("p","status err","Couldn't load this conversation. Try Open in Gmail."));return}
+  const all=el("div","mailbar");
+  if(thr.msgs.length>2){
+    const ex=el("button","btn small ghost","Open all "+thr.msgs.length+" messages");ex.type="button";
+    let open=false;ex.onclick=()=>{open=!open;body.querySelectorAll("details.msg").forEach(x=>{x.open=open});ex.textContent=open?"Collapse older messages":"Open all "+thr.msgs.length+" messages"};
+    all.append(ex);body.append(all);
+  }
   thr.msgs.forEach((m,ix)=>{
-    const d=el("details","msg");if(ix>=thr.msgs.length-2)d.open=true;
+    const d=el("details","msg");if(ix>=thr.msgs.length-1||thr.msgs.length<=2)d.open=true;
     const s=el("summary");s.append(document.createTextNode((nameOf(m.sender)||m.sender||"Unknown")+" "),el("span","meta","· "+(m.date?fmtWhen(m.date):"")+(addrOf(m.sender).toLowerCase()===myAddr()?" · you":"")));
+    if(ix<thr.msgs.length-1)s.append(el("span","meta"," · "+clip(String(m.snippet||"").replace(/\s+/g," "),70)));
     d.append(s);
     const to=(m.toRecipients||[]).map(x=>nameOf(x)||x).join(", ");
     if(to)d.append(el("div","meta","To: "+to+((m.ccRecipients||[]).length?" · Cc: "+m.ccRecipients.map(x=>nameOf(x)||x).join(", "):"")));
-    d.append(el("pre","",String(m.plaintextBody||m.snippet||"(No text in this message)").trim()));
-    if((m.attachments||[]).length)d.append(el("div","meta","Attachments: "+m.attachments.join(", ")+" (open in Gmail to download)"));
+    d.append(msgBody(m,d));
     body.append(d);
   });
 }
+function threadNav(){
+  const ids=[];const add=l=>(l||[]).forEach(x=>{if(x&&x.id&&!ids.includes(x.id))ids.push(x.id)});
+  const board=typeof allItems==="function"?allItems():[];
+  const inBoard=board.some(x=>x.id===thr.id);
+  add(inBoard?board:found);if(!ids.includes(thr.id)){add(found);add(board)}
+  const ix=ids.indexOf(thr.id);
+  $("thrPos").textContent=ix>=0&&ids.length>1?(ix+1)+" of "+ids.length:"";
+  $("thrPrev").disabled=ix<=0;$("thrNext").disabled=ix<0||ix>=ids.length-1;
+  $("thrPrev").hidden=$("thrNext").hidden=ids.length<2||thr.mode==="new";
+  return {ids,ix};
+}
+function thrStep(d){const {ids,ix}=threadNav(),n=ids[ix+d];if(n)openThread(n)}
+$("thrPrev").onclick=()=>thrStep(-1);$("thrNext").onclick=()=>thrStep(1);
+document.addEventListener("keydown",e=>{
+  if($("thr").hidden||thr.mode==="new")return;
+  const t=e.target&&e.target.tagName;if(t==="INPUT"||t==="TEXTAREA"||t==="SELECT"||(e.target&&e.target.isContentEditable))return;
+  if(e.key==="ArrowLeft"&&!$("thrPrev").disabled)thrStep(-1);
+  if(e.key==="ArrowRight"&&!$("thrNext").disabled)thrStep(1);
+});
 async function openThread(id,o){
   o=o||{};const t=tById(id)||{};
   thr={id,msgs:[],item:o.item||{id,st:"reply",title:t.subject||"",summary:t.snippet||""},armed:0,done:false,mode:"reply",files:[]};
@@ -640,7 +792,7 @@ async function openThread(id,o){
   ["thrSend","thrSave","thrText","thrTo","thrCc"].forEach(k=>$(k).disabled=false);
   $("thrSend").textContent="Send";
   try{const r=await mcp.callTool("Gmail","get_thread",{threadId:id,messageFormat:"PLAIN_TEXT"},{cache:false});thr.msgs=(r.payload&&r.payload.messages)||[]}catch(e){thr.msgs=[]}
-  renderThread();
+  renderThread();threadNav();
   if(thr.msgs.length&&(lastMsg().labelIds||[]).includes("UNREAD"))mcp.callTool("Gmail","mark_read",{threadId:id}).catch(()=>{});
   if(thr.msgs.length){
     $("thrReply").hidden=false;fillTargets();syncRuleBtns();
@@ -678,7 +830,7 @@ function forwardBlock(){
 function setMode(m){
   thr.mode=m;const fwd=m==="forward",nw=m==="new";
   ["thrSnooze","thrGmail","thrArchive","thrVip","thrMute"].forEach(k=>$(k).hidden=nw);
-  $("thrBody").hidden=nw;if(nw)$("thrAIbox").hidden=true;
+  $("thrBody").hidden=nw;if(nw){$("thrAIbox").hidden=true;$("thrPrev").hidden=$("thrNext").hidden=true;$("thrPos").textContent=""}
   $("thrSubjWrap").hidden=!nw;$("thrBrief").hidden=!nw;if(nw)$("thrCcWrap").hidden=false;
   $("thrFwd").hidden=nw;
   $("thrFwd").textContent=fwd?"Back to reply":"Forward";
@@ -704,7 +856,7 @@ async function thrAct(kind){
   const st=$("thrSt"),a=thrArgs();st.className="status";
   if(!$("thrText").value.trim()&&!thr.files.length){st.className="status err";st.textContent=thr.mode==="forward"?"Add a short note or an attachment first.":thr.mode==="new"?"Write the email first.":"Write your reply first.";return}
   if(thr.mode==="new"&&!a.subject){st.className="status err";st.textContent="Add a subject.";$("thrSubj").focus();return}
-  if(!a.to.length||a.to.some(x=>!/^\S+@\S+\.\S+$/.test(x))){st.className="status err";st.textContent="Check the To address.";return}
+  if(!a.to.length||a.to.concat(a.cc||[]).some(x=>!/^\S+@\S+\.\S+$/.test(addrOf(x)))){st.className="status err";st.textContent="Check the To and Cc addresses.";return}
   const btn=$(kind==="send"?"thrSend":"thrSave");
   if(kind==="send"&&!thr.armed){thr.armed=1;btn.textContent="Tap again to send to "+a.to[0]+(a.to.length>1?" +"+(a.to.length-1):"");setTimeout(()=>{if(thr.armed&&!thr.done){thr.armed=0;btn.textContent="Send"}},6000);return}
   thr.armed=0;btn.disabled=true;const old=btn.textContent;btn.textContent=kind==="send"?"Sending...":"Saving...";
@@ -1208,7 +1360,7 @@ async function weeklyReview(){
 $("weekGo").onclick=weeklyReview;
 
 /* ---------- system check: test every connection, read-only ---------- */
-const SCOPE_LABEL={calEvents:"create and move calendar events",gmailRead:"read your email",gmailDraft:"save drafts and send replies",gmailModify:"archive and mark as read",cal:"read your calendar",drive:"list your Drive files"};
+const SCOPE_LABEL={contacts:"see your contacts",otherContacts:"see people you have emailed",calEvents:"create and move calendar events",gmailRead:"read your email",gmailDraft:"save drafts and send replies",gmailModify:"archive and mark as read",cal:"read your calendar",drive:"list your Drive files"};
 let lastReport="";
 async function testEverything(){
   const out=$("testOut"),sum=$("testSum"),btn=$("testGo");
@@ -1238,6 +1390,13 @@ async function testEverything(){
     // 5 calendar
     try{const d=new Date();d.setHours(0,0,0,0);const e2=new Date(d);e2.setDate(e2.getDate()+1);const r=await mcp.callTool("Google Calendar","list_events",{startTime:ymd(d)+"T00:00:00",endTime:ymd(e2)+"T00:00:00",pageSize:5},{cache:false});add("Google Calendar","ok","Reading works ("+((r.payload&&r.payload.events)||[]).length+" meetings today).")}
     catch(e){add("Google Calendar","bad","Couldn't read the calendar ("+msg(e)+").")}
+    // contacts
+    try{await loadContacts(true);
+      if(contactsErr==="people_api")add("Google Contacts","warn","The People API is off in your Google Cloud project, so suggestions only use people from your recent mail. Turn it on, then test again.",["Turn it on",()=>window.open("https://console.cloud.google.com/apis/library/people.googleapis.com","_blank","noopener")]);
+      else if(contactsErr==="consent")add("Google Contacts","warn","Not allowed yet, so suggestions only use your recent mail.",["Allow it",()=>connectGoogle(true)]);
+      else if(contactsErr)add("Google Contacts","warn","Couldn't read contacts ("+contactsErr+"). Suggestions use your recent mail.");
+      else add("Google Contacts","ok",contacts.length+" contacts and people you've emailed are available as suggestions.");
+    }catch(e){add("Google Contacts","warn","Couldn't read contacts ("+msg(e)+").")}
     // 6 drive
     try{const r=await mcp.callTool("Google Drive","list_recent_files",{pageSize:1},{cache:false});add("Google Drive","ok","Reading works"+((r.payload&&r.payload.files||[])[0]?" (latest: "+clip(r.payload.files[0].name||r.payload.files[0].title||"file",40)+").":"."))}
     catch(e){add("Google Drive","bad","Couldn't read Drive ("+msg(e)+").")}
@@ -1409,16 +1568,11 @@ $("wrapBtn").onclick=()=>{if(!G.connected()){showWelcome();return}showReport("wr
 $("repClose").onclick=()=>{$("report").hidden=true};
 
 /* ---------- write a new email from the page ---------- */
-function fillAddrBook(){
-  const set=new Set();
-  threads.concat(found).forEach(t=>{[t.from].concat(t.lastTo||[]).forEach(x=>{const a=addrOf(x);if(a&&a.toLowerCase()!==myAddr())set.add(a)})});
-  const dl=$("thrAddrs");dl.replaceChildren();[...set].slice(0,60).forEach(a=>dl.append(new Option(a)));
-}
 function openCompose(o){
   o=o||{};
   thr={id:"",msgs:[],item:{id:"",st:"work",title:"New email",summary:""},armed:0,done:false,mode:"new",files:[]};
   $("thr").hidden=false;$("thrTitle").textContent="New email";
-  setMode("new");renderTplSelect();renderThrPick();fillAddrBook();
+  setMode("new");renderTplSelect();renderThrPick();loadContacts();
   $("thrReply").hidden=false;$("thrFiles").value="";$("thrFileList").textContent="";
   ["thrSend","thrSave","thrText","thrTo","thrCc","thrSubj"].forEach(k=>$(k).disabled=false);
   $("thrSend").textContent="Send";$("thrSt").textContent="";$("thrSt").className="status";$("thrRemind").value="3";
@@ -1440,3 +1594,49 @@ async function composeDraft(){
 }
 $("newMailBtn").onclick=()=>{if(!G.connected()){showWelcome();return}openCompose()};
 $("newMailBtn2").onclick=()=>{if(!G.connected()){showWelcome();return}openCompose()};
+
+/* ---------- people suggestions: Google Contacts, people you have emailed, and your recent mail ---------- */
+let contacts=[],contactsAt=0,contactsErr="";
+function loadContactsCache(){try{const c=JSON.parse(localStorage.getItem(LS+"-contacts")||"null");if(c&&Array.isArray(c.people)){contacts=c.people;contactsAt=c.at||0}}catch(e){}}
+async function loadContacts(force){
+  if(!G.connected())return;
+  if(!force&&contacts.length&&Date.now()-contactsAt<6*3600e3)return;
+  try{
+    const r=await mcp.callTool("Google Contacts","list_contacts",{});
+    contacts=(r.payload&&r.payload.people)||[];contactsAt=Date.now();contactsErr="";
+    try{localStorage.setItem(LS+"-contacts",JSON.stringify({at:contactsAt,people:contacts.slice(0,3000)}))}catch(e){}
+  }catch(e){contactsErr=e&&e.code==="api_disabled"?"people_api":e&&e.code==="consent_required"?"consent":(clip((e&&e.message)||"unknown reason",90)||"error")}
+}
+function contactPool(){
+  const m=new Map();
+  const add=(name,addr,w)=>{addr=String(addr||"").trim().toLowerCase();if(!/^\S+@\S+\.\S+$/.test(addr)||addr===myAddr())return;const e=m.get(addr)||{email:addr,name:"",w:0};if(name&&!e.name)e.name=String(name).trim();e.w+=w;m.set(addr,e)};
+  contacts.forEach(c=>add(c.name,c.email,1));
+  threads.concat(found).forEach(t=>{[t.from].concat(t.lastTo||[]).forEach(x=>{const named=/</.test(String(x||""));add(named?nameOf(x):"",addrOf(x),3)})});
+  return [...m.values()];
+}
+const safeName=n=>String(n||"").replace(/["<>,;]/g,"").trim();
+function attachAutocomplete(input,plain){
+  const w=el("div","acwrap");input.parentNode.insertBefore(w,input);const box=el("div","acbox");box.hidden=true;w.append(input,box);
+  let hits=[],sel=-1;
+  const token=()=>{const p=input.value.split(/[,;]/);return {parts:p,q:p[p.length-1].trim().toLowerCase()}};
+  const close=()=>{box.hidden=true;sel=-1};
+  const pickIt=h=>{const {parts}=token();const val=plain||!h.name?h.email:safeName(h.name)+" <"+h.email+">";parts[parts.length-1]=" "+val;input.value=parts.map(x=>x.trim()).filter(Boolean).join(", ")+", ";close();input.focus();input.dispatchEvent(new Event("input",{bubbles:true}));close()};
+  const draw=()=>{
+    const {parts,q}=token();const used=new Set(parts.slice(0,-1).map(x=>addrOf(x).toLowerCase()));
+    hits=contactPool().filter(c=>!used.has(c.email)&&(!q||c.email.includes(q)||c.name.toLowerCase().includes(q)))
+      .sort((a,b)=>{const sa=(a.email.startsWith(q)||a.name.toLowerCase().startsWith(q))?1:0,sb=(b.email.startsWith(q)||b.name.toLowerCase().startsWith(q))?1:0;return sb-sa||b.w-a.w}).slice(0,8);
+    box.replaceChildren();sel=hits.length?0:-1;
+    hits.forEach((h,i)=>{const b=el("button",i===0?"on":"");b.type="button";b.append(el("b","",h.name||h.email),h.name?el("span","",h.email):document.createComment(""));b.onmousedown=e=>{e.preventDefault();pickIt(h)};box.append(b)});
+    box.hidden=!hits.length;
+  };
+  const mark=()=>[...box.children].forEach((b,i)=>b.classList&&b.classList.toggle("on",i===sel));
+  input.addEventListener("input",draw);input.addEventListener("focus",()=>{loadContacts();draw()});input.addEventListener("blur",()=>setTimeout(close,120));
+  input.addEventListener("keydown",e=>{
+    if(box.hidden)return;
+    if(e.key==="ArrowDown"){e.preventDefault();sel=Math.min(sel+1,hits.length-1);mark()}
+    else if(e.key==="ArrowUp"){e.preventDefault();sel=Math.max(sel-1,0);mark()}
+    else if((e.key==="Enter"||e.key==="Tab")&&sel>=0){e.preventDefault();pickIt(hits[sel])}
+    else if(e.key==="Escape"){e.stopPropagation();close()}
+  });
+}
+attachAutocomplete($("thrTo"));attachAutocomplete($("thrCc"));attachAutocomplete($("evtGuests"),true);

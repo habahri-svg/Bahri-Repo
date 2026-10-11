@@ -22,15 +22,16 @@ This work sits on the branch `claude/gracious-mayer-ywmspl`. Merge it into `main
 Without this the page can't log anyone in. It shows "One-time setup needed" until you finish it.
 
 1. Go to https://console.cloud.google.com and create a project (any name).
-2. **APIs and Services, Library**: enable **Gmail API**, **Google Calendar API** and **Google Drive API**.
+2. **APIs and Services, Library**: enable **Gmail API**, **Google Calendar API**, **Google Drive API** and **People API** (People API gives the address suggestions when you write an email).
 3. **APIs and Services, OAuth consent screen**: choose **External**, fill in the app name (for example "WYZ Execution Page") and your email.
-4. On the **Scopes** step add these four:
+4. On the **Scopes** step add these:
    - `.../auth/gmail.readonly`
    - `.../auth/gmail.compose`
    - `.../auth/gmail.modify` (archive and mark as read)
    - `.../auth/calendar.readonly`
    - `.../auth/calendar.events` (create and move meetings)
    - `.../auth/drive.metadata.readonly`
+   - `.../auth/contacts.readonly` and `.../auth/contacts.other.readonly` (address suggestions from your contacts and people you've emailed)
 5. On the **Audience** page tap **Publish app**. This lets anyone with a Google account sign in, with no test-user list and no 7-day expiry. Until Google verifies the app (see "Going beyond 100 people" below) it shows an "unverified app" warning (Advanced, Go to app) and is capped at 100 people in total.
 6. **APIs and Services, Credentials, Create credentials, OAuth client ID**:
    - Application type: **Web application**
