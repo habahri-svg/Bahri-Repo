@@ -456,7 +456,7 @@ async function afterConnect(){
   if(!loopOn){loopOn=true;
     setInterval(()=>{if(!document.hidden)refreshAll(false)},600000);
     setInterval(()=>{if(document.hidden&&state.alertsOn)refreshAll(false)},300000);
-    document.addEventListener("visibilitychange",()=>{if(!document.hidden&&board&&Date.now()-(board.at||0)>300000)refreshAll(false)})}
+    document.addEventListener("visibilitychange",()=>{if(!document.hidden&&board&&Date.now()-(board.at||0)>600000)refreshAll(false)})}
 }
 async function connectGoogle(consent){
   const b=$("wBtn"),old="Continue with Google";
