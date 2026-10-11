@@ -9,5 +9,8 @@ window.WYZ_CONFIG = {
   DASHBOARD_URL: "",
   /* true once https://99946693.vercel.app/ is listed under "Authorized redirect URIs" on the Google Client ID.
      The installed iPhone app then signs in with a full-page Google screen, which is more reliable there than a popup. */
-  IPHONE_APP_REDIRECT: false
+  IPHONE_APP_REDIRECT: false,
+  /* Microsoft sign-in (Outlook, Hotmail, Microsoft 365). Paste the Application (client) ID from the Microsoft app
+     registration (EXECUTION-PAGE.md, Microsoft). Empty = the Continue with Microsoft button stays hidden. */
+  MS_CLIENT_ID: ""
 };

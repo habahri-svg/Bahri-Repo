@@ -95,15 +95,16 @@ const CHAT={chatgpt:{name:"ChatGPT",url:"https://chatgpt.com/?q={prompt}",home:"
 const chatAI=()=>CHAT[state.chatAI]?state.chatAI:"";
 function useChat(id){state.chatAI=id;state.skipAi=0;persist();window.open(CHAT[id].home,"_blank","noopener");renderSetup();try{setAIButton()}catch(e){}}
 function askInChat(text){const c=CHAT[chatAI()];if(!c)return "";return openOutside({url:c.url,name:c.name},text)}
-async function addAccount(){
-  try{const em=await G.addAccount();toast("Added "+em+". Its email, meetings and files now show here too.");refreshAll(true)}
+async function addAccount(type){
+  if(type==="ms"&&!G.msConfigured()){toast("Microsoft accounts aren't switched on yet. Ask the person who invited you.");return}
+  try{const em=await G.addAccount(type);toast("Added "+em+". Its email, meetings and files now show here too.");refreshAll(true)}
   catch(e){toast(e&&e.code==="same_account"?e.message:e&&e.code==="popup_closed"?"The Google window was closed. Tap Add account to try again.":"Couldn't add it ("+clip((e&&e.message)||"unknown reason",80)+").")}
   renderSetup();
 }
 async function reconnectAccount(n){try{await G.reconnectAccount(n);refreshAll(true)}catch(e){toast("Couldn't reconnect. Tap again.")}renderSetup()}
 window.addEventListener("wyz-accounts",()=>{try{renderSetup();fillFrom()}catch(e){}});
 function toast(t){let n=$("toastMsg");if(!n){n=el("div","updbar");n.id="toastMsg";n.setAttribute("role","status");document.body.append(n)}n.textContent=t;n.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>{n.hidden=true},5000)}
-const APPS=[["WhatsApp Business","https://web.whatsapp.com/"],["Hostaway","https://dashboard.hostaway.com/"],["Wafeq","https://app.wafeq.com/"],["PriceLabs","https://app.pricelabs.co/"],["Outlook","https://outlook.office.com/mail/"],["Slack","https://app.slack.com/"],["Notion","https://www.notion.so/"],["Canva","https://www.canva.com/"],["LinkedIn","https://www.linkedin.com/"],["Google Sheets","https://docs.google.com/spreadsheets/"]];
+const APPS=[["WhatsApp Business","https://web.whatsapp.com/"],["Hostaway","https://dashboard.hostaway.com/"],["Wafeq","https://app.wafeq.com/"],["PriceLabs","https://app.pricelabs.co/"],["Outlook","https://outlook.office.com/mail/"],["Slack","https://app.slack.com/"],["Notion","https://www.notion.so/"],["Canva","https://www.canva.com/"],["LinkedIn","https://www.linkedin.com/"],["Google Sheets","https://docs.google.com/spreadsheets/"],["Microsoft Teams","https://teams.microsoft.com/"],["Microsoft To Do","https://to-do.office.com/"],["Zoom","https://app.zoom.us/"],["Yahoo Mail","https://mail.yahoo.com/"],["iCloud Mail","https://www.icloud.com/mail"],["Proton Mail","https://mail.proton.me/"]];
 const dashLink=()=>(window.WYZ_CONFIG&&window.WYZ_CONFIG.DASHBOARD_LINK)||state.dashLink||"";
 function addApp(n,u){state.links=state.links||[];if(!state.links.some(l=>l.u===u))state.links.push({n,u});persist();try{renderLinks()}catch(e){}window.open(u,"_blank","noopener");renderSetup()}
 function setDashLink(){const v=prompt("Paste the WYZ Rent dashboard address (it starts with https://)",state.dashLink||"");if(v===null)return;const u=v.trim();if(!/^https:\/\/\S+$/.test(u)){toast("That doesn't look like a web address.");return}state.dashLink=u;persist();addApp("WYZ Rent dashboard",u)}
@@ -157,16 +158,16 @@ function stepDefs(){
     return Object.assign(base,{desc:missingTxt,btn:missingBtn,btn2:sk,done:!!state[flag]});
   };
   return [
-    {name:"Signed in with Google",done:!!uid,desc:uid?"You're signed in as "+email+". Your board is private to you.":"Tap Continue with Google at the top of the page.",btn:uid?null:["Continue with Google",()=>connectGoogle()]},
-    Object.assign({name:"Gmail"},mailStep("Gmail","Reads your inbox and sent mail, and saves reply drafts you approve.")),
-    Object.assign({name:"Google Calendar"},mailStep("Google Calendar","Shows your meetings for today and tomorrow.")),
+    {name:"Signed in",done:!!uid,desc:uid?"You're signed in as "+email+(G.mainType()==="ms"?" (Microsoft)":"")+". Your board is private to you.":"Tap Continue with Google or Continue with Microsoft at the top of the page.",btn:uid?null:["Continue with Google",()=>connectGoogle()]},
+    Object.assign({name:G.mainType()==="ms"?"Outlook email":"Gmail"},mailStep("Gmail","Reads your inbox and sent mail, and saves reply drafts you approve.")),
+    Object.assign({name:G.mainType()==="ms"?"Outlook calendar":"Google Calendar"},mailStep("Google Calendar","Shows your meetings for today and tomorrow.")),
     (()=>{const ex=G.accounts().slice(1),tap=ex.find(x=>x.needsTap);
-      if(!ex.length)return {name:"Your other email account (optional)",done:!!state.skipAcct,desc:"Add your second Google account, for example your wyzrent.com work email or your personal Gmail. Both inboxes, calendars and files show together, and every reply goes out from the right account.",btn:uid?["Add account",addAccount]:null,btn2:state.skipAcct?null:["Later",()=>{state.skipAcct=1;persist();renderSetup()}]};
-      return {name:"Your other email account"+(ex.length>1?"s":""),done:!tap,desc:"Connected: "+ex.map(x=>x.email+(x.needsTap?" (needs a tap)":"")).join(", ")+"."+(tap?" Google's sign-in for this account ran out. Tap Reconnect.":""),btn:tap?["Reconnect "+tap.email,()=>reconnectAccount(tap.n)]:["Add another",addAccount],btn2:["Remove "+ex[ex.length-1].email,()=>{if(confirm("Remove "+ex[ex.length-1].email+" from this page? Nothing is deleted in the account itself.")){G.removeAccount(ex[ex.length-1].n);refreshAll(true)}}]};
+      if(!ex.length)return {name:"Your other email account (optional)",done:!!state.skipAcct,desc:"Add your other email account: Gmail or Google work email, or Outlook, Hotmail or Microsoft 365. All inboxes, calendars and files show together, and every reply goes out from the right account.",btn:uid?["Add Google account",()=>addAccount("google")]:null,more:uid?[["Add Microsoft account",()=>addAccount("ms")]]:null,btn2:state.skipAcct?null:["Later",()=>{state.skipAcct=1;persist();renderSetup()}]};
+      return {name:"Your other email account"+(ex.length>1?"s":""),done:!tap,desc:"Connected: "+ex.map(x=>x.email+(x.type==="ms"?" (Microsoft)":"")+(x.needsTap?" (needs a tap)":"")).join(", ")+"."+(tap?" The sign-in for this account ran out. Tap Reconnect.":""),btn:tap?["Reconnect "+tap.email,()=>reconnectAccount(tap.n)]:["Add Google account",()=>addAccount("google")],more:tap?null:[["Add Microsoft account",()=>addAccount("ms")]],btn2:["Remove "+ex[ex.length-1].email,()=>{if(confirm("Remove "+ex[ex.length-1].email+" from this page? Nothing is deleted in the account itself.")){G.removeAccount(ex[ex.length-1].n);refreshAll(true)}}]};
     })(),
     {name:"AI assistant: Claude or ChatGPT",done:!!sample||!!chatAI()||!!state.skipAi,
       more:sample?null:[["Use my ChatGPT account (no key)",()=>useChat("chatgpt")],["Use my Claude account (no key)",()=>useChat("claude")]],
-      desc:sample?(Connectors.ai.label()+(Connectors.ai.mode()==="shared"?" is on automatically with your Google sign-in.":" is on with your own key (stored on this device only).")+" Change it under Connections, Personalise."):chatAI()?"Using your own "+CHAT[chatAI()].name+" account, no key needed. Write it for me and Ask open "+CHAT[chatAI()].name+" with the request filled in, then you paste the answer back. A key (below) makes it fully automatic.":"Without an AI, your inbox is sorted by simple rules. Connect Claude or ChatGPT for smarter sorting, drafts and Instruct AI. Each connects with an API key and stays on this device.",
+      desc:sample?(Connectors.ai.label()+(Connectors.ai.mode()==="shared"?" is on automatically with your Google sign-in.":" is on with your own key (stored on this device only).")+" Change it under Settings, Personalise."):chatAI()?"Using your own "+CHAT[chatAI()].name+" account, no key needed. Write it for me and Ask open "+CHAT[chatAI()].name+" with the request filled in, then you paste the answer back. A key (below) makes it fully automatic.":"Without an AI, your inbox is sorted by simple rules. Connect Claude or ChatGPT for smarter sorting, drafts and Instruct AI. Each connects with an API key and stays on this device.",
       btn:["Add Claude key",()=>askKey("claude")],btn2:sample||state.skipAi?["Add ChatGPT key",()=>askKey("chatgpt")]:null},
     Object.assign({name:"Your Claude research"},imp("claude","Claude",CLAUDE_EXPORT,"f-claude","1. Tap Open Claude export page. 2. Under Your data, tap Export data and confirm. 3. Claude emails you a download link (usually within minutes). 4. Download the .zip from that email, no need to unzip it. 5. Come back here, tap Import file and choose it.")),
     Object.assign({name:"Your ChatGPT research"},imp("chatgpt","ChatGPT",GPT_EXPORT,"f-chatgpt","1. Tap Open ChatGPT export page and sign in if asked. 2. In Data controls, tap Export data, then Confirm export. 3. OpenAI emails you a download link. 4. Download the .zip from that email, no need to unzip it. 5. Come back here, tap Import file and choose it. Repeat weekly to keep it current.")),
@@ -179,7 +180,7 @@ function stepDefs(){
     {name:"Your to-do list from iPhone (optional)",done:!!state.listImported||!!state.skipList,desc:state.listImported?"Imported "+fmtWhen(state.listImported)+". Import again any time to add new items.":"Bring in your list from iPhone Reminders, Notes or anywhere else. Copy it, paste it here, and every line becomes a task.",btn:["Import a list",importList],btn2:state.listImported||state.skipList?null:["Later",()=>{state.skipList=1;persist();renderSetup()}]},
     {name:"WYZ Rent dashboard",done:!!dashLink()&&!!(state.links||[]).some(l=>l.u===dashLink())||!!state.skipDashLink,desc:dashLink()?"Opens the company dashboard in a new tab. Sign in there once and it stays on your Quick links.":"Add the company dashboard to your page. Ask Abbas or Sam for the address if you don't have it.",btn:dashLink()?["Open and sign in",()=>addApp("WYZ Rent dashboard",dashLink())]:["Add dashboard link",setDashLink],btn2:state.skipDashLink?null:["Later",()=>{state.skipDashLink=1;persist();renderSetup()}]},
     {name:"Your other apps (optional)",done:(state.links||[]).length>0||!!state.skipApps,desc:"Put the apps you use every day one tap away. Each one opens so you can sign in, then stays on your Quick links. Add any other app under Quick links.",
-      more:APPS.filter(([n,u])=>!(state.links||[]).some(l=>l.u===u)).slice(0,8).map(([n,u])=>["+ "+n,()=>addApp(n,u)]),btn2:state.skipApps||(state.links||[]).length?null:["Later",()=>{state.skipApps=1;persist();renderSetup()}]},
+      more:APPS.filter(([n,u])=>!(state.links||[]).some(l=>l.u===u)).slice(0,16).map(([n,u])=>["+ "+n,()=>addApp(n,u)]),btn2:state.skipApps||(state.links||[]).length?null:["Later",()=>{state.skipApps=1;persist();renderSetup()}]},
     {name:"Installed on your phone or computer",done:!!state.installed,desc:state.installed?"Done.":"Pin the page so it opens like an app. Steps are in the Install tab.",btn:state.installed?null:["Show me how",()=>show("t-inst")],btn2:state.installed?null:["I've done it",()=>{state.installed=1;persist();renderSetup()}]}
   ];
 }
@@ -233,11 +234,11 @@ function onbRender(){
   if(k==="accounts"){
     $("onbTitle").textContent="Add your other email account";
     const ex=G.accounts().slice(1).filter(x=>x.email);
-    p("Welcome, "+firstName()+". You're signed in as "+(email||"your Google account")+". Run all your email from here: add your other Google account too, for example your wyzrent.com work email or your personal Gmail.");
+    p("Welcome, "+firstName()+". You're signed in as "+(email||"your account")+". Run all your email from here: add your other account too, Gmail or Google work email, or Outlook, Hotmail or Microsoft 365.");
     p("Both inboxes, calendars and files show together. Every reply goes out from the account the email came to, and new emails let you pick which one to send from.");
     if(ex.length)p("✓ Added: "+ex.map(x=>x.email).join(", "),"status");
-    acts.append(onbBtn(ex.length?"Add another":"Add account",async function(){this.disabled=true;await addAccount();onbRender()},"solid"),onbBtn(ex.length?"Next":"Later",()=>{if(!ex.length){state.skipAcct=1;persist()}onbGo(onbI+1)},ex.length?"":"ghost"));
-    p("Later is fine. It stays under Connections.","status");
+    acts.append(onbBtn("Add Google account",async function(){this.disabled=true;await addAccount("google");onbRender()},"solid"),onbBtn("Add Microsoft account",async function(){this.disabled=true;await addAccount("ms");onbRender()},"solid"),onbBtn(ex.length?"Next":"Later",()=>{if(!ex.length){state.skipAcct=1;persist()}onbGo(onbI+1)},ex.length?"":"ghost"));
+    p("Later is fine. It stays under Settings.","status");
   }else if(k==="apps"){
     $("onbTitle").textContent="Your dashboard and everyday apps";
     p("Put the WYZ Rent dashboard and the apps you use every day one tap away. Each one opens so you can sign in, then stays on your Quick links. Choose any, or tap Later.");
@@ -315,7 +316,7 @@ function onbRender(){
     const n=((research.chatgpt&&research.chatgpt.convs)||[]).length+((research.claude&&research.claude.convs)||[]).length;
     line(n>0,n?"Research: "+n+" conversations imported":"Research: not imported yet");
     if(DASH)line(!!state.shareDash,state.shareDash?"Company dashboard: sharing a daily summary":"Company dashboard: not sharing");
-    p("You can connect anything left from the Connections tab at any time.");
+    p("You can connect anything left from the Settings tab at any time.");
     acts.append(onbBtn("Open my page",()=>onbClose(true),"solid"));
   }
   const f=body.querySelector("input")||acts.querySelector("button");if(f)setTimeout(()=>f.focus(),30);
@@ -358,7 +359,7 @@ const niceErr=e=>{const c=e&&e.code;
   return (e&&e.message)||"Couldn't connect to Google. Try again."};
 const lastName=()=>{try{return localStorage.getItem("wyz-last-name")||""}catch(e){return ""}};
 function showWelcome(){
-  const w=$("welcome");w.hidden=false;
+  const w=$("welcome");w.hidden=false;$("wMs").hidden=!G.msConfigured();
   if(typeof DEV!=="undefined"&&DEV.inApp){$("wMsg").textContent="You opened this inside another app, and Google doesn't allow sign-in there. Tap the menu (three dots) and choose Open in "+(DEV.ios?"Safari":"Chrome")+", or copy the link into "+(DEV.ios?"Safari":"Chrome")+"."}
   if(!G.configured()){$("wTitle").textContent="One-time setup needed";$("wText").textContent="Google needs to know this site before anyone can sign in. Follow the steps below once, paste the Client ID, and the Continue with Google button turns on.";$("wBtn").disabled=true;$("wSetup").hidden=false;$("wOrigin").textContent=location.origin;return}
   $("wBtn").disabled=false;
@@ -457,6 +458,13 @@ function aiOptions(){
   A.links().forEach(l=>out.push({id:"link:"+l.id,name:l.name,kind:"link",ready:false,url:l.url,label:l.name+" (opens in a new tab)"}));
   return out;
 }
+/* Everything stays on this page. Another site opens only when the person taps a button that says so. */
+function outsideOffer(opt,text){
+  const box=el("div","");
+  box.append(el("p","status",opt.kind==="link"?opt.name+" opens on its own site.":"No AI is connected on this page yet, so it can't answer here. Connect one in Settings (an API key, or the company AI) and answers appear right here."));
+  const b=el("button","btn small","Open in "+opt.name+" instead");b.type="button";b.onclick=()=>{box.replaceChildren(el("p","status",openOutside(opt,text)))};box.append(b);
+  return box;
+}
 function openOutside(opt,text){
   const t=String(text);
   if(opt.url.includes("{prompt}")){window.open(opt.url.replace("{prompt}",encodeURIComponent(t.slice(0,1800))),"_blank","noopener");return "Opened "+opt.name+" in a new tab with your question filled in."}
@@ -471,9 +479,9 @@ function renderThrPick(){
   sel.hidden=false;const a=Connectors.ai.active();if(a)sel.value=a;else sel.value="free";
   setAIButton();
 }
-function setAIButton(){$("thrAI").textContent=!sample&&chatAI()?"Write it in "+CHAT[chatAI()].name:thr.mode==="new"?(sample?"Write it for me":"Use my note"):"Suggest an answer"}
+function setAIButton(){$("thrAI").textContent=!sample&&chatAI()?"Write it with "+CHAT[chatAI()].name:thr.mode==="new"?(sample?"Write it for me":"Use my note"):"Suggest an answer"}
 $("thrAIpick").onchange=()=>{const v=$("thrAIpick").value;if(v==="free"){showFree();return}Connectors.ai.setChosen(v);renderAI()};
-/* Connections, Personalise */
+/* Settings, Personalise */
 const baseTitle=()=>state.pageName&&state.pageName.trim()?state.pageName.trim():"WYZ Rent Execution Page";
 function applyPageName(){
   const n=state.pageName&&state.pageName.trim();
@@ -502,13 +510,14 @@ function applyLook(l){
 }
 function applyOwnColours(l){
   let st=document.getElementById("ownCol");if(!st){st=document.createElement("style");st.id="ownCol";document.head.append(st)}
-  st.textContent=(l.c1||l.c2)&&window.ownColCss?window.ownColCss(l.c1,l.c2):"";
-  if(l.c1)$("colMain").value=l.c1;if(l.c2)$("colAccent").value=l.c2;
+  const any=l.c1||l.c2||l.cH||l.cB||l.cP||l.cT;
+  st.textContent=any&&window.ownColCss?window.ownColCss(l):"";
+  COLS.forEach(([id,k,def])=>{$(id).value=l[k]||(k==="cH"&&l.c1)||def});
   const mt=document.querySelector('meta[name="theme-color"]');if(mt&&l.c1)mt.content=l.c1;
 }
-$("colMain").oninput=()=>saveLook({c1:$("colMain").value});
-$("colAccent").oninput=()=>saveLook({c2:$("colAccent").value});
-$("colReset").onclick=()=>{saveLook({c1:"",c2:"",p:"ocean"});$("colMain").value="#104b70";$("colAccent").value="#b8923c"};
+const COLS=[["colHeader","cH","#104b70"],["colMain","c1","#104b70"],["colAccent","c2","#b8923c"],["colBg","cB","#f4f8fc"],["colPanel","cP","#ffffff"],["colText","cT","#0e2238"]];
+COLS.forEach(([id,k])=>{$(id).oninput=()=>saveLook({[k]:$(id).value})});
+$("colReset").onclick=()=>{saveLook({c1:"",c2:"",cH:"",cB:"",cP:"",cT:"",p:"ocean"})};
 function saveLook(patch){const l=Object.assign({},lookNow(),patch);try{localStorage.setItem("wyz-look",JSON.stringify(l))}catch(e){}applyLook(l)}
 document.querySelectorAll("#swatches .swatch").forEach(b=>b.onclick=()=>saveLook({p:b.dataset.pal}));
 $("lookMode").onchange=()=>saveLook({m:$("lookMode").value});
@@ -539,6 +548,12 @@ $("aiClaudeRm").onclick=()=>removeAiKey("claude");$("aiGptRm").onclick=()=>remov
 $("linkAdd").onclick=()=>{const n=$("linkName").value.trim(),u=$("linkUrl").value.trim();if(!n||!/^https:\/\/\S+\.\S+/.test(u)){$("aiMsg").className="status err";$("aiMsg").textContent="Give it a name and a full web address starting with https://";return}Connectors.ai.addLink(n,u);$("linkName").value="";$("linkUrl").value="";$("aiMsg").className="status";$("aiMsg").textContent=n+" added. It now shows in the Instruct AI list.";renderAI()};
 const gateUi=()=>{};
 $("wBtn").onclick=()=>connectGoogle();
+$("wMs").onclick=async()=>{
+  const b=$("wMs");if(!G.msConfigured()){$("wMsg").textContent="Microsoft sign-in isn't switched on yet. Ask the person who invited you, or use Google for now.";return}
+  b.disabled=true;b.textContent="Opening Microsoft...";$("wMsg").textContent="";
+  try{await G.connectMicrosoft();await afterConnect()}catch(e){$("wMsg").textContent=e&&e.code==="popup_closed"?"The Microsoft window was closed. Tap Continue with Microsoft to try again.":e&&e.code==="popup_failed_to_open"?"Your browser blocked the Microsoft window. Allow pop-ups for this site, then try again.":"Couldn't sign in with Microsoft ("+clip((e&&e.message)||"unknown reason",100)+")."}
+  b.disabled=false;b.textContent="Continue with Microsoft";
+};
 const copyBtn=(id,text,label)=>{$(id).onclick=()=>navigator.clipboard.writeText(text()).then(()=>{$(id).textContent="Copied";setTimeout(()=>$(id).textContent=label,1500)}).catch(()=>{$(id).textContent="Copy by hand"})};
 copyBtn("wFamCopy",()=>$("wFamLink").value,"Copy link");
 copyBtn("wCopyOrigin",()=>location.origin,"Copy address");
@@ -729,16 +744,20 @@ function buildInstruct(i,box,getText,useReply){
     (Array.isArray(r.tasks)?r.tasks:[]).slice(0,3).forEach(t=>{if(!t||!t.title)return;const b=el("button","btn small","Add task: "+clip(t.title,40)+(t.due?" ("+t.due+")":""));b.type="button";b.onclick=()=>{addTask(String(t.title),"Email from "+nameOf((tById(i.id)||{}).from),/^\d{4}-\d{2}-\d{2}$/.test(t.due||"")?t.due:"");b.textContent="Task added";b.disabled=true};acts.append(b)});
     const n=Math.round(+r.snooze_days||0);
     if(n>0&&n<=60){const b=el("button","btn small","Snooze "+n+" day"+(n>1?"s":""));b.type="button";b.onclick=()=>snoozeUntil(i.id,n);acts.append(b)}
-    if(r.event&&r.event.title&&r.event.start){const l=el("a","btn small","Add to calendar: "+clip(r.event.title,30));l.href=gcalLink(r.event);l.target="_blank";l.rel="noopener";acts.append(l)}
+    if(r.event&&r.event.title&&r.event.start){const l=el("button","btn small","Add to calendar: "+clip(r.event.title,30));l.type="button";l.onclick=async()=>{l.disabled=true;l.textContent="Adding...";
+      const fix=v=>String(v||"").slice(0,16),st=fix(r.event.start),en=fix(r.event.end)||(()=>{const d=new Date(st);d.setMinutes(d.getMinutes()+30);return ymd(d)+"T"+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")})();
+      try{await mcp.callTool("Google Calendar","create_event",{title:String(r.event.title),start:st,end:en,account:/^a(\d+)~/.test(i.id)?+i.id.match(/^a(\d+)~/)[1]:undefined});l.textContent="Added to your calendar";try{refreshAll(true)}catch(e){}}
+      catch(e){l.disabled=false;l.textContent="Couldn't add it. Tap to try again"}};acts.append(l)}
     const c=el("button","btn small ghost","Copy answer");c.type="button";c.onclick=()=>navigator.clipboard.writeText(String(r.answer||"")).then(()=>c.textContent="Copied").catch(()=>c.textContent="Select the text to copy");acts.append(c);
     out.append(acts);
   };
   async function run(){
     const q=inp.value.trim();if(!q){inp.focus();return}
-    const opt=aiOptions().find(o=>o.id===pick.value)||aiOptions()[0];
+    let opt=aiOptions().find(o=>o.id===pick.value)||aiOptions()[0];
     if(opt.kind==="link"||!opt.ready){
-      const txt0=cached||await getText();cached=txt0||"";
-      out.replaceChildren(el("p","status",openOutside(opt,q+"\n\nEmail thread:\n"+cached.slice(0,2500))));return}
+      const here=aiOptions().find(o=>o.kind==="builtin"&&o.ready);
+      if(here&&sample)opt=here;
+      else{const txt0=cached||await getText();cached=txt0||"";out.replaceChildren(outsideOffer(opt,q+"\n\nEmail thread:\n"+cached.slice(0,2500)));return}}
     go.disabled=true;out.replaceChildren(el("p","status","Thinking..."));
     try{
       const txt=cached||await getText();cached=txt||"";
@@ -1005,7 +1024,7 @@ function drawSuggest(){
     a.append(use,cp);c.append(a);
   }else if(S.state==="loading"){c.append(el("p","status","One moment..."))}
   else if(S.state==="error"){c.append(el("p","status err",S.error))}
-  else{c.append(el("p","status",sample?"Pick an AI and it writes an answer here, ready for you to edit.":"No AI is connected yet. Use a free chat, or connect Claude or ChatGPT under Connections."))}
+  else{c.append(el("p","status",sample?"Pick an AI and it writes an answer here, ready for you to edit.":"No AI is connected yet. Use a free chat, or connect Claude or ChatGPT under Settings."))}
   const row=el("div","acts");row.append(el("span","status","Write it with:"));
   aiOptions().filter(o=>o.kind==="builtin"&&o.ready).forEach(o=>{
     const b=el("button","chip",o.name);b.type="button";b.setAttribute("aria-pressed",String(S.state==="ready"&&S.prov===o.id));
@@ -1267,7 +1286,7 @@ async function thrCheck(){
   out.hidden=false;
   if(!$("thrText").value.trim()){out.replaceChildren(el("p","","Write the email first, then check it."));return}
   const local=sendChecks(a);
-  if(!sample){out.replaceChildren(el("p","",local.length?local.join(" "):"No obvious problems found. Connect Claude or ChatGPT under Connections for a deeper check."));return}
+  if(!sample){out.replaceChildren(el("p","",local.length?local.join(" "):"No obvious problems found. Connect Claude or ChatGPT under Settings for a deeper check."));return}
   btn.disabled=true;out.replaceChildren(el("p","status","Reading your email..."));
   try{
     const r=await creditFallback(prov=>sample.json("Check this email before "+(myName||"the sender")+" sends it. Look for: wrong or missing facts compared with the conversation, a tone that is too blunt or too soft for the situation, unclear asks, promises that were not meant, typos, a missing attachment, and anything that should be left out. Be strict but brief.\n\n"+(thr.mode==="new"?"To: "+a.to.join(", ")+"\nSubject: "+a.subject+"\n":"The conversation so far (latest last):\n"+threadBlock(thr.msgs).slice(-3500)+"\n\n")+"The email they are about to send:\n"+$("thrText").value.slice(0,4000)+"\n\nReturn JSON only: {\"ok\": true or false, \"issues\": [ short plain sentences, max 5 ], \"better\": a corrected version of the email only if you found real problems, else an empty string}. No em dashes.",{cache:false,provider:prov}));
@@ -1346,7 +1365,7 @@ function thrMore(){
   host.append(d);
 }
 function thrClose(){if(thr.counting){thrNote("Your email is about to be sent. Press Undo to stop it, or wait a few seconds.");return}$("thr").hidden=true}
-$("thrClose").onclick=thrClose;$("thrAI").onclick=()=>{if(!sample&&chatAI()){openFree(CHAT[chatAI()].url,CHAT[chatAI()].name);return}if(thr.mode==="new")composeDraft();else if($("thrAIpick").value==="free")showFree();else suggestReply({prov:aiPickValue(),force:true})};$("thrAll").onchange=fillTargets;
+$("thrClose").onclick=thrClose;$("thrAI").onclick=()=>{if(!sample&&chatAI()){showFree();return}if(thr.mode==="new")composeDraft();else if($("thrAIpick").value==="free")showFree();else suggestReply({prov:aiPickValue(),force:true})};$("thrAll").onchange=fillTargets;
 $("thrSend").onclick=()=>thrAct("send");
 ["thrText","thrTo","thrCc"].forEach(k=>$(k).addEventListener("input",()=>{if(thr.armed&&!thr.counting){thr.armed=0;$("thrSend").textContent="Send";$("thrSt").textContent=""}}));$("thrSave").onclick=()=>thrAct("save");
 $("thrWA").onclick=()=>window.open(waLink($("thrText").value),"_blank","noopener");
@@ -1478,7 +1497,7 @@ async function draftOne(i){
 async function draftAll(auto){
   const st=$("draftAllSt"),btn=$("draftAll");
   if(drafting)return;
-  if(!sample){st.className="status err";st.textContent="Connect Claude or ChatGPT first, under Connections.";return}
+  if(!sample){st.className="status err";st.textContent="Connect Claude or ChatGPT first, under Settings.";return}
   const todo=allItems().filter(i=>i.st==="reply"&&!isOff(i)&&!(state.drafted||{})[i.id]).slice(0,8);
   if(!todo.length){if(!auto){st.className="status";st.textContent="Nothing needs a new draft. Every reply-today email already has one or is done."}return}
   drafting=true;btn.disabled=true;let ok=0,bad=0,stop="";
@@ -1544,7 +1563,7 @@ $("showOff").onclick=()=>{showOff=!showOff;renderBoard()};
 $("askGo").onclick=ask;$("askQ").addEventListener("keydown",e=>{if(e.key==="Enter")ask()});
 async function ask(){
   const q=$("askQ").value.trim();if(!q)return;const out=$("askOut");out.hidden=false;
-  if(!sample&&chatAI()){const ctx=(board&&board.items||[]).slice(0,25).map(i=>"- "+ST[i.st]+": "+i.title).join("\n");out.textContent=askInChat("I'm "+(myName||"a WYZ Rent team member")+". My board today:\n"+ctx+"\n\nQuestion: "+q);return}
+  if(!sample&&chatAI()){const ctx=(board&&board.items||[]).slice(0,25).map(i=>"- "+ST[i.st]+": "+i.title).join("\n");const c=CHAT[chatAI()];out.replaceChildren(outsideOffer({name:c.name,url:c.url,kind:"chat"},"I'm "+(myName||"a WYZ Rent team member")+". My board today:\n"+ctx+"\n\nQuestion: "+q));return}
   if(!sample){out.textContent="Ask needs an AI connected. Connect Claude or ChatGPT in the setup steps.";return}
   out.textContent="Thinking...";
   const ctx={today:new Date().toString(),board:(board&&board.items||[]).map(i=>({status:ST[i.st],urgency:UR[i.g],title:i.title,summary:i.summary,from:nameOf((tById(i.id)||{}).from)})),calendar:(events||[]).map(e=>({when:e.start&&(e.start.dateTime||e.start.date),what:e.summary}))};
@@ -1639,9 +1658,13 @@ function renderResearch(keepHead){
     else if(c.asks&&c.asks[0])r.append(el("span","q",c.asks[0]));
     r.append(el("span","m",c.title+" · "+new Date(c.at).toLocaleDateString("en-GB",{day:"numeric",month:"short"})));
     const a=el("div","acts");
-    const op=el("a","btn small","Open conversation");op.href=c.url;op.target="_blank";op.rel="noopener";a.append(op);
+    const op=el("a","btn small ghost","Open conversation ↗");op.href=c.url;op.target="_blank";op.rel="noopener";a.append(op);
     if(f&&f.prompt){
-      const q=encodeURIComponent(f.prompt);const ask=el("a","btn small solid",c.src==="claude"?"Ask in Claude":"Ask in ChatGPT");ask.href=c.src==="claude"?"https://claude.ai/new?q="+q:"https://chatgpt.com/?q="+q;ask.target="_blank";ask.rel="noopener";a.append(ask);
+      const q=encodeURIComponent(f.prompt);
+      if(sample){const ans=el("div","out");ans.hidden=true;const here=el("button","btn small solid","Answer here");here.type="button";
+        here.onclick=async()=>{here.disabled=true;ans.hidden=false;ans.textContent="Thinking...";try{const x=await sample(f.prompt+"\n\nAnswer plainly and briefly. No em dashes.",{cache:false,onText:u=>{ans.textContent=u.text}});ans.textContent=String(x.text||"").trim()}catch(e){ans.textContent="Couldn't answer just now ("+clip((e&&e.message)||"unknown reason",80)+")."}here.disabled=false};
+        a.append(here);r.append(ans)}
+      const ask=el("a","btn small"+(sample?" ghost":" solid"),(c.src==="claude"?"Continue in Claude":"Continue in ChatGPT")+" ↗");ask.href=c.src==="claude"?"https://claude.ai/new?q="+q:"https://chatgpt.com/?q="+q;ask.target="_blank";ask.rel="noopener";a.append(ask);
       const cp=el("button","btn small ghost","Copy question");cp.type="button";cp.onclick=()=>navigator.clipboard.writeText(f.prompt).then(()=>cp.textContent="Copied").catch(()=>cp.textContent="Select the text to copy");a.append(cp);
     }
     a.append(askDrop(f&&f.prompt?f.prompt:"I was researching: "+c.title+". "+((c.asks||[]).join(" ")).slice(0,600)+" Help me pick this up again and tell me the next step."));
@@ -1780,14 +1803,14 @@ let fileAI={name:"",load:null,cache:null};
 function openFileAI(name,load){
   fileAI={name,load,cache:null};
   $("fileAITitle").textContent=name;$("fileAIQ").value="";$("fileAIOut").replaceChildren();
-  $("fileAINote").textContent=sample?"The AI reads this file when you ask. Nothing is saved.":"Connect Claude first, under Connections.";
+  $("fileAINote").textContent=sample?"The AI reads this file when you ask. Nothing is saved.":"Connect Claude first, under Settings.";
   const c=$("fileAIChips");c.replaceChildren();
   [["Summarize","Summarize this in five short lines."],["Key dates and amounts","List every date, deadline and amount of money in this file."],["What must I do?","What do I need to do or decide because of this file?"],["Anything risky?","Point out anything unusual, risky or missing that I should check before agreeing."]].forEach(([l,v])=>{const b=el("button","chip",l);b.type="button";b.onclick=()=>{$("fileAIQ").value=v;runFileAI()};c.append(b)});
   $("fileAI").hidden=false;$("fileAIQ").focus();
 }
 async function runFileAI(){
   const q=$("fileAIQ").value.trim(),out=$("fileAIOut");if(!q){$("fileAIQ").focus();return}
-  if(!sample){out.replaceChildren(el("p","status err","No AI is connected. Connect Claude under Connections."));return}
+  if(!sample){out.replaceChildren(el("p","status err","No AI is connected. Connect Claude under Settings."));return}
   const go=$("fileAIGo");go.disabled=true;
   try{
     if(!fileAI.cache){out.replaceChildren(el("p","status","Opening the file..."));fileAI.cache=await fileAI.load()}
@@ -2109,13 +2132,13 @@ function renderAIStat(){
   const one=(p,name)=>{
     const d=A.down(p),has=A.avail(p);
     const s=el("span","",(has?(d?"⚠ ":"✅ "):"⛔ ")+name+(has?(d?(d.credit?" no credit":" problem"):" ready"):" not connected"));
-    s.title=has?(d?d.why:"Connected ("+(A.mode(p)==="key"?"your own key":"shared account")+"). Press Test under Connections to be sure."):"Not connected. See Connections.";return s;
+    s.title=has?(d?d.why:"Connected ("+(A.mode(p)==="key"?"your own key":"shared account")+"). Press Test under Settings to be sure."):"Not connected. See Settings.";return s;
   };
   bar.append(el("b","","AI"),document.createTextNode(" "),one("claude","Claude"),document.createTextNode(" · "),one("chatgpt","ChatGPT"));
   const c=A.down("claude"),g=A.down("chatgpt");
   if(c&&A.avail("chatgpt")&&!g)bar.append(document.createTextNode(" · ChatGPT is answering instead"));
   else if(g&&A.avail("claude")&&!c)bar.append(document.createTextNode(" · Claude is answering instead"));
-  else if(c&&g)bar.append(document.createTextNode(" · both need attention, see Connections"));
+  else if(c&&g)bar.append(document.createTextNode(" · both need attention, see Settings"));
 }
 window.addEventListener("wyz-ai-status",renderAIStat);
 /* ---------- quick links ---------- */
@@ -2220,6 +2243,7 @@ setInterval(checkVersion,180000);document.addEventListener("visibilitychange",()
   try{applyOrder();applyCol();renderLinks();renderSetup();renderTasks();renderResearch()}catch(e){}
   mcp=gateMcp(Connectors.mcp);perms=Connectors.perms;await Connectors.ai.detect();sample=Connectors.makeSample();try{renderAI()}catch(e){}
   renderHello();
+  try{await Connectors.msPending}catch(e){}
   if(!G.configured()){showWelcome();setFresh("err","Google sign-in isn't set up yet.");return}
   if(G.wasConnected()){
     setFresh("load","Reconnecting to Google");
@@ -2245,7 +2269,7 @@ function applyZoom(){let z=1;try{z=+localStorage.getItem("wyz-zoom")||1}catch(e)
 $("zoomBtn").onclick=()=>{let z=1;try{z=+localStorage.getItem("wyz-zoom")||1}catch(e){}const n=ZOOMS[(ZOOMS.indexOf(z)+1)%ZOOMS.length];try{localStorage.setItem("wyz-zoom",String(n))}catch(e){}applyZoom()};
 applyZoom();
 $("inviteBtn").onclick=async()=>{
-  const txt="Hi! This is your own Execution Page. It sorts your inbox by what needs you, and shows today's meetings, tasks and recent files, all from your own Google account. Only you see your data.\n\n"+SITE_URL+"\n\nIt works with a Gmail or Google work account. If your email is Outlook, Hotmail or Microsoft, tell me before you start.\n\n1. Open the link. On iPhone use Safari, on Android or a computer use Chrome.\n2. Tap Continue with Google and sign in with your own account.\n3. If Google says it hasn't verified the app, tap Advanced, then Go to (unsafe). That's normal for a private app. If Google says Access blocked, send me a screenshot so I can add you.\n4. Tick every box and tap Continue.\n5. Follow the short steps on screen. The last one puts it on your home screen or computer like an app.\n6. Then open the same link on your other device (phone or computer) and sign in there too.\n\nAny problem, send me a screenshot.";
+  const txt="Hi! This is your own Execution Page. It sorts your inbox by what needs you, and shows today's meetings, tasks and recent files, all from your own Google account. Only you see your data.\n\n"+SITE_URL+"\n\n"+(G.msConfigured()?"It works with Gmail, Google work accounts, Outlook, Hotmail and Microsoft 365, and you can add a second account.":"It works with a Gmail or Google work account. If your email is Outlook, Hotmail or Microsoft, tell me before you start.")+"\n\n1. Open the link. On iPhone use Safari, on Android or a computer use Chrome.\n2. Tap Continue with "+(G.msConfigured()?"Google or Continue with Microsoft":"Google")+" and sign in with your own account.\n3. If Google says it hasn't verified the app, tap Advanced, then Go to (unsafe). That's normal for a private app. If Google says Access blocked, send me a screenshot so I can add you.\n4. Tick every box and tap Continue.\n5. Follow the short steps on screen. The last one puts it on your home screen or computer like an app.\n6. Then open the same link on your other device (phone or computer) and sign in there too.\n\nAny problem, send me a screenshot.";
   if(DEV.phone&&navigator.share){try{await navigator.share({title:"Your Execution Page",text:txt});return}catch(e){if(e&&e.name==="AbortError")return}}
   window.open(waLink(txt),"_blank","noopener");
 };
@@ -2313,7 +2337,7 @@ async function testEverything(){
      if(!A.avail(p)){const ms=A.missing(p);add(nm,ms.length?"warn":"na","Not connected"+(ms.length?". Vercel is missing "+ms.join(" and ")+". Add it under Settings, Environment Variables, then Redeploy.":(p==="chatgpt"?" (optional).":"."))+(!sample&&p==="claude"?" Sorting uses simple rules until an AI is connected.":""));continue}
      const mode=A.mode(p);
      try{const r=await sample("Reply with the single word OK.",{provider:p,cache:false,noFallback:true});Connectors.ai.clearDown(p);res[p]="ok";add(nm,"ok",(mode==="shared"?"Working through the shared connection":"Working with your own key")+", using "+(p==="chatgpt"?A.getOModel():A.modelLabel())+". It answered: "+clip(r.text,20)+".")}
-     catch(e){res[p]=/credit|billing|quota|insufficient/i.test(msg(e))?"credit":"bad";add(nm,"bad",A.names[p]+" is switched on but failed ("+msg(e)+")."+(mode==="shared"?" Check the key, credit and ALLOWED_EMAILS in Vercel.":" Check your key, the model name and credit under Connections, Personalise."))}
+     catch(e){res[p]=/credit|billing|quota|insufficient/i.test(msg(e))?"credit":"bad";add(nm,"bad",A.names[p]+" is switched on but failed ("+msg(e)+")."+(mode==="shared"?" Check the key, credit and ALLOWED_EMAILS in Vercel.":" Check your key, the model name and credit under Settings, Personalise."))}
    }
    for(const [p,o] of [["claude","chatgpt"],["chatgpt","claude"]]){
      if(res[p]==="credit"&&res[o]==="ok"&&A.chosen()===p){A.autoSwitch(p,o);add("AI in use","ok",A.names[p]+" has no credit, so "+A.names[o]+" is now your main AI. "+A.names[p]+" takes over again by itself once its credit is fixed.")}
@@ -2382,7 +2406,7 @@ function syncRuleBtns(){
   $("thrVip").textContent=ruleHit(r.vip,a)?"★ VIP on":"VIP";$("thrMute").textContent=ruleHit(r.mute,a)?"Muted":"Mute";
 }
 $("thrVip").onclick=()=>{const a=thrSender();if(!a)return;const r=state.rules||{};if(ruleHit(r.vip,a)){state.rules.vip=state.rules.vip.filter(x=>x!==a);persist();renderRules();renderBoard()}else addRule("vip",a);syncRuleBtns()};
-$("thrMute").onclick=()=>{const a=thrSender();if(!a)return;const r=state.rules||{};if(ruleHit(r.mute,a)){state.rules.mute=state.rules.mute.filter(x=>x!==a);persist();renderRules();renderBoard();syncRuleBtns()}else{addRule("mute",a);syncRuleBtns();$("thrSt").className="status";$("thrSt").textContent="Muted. This sender is now hidden from your board. Undo it under Connections, Replies and rules."}};
+$("thrMute").onclick=()=>{const a=thrSender();if(!a)return;const r=state.rules||{};if(ruleHit(r.mute,a)){state.rules.mute=state.rules.mute.filter(x=>x!==a);persist();renderRules();renderBoard();syncRuleBtns()}else{addRule("mute",a);syncRuleBtns();$("thrSt").className="status";$("thrSt").textContent="Muted. This sender is now hidden from your board. Undo it under Settings, Replies and rules."}};
 renderTplSelect();renderTplList();renderRules();$("sigText").value=sigText();
 
 /* ---------- create and move calendar events ---------- */
@@ -2699,7 +2723,7 @@ async function openBrief(ev){
     }catch(e){out.replaceChildren(el("p","status err","Couldn't write the brief ("+clip((e&&e.message)||"unknown reason",100)+"). The related emails and files are below."))}
   }
   if(text){out.replaceChildren();const t=el("div","mailtext");t.textContent=text;const cp=el("button","btn small ghost","Copy");cp.type="button";cp.onclick=()=>navigator.clipboard.writeText(text).then(()=>cp.textContent="Copied").catch(()=>cp.textContent="Select the text to copy");out.append(t,cp)}
-  else if(!out.childNodes.length)out.append(el("p","status",sample?"Not enough to write a brief. Here is what I found.":"Connect Claude or ChatGPT under Connections for a written brief. Here is what I found."));
+  else if(!out.childNodes.length)out.append(el("p","status",sample?"Not enough to write a brief. Here is what I found.":"Connect Claude or ChatGPT under Settings for a written brief. Here is what I found."));
   const es=infoSection(host,"Related emails");
   if(!threadsF.length)es.append(el("p","status","No recent emails with these people."));
   threadsF.forEach(t=>es.append(threadRow(t,infoClose)));
@@ -2801,7 +2825,7 @@ attachAutocomplete($("teamEmail"),true);
 function openHandoff(){
   const team=teamList();
   const host=infoOpen("Hand off: "+($("thrTitle").textContent||"this email"));
-  if(!team.length){host.append(el("p","status","Add a team member first, under Connections, Replies and rules, Team."));return}
+  if(!team.length){host.append(el("p","status","Add a team member first, under Settings, Replies and rules, Team."));return}
   host.append(el("p","status","They get this email with your note. It leaves your board until they answer, and you can nudge them from Waiting on the team."));
   host.append(el("span","status","Hand it to"));
   const sel=el("select","in");sel.setAttribute("aria-label","Team member");team.forEach(p=>sel.append(new Option(p.name+" ("+p.email+")",p.email)));host.append(sel);

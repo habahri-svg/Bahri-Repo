@@ -14,9 +14,9 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
 <script>/* demo (?demo): brand-new in-memory storage, so it never touches your real setup */
 if(/[?&]demo\b/.test(location.search)){try{var M={},S={getItem:function(k){return k in M?M[k]:null},setItem:function(k,v){M[k]=String(v)},removeItem:function(k){delete M[k]},clear:function(){M={}},key:function(i){return Object.keys(M)[i]||null},get length(){return Object.keys(M).length}};Object.defineProperty(window,"localStorage",{value:S,configurable:true})}catch(e){}}</script>
-<script>try{var L=JSON.parse(localStorage.getItem("wyz-look")||"{}");window.ownColCss=function(c1,c2){var n=c1?"--navy:"+c1+";":"",x=(c1?"--hero1:"+c1+";--hero2:color-mix(in srgb,"+c1+" 70%,#000);":"")+(c2?"--gold:"+c2+";":"");return ":root,:root[data-palette]{"+x+"}@media (prefers-color-scheme: light){:root:not([data-theme=dark]){"+n+"}}:root[data-theme=light]{"+n+"}"};if(L.c1||L.c2){var st=document.createElement("style");st.id="ownCol";st.textContent=window.ownColCss(L.c1,L.c2);document.head.appendChild(st)}if(L.p)document.documentElement.setAttribute("data-palette",L.p);if(L.m==="light"||L.m==="dark")document.documentElement.setAttribute("data-theme",L.m)}catch(e){}</script>
+<script>try{var L=JSON.parse(localStorage.getItem("wyz-look")||"{}");window.ownColCss=function(L){var n=(L.c1?"--navy:"+L.c1+";":"")+(L.cB?"--bg:"+L.cB+";--sky:color-mix(in srgb,"+L.cB+" 80%,"+(L.c1||"#104b70")+" 6%);":"")+(L.cP?"--panel:"+L.cP+";":"")+(L.cT?"--fg:"+L.cT+";--soft:color-mix(in srgb,"+L.cT+" 70%,#888);":""),hc=L.cH||L.c1,x=(hc?"--hero1:"+hc+";--hero2:color-mix(in srgb,"+hc+" 70%,#000);":"")+(L.c2?"--gold:"+L.c2+";":"");return ":root,:root[data-palette]{"+x+"}@media (prefers-color-scheme: light){:root:not([data-theme=dark]){"+n+"}}:root[data-theme=light]{"+n+"}"};if(L.c1||L.c2||L.cH||L.cB||L.cP||L.cT){var st=document.createElement("style");st.id="ownCol";st.textContent=window.ownColCss(L);document.head.appendChild(st)}if(L.p)document.documentElement.setAttribute("data-palette",L.p);if(L.m==="light"||L.m==="dark")document.documentElement.setAttribute("data-theme",L.m)}catch(e){}</script>
 <style>
-/* Layout: one column run sheet. Header, three tabs (Today, Connections, Install). Colour lives in status dots only. WYZ navy, gold, sky. */
+/* Layout: one column run sheet. Header, three tabs (Today, Settings, Install). Colour lives in status dots only. WYZ navy, gold, sky. */
 :root{
   --bg:#f4f8fc; --panel:#ffffff; --fg:#0e2238; --soft:#56697c; --line:#dbe5ee;
   --navy:#104b70; --gold:#b8923c; --sky:#e8f2fa; --onnavy:#ffffff;
@@ -29,7 +29,7 @@ if(/[?&]demo\b/.test(location.search)){try{var M={},S={getItem:function(k){retur
 :root[data-theme="dark"]{
   --bg:#0b1a2b; --panel:#0e2238; --fg:#e8f2fa; --soft:#9db2c6; --line:#22405c;
   --navy:#9cc9e8; --gold:#d8a23c; --sky:#16324e; --onnavy:#0b1a2b; color-scheme:dark}
-/* WYZ Rent looks only: deep navy, champagne gold, sky. Pick one under Connections, Personalise. Each has a light and a dark version. */
+/* WYZ Rent looks only: deep navy, champagne gold, sky. Pick one under Settings, Personalise. Each has a light and a dark version. */
 :root[data-palette="ocean"]{--bg:#f4f8fc;--panel:#ffffff;--fg:#0e2238;--soft:#56697c;--line:#dbe5ee;--navy:#104b70;--gold:#b8923c;--sky:#e8f2fa;--onnavy:#ffffff;--hero1:#104b70;--hero2:#0e2238}
 :root[data-palette="ivory"]{--bg:#faf7f1;--panel:#ffffff;--fg:#0e2238;--soft:#5e6670;--line:#ebe3d3;--navy:#16324e;--gold:#b8923c;--sky:#f3ecdd;--onnavy:#ffffff;--hero1:#16324e;--hero2:#0e2238}
 @media (prefers-color-scheme: dark){:root[data-palette="ocean"]:not([data-theme="light"]),:root[data-palette="ivory"]:not([data-theme="light"]){--bg:#0b1a2b;--panel:#0e2238;--fg:#e8f2fa;--soft:#9db2c6;--line:#22405c;--navy:#9cc9e8;--gold:#d8a23c;--sky:#16324e;--onnavy:#0b1a2b;--hero1:#16324e;--hero2:#0b1a2b;color-scheme:dark}}
@@ -219,6 +219,9 @@ label.chk{display:flex;gap:6px;align-items:center}
 .demobar{position:sticky;top:0;z-index:40;background:var(--gold);color:#0e2238;font-size:13.5px;padding:8px 16px;text-align:center}
 .demobar a{color:#0e2238;font-weight:700}
 .mv{display:inline-flex;gap:4px;flex:none;margin-left:auto}.mv .btn{min-width:34px;padding:4px 8px}.mv .btn:disabled{opacity:.35}
+.cpicks{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:8px 0}
+.cpick{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);cursor:pointer;font-size:13.5px}
+.cpick input{width:40px;height:32px;border:0;padding:0;background:none;cursor:pointer;flex:none}
 .srcrow{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line);cursor:pointer}
 .srcrow:first-child{border-top:0}.srcrow input{width:22px;height:22px;flex:none;margin-top:1px;accent-color:var(--navy)}
 .updbar{position:fixed;left:16px;right:16px;margin-inline:auto;width:fit-content;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:30;display:flex;gap:10px;align-items:center;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-left:4px solid var(--gold);border-radius:12px;padding:10px 14px;box-shadow:0 8px 24px rgba(0,0,0,.18);max-width:calc(100% - 32px)}
@@ -298,7 +301,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
 
   <nav class="tabs" role="tablist" aria-label="Sections">
     <button class="tab" role="tab" id="t-today" aria-selected="true" aria-controls="p-today" type="button">Today</button>
-    <button class="tab" role="tab" id="t-conn" aria-selected="false" aria-controls="p-conn" type="button">Connections</button>
+    <button class="tab" role="tab" id="t-conn" aria-selected="false" aria-controls="p-conn" type="button">Settings</button>
     <button class="tab" role="tab" id="t-inst" aria-selected="false" aria-controls="p-inst" type="button">Install on phone or computer</button>
   </nav>
 
@@ -312,8 +315,9 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
     <div class="toolbar" id="toolbar" role="toolbar" aria-label="Sections"><button class="btn ghost small" type="button" id="expAll" title="Open every part">Expand all</button><button class="btn ghost small" type="button" id="colAll">Collapse all</button><span class="tsep" aria-hidden="true"></span><span id="secNav" class="secnav"></span><span class="tsep" aria-hidden="true"></span><button class="navchip" type="button" id="goCheck" title="Jump to the System check at the bottom of Today">System check</button></div>
     <div class="card note" id="welcome" hidden><div class="pad">
       <h2 id="wTitle">Connect your accounts to start</h2>
-      <p class="sub" id="wText">Works with Gmail and Google work accounts. Sign in with Google once. Your inbox, meetings and recent documents load straight away, and the page is then set up just for you. Nobody else can see your data.</p>
-      <div class="headrow"><button class="btn solid" type="button" id="wBtn">Continue with Google</button></div>
+      <p class="sub" id="wText">Sign in once with Google or Microsoft. Your inbox, meetings and recent documents load straight away, and the page is then set up just for you. Nobody else can see your data.</p>
+      <div class="headrow"><button class="btn solid" type="button" id="wBtn">Continue with Google</button><button class="btn" type="button" id="wMs">Continue with Microsoft</button></div>
+      <p class="status">Google: Gmail and Google work accounts. Microsoft: Outlook, Hotmail, Live and Microsoft 365. You can add the other kind later.</p>
       <p class="status err" id="wMsg"></p>
       <div id="wFamily" hidden>
         <p class="sub"><b>Sharing this with family or staff?</b> Send them this link. It carries the sign-in setting, so they only tap Continue with Google.</p>
@@ -337,7 +341,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
     <div class="card">
       <div class="pad">
         <div class="ask">
-          <input class="in" id="askQ" placeholder="Ask Claude about your day, a person, or a draft" aria-label="Ask Claude">
+          <input class="in" id="askQ" placeholder="Ask about your day, a person, or a draft" aria-label="Ask Claude">
           <button class="btn solid" type="button" id="askGo">Ask</button>
         </div>
         <div class="out" id="askOut" hidden></div>
@@ -466,7 +470,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
 
   <!-- CONNECTIONS -->
   <section id="p-conn" role="tabpanel" aria-labelledby="t-conn" hidden class="wrap" style="gap:16px">
-    <div class="toolbar" role="toolbar" aria-label="Connections"><button class="btn ghost small" type="button" id="connExp">Expand all</button><button class="btn ghost small" type="button" id="connCol">Collapse all</button></div>
+    <div class="toolbar" role="toolbar" aria-label="Settings"><button class="btn ghost small" type="button" id="connExp">Expand all</button><button class="btn ghost small" type="button" id="connCol">Collapse all</button></div>
     <div class="card" id="srcCard"><div class="pad">
       <h2>What your page reads</h2>
       <p class="sub">Switch any source on or off. It's saved for you only and you can change it any time.</p>
@@ -497,10 +501,9 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       <h2 style="font-size:15px;margin-top:8px">Colours</h2>
       <span class="status">Two WYZ Rent looks, both in navy and champagne gold. Saved on this device.</span>
       <div class="swatches" id="swatches" role="group" aria-label="Colour palette"><button class="swatch" type="button" data-pal="ocean" aria-pressed="false"><i style="background:linear-gradient(135deg,#104b70 0 60%,#b8923c 60% 68%,#e8f2fa 68%)"></i>WYZ Classic</button><button class="swatch" type="button" data-pal="ivory" aria-pressed="false"><i style="background:linear-gradient(135deg,#16324e 0 60%,#b8923c 60% 68%,#faf7f1 68%)"></i>WYZ Ivory</button></div>
-      <div class="ask"><span class="status" style="flex:1 1 100%">Or pick your own colours</span>
-        <label class="status" for="colMain">Main colour</label><input type="color" id="colMain" value="#104b70" style="width:52px;height:38px;border:1px solid var(--line);border-radius:8px;background:none;padding:2px">
-        <label class="status" for="colAccent">Accent</label><input type="color" id="colAccent" value="#b8923c" style="width:52px;height:38px;border:1px solid var(--line);border-radius:8px;background:none;padding:2px">
-        <button class="btn small ghost" type="button" id="colReset">Back to WYZ colours</button></div>
+      <span class="status">Or pick your own colours. Tap a colour to change it. Background, cards and text apply to the light look.</span>
+      <div class="cpicks"><label class="cpick"><input type="color" id="colHeader" value="#104b70"><span>Header</span></label><label class="cpick"><input type="color" id="colMain" value="#104b70"><span>Buttons and links</span></label><label class="cpick"><input type="color" id="colAccent" value="#b8923c"><span>Accent</span></label><label class="cpick"><input type="color" id="colBg" value="#f4f8fc"><span>Page background</span></label><label class="cpick"><input type="color" id="colPanel" value="#ffffff"><span>Cards</span></label><label class="cpick"><input type="color" id="colText" value="#0e2238"><span>Text</span></label></div>
+      <div class="ask"><button class="btn small ghost" type="button" id="colReset">Back to WYZ colours</button></div>
       <div class="ask"><label class="status" for="lookMode">Light or dark</label><select class="in" id="lookMode" style="flex:0 1 160px"><option value="auto">Match my device</option><option value="light">Always light</option><option value="dark">Always dark</option></select></div>
       <h2 style="font-size:15px;margin-top:8px">AI assistants</h2>
       <span class="status">Answers on this page come from</span>
@@ -692,6 +695,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
 <script src="config.js"></script>
 <script src="version.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="microsoft.js"></script>
 <script src="connectors.js"></script>
 <script src="demo.js"></script>
 <script src="app.js"></script>

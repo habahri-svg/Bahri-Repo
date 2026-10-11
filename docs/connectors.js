@@ -37,7 +37,7 @@
     }
   } catch (e) {}
   var clientId = function () { return String(CFG.GOOGLE_CLIENT_ID || ls.get(KEY.cid) || "").trim(); };
-  var configured = function () { return /\.apps\.googleusercontent\.com$/.test(clientId()); };
+  var configured = function () { return /\.apps\.googleusercontent\.com$/.test(clientId()) || (ls.get("wyz-main") === "ms" && !!(window.WyzMS && window.WyzMS.configured())); };
 
   /* ---------- Google sign-in (token model) ---------- */
   var tok = { access: "", exp: 0, scope: "" };
@@ -80,8 +80,8 @@
   /* Extra Google accounts (for example a personal Gmail plus a wyzrent.com work account). The first account
      keeps plain ids. Ids from extra account n get the prefix "a<n>~", so every later call goes to the right account. */
   var XKEY = "wyz-google-extra";
-  var xs = (function () { try { var a = JSON.parse(ls.get(XKEY) || "[]"); return Array.isArray(a) ? a.filter(function (e) { return e && e.email; }).map(function (e) { return { email: e.email, tok: { access: "", exp: 0, scope: "" }, prof: null, inflight: null, err: "" }; }) : []; } catch (e) { return []; } })();
-  function saveXs() { ls.set(XKEY, JSON.stringify(xs.map(function (x) { return { email: x.email }; }))); }
+  var xs = (function () { try { var a = JSON.parse(ls.get(XKEY) || "[]"); return Array.isArray(a) ? a.filter(function (e) { return e && e.email; }).map(function (e) { return { email: e.email, type: e.type === "ms" ? "ms" : "google", tok: { access: "", exp: 0, scope: "" }, prof: null, inflight: null, err: "" }; }) : []; } catch (e) { return []; } })();
+  function saveXs() { ls.set(XKEY, JSON.stringify(xs.map(function (x) { return { email: x.email, type: x.type || "google" }; }))); }
   function requestToken(prompt, who) {
     return gisReady().then(function () {
       return new Promise(function (resolve, reject) {
@@ -116,7 +116,17 @@
     });
   }
 
+  /* The main account can be Google (default) or Microsoft */
+  var isMsMain = function () { return ls.get("wyz-main") === "ms"; };
+  var msMain = { email: "", name: "", id: "", tok: "", exp: 0 };
+  function setMsMain(w) { msMain = { email: w.email, name: w.name, id: w.id, tok: w.token, exp: w.exp - 60000 }; ls.set("wyz-main", "ms"); ls.set(KEY.flag, "1"); ls.set(KEY.hint, w.email); profileCache = { sub: "ms-" + w.id, email: w.email, name: w.name, picture: "" }; }
+  function ensureMs() {
+    if (msMain.tok && Date.now() < msMain.exp) return Promise.resolve(msMain.tok);
+    if (!window.WyzMS) return Promise.reject(cerr("ms_unavailable", "Microsoft sign-in didn't load."));
+    return window.WyzMS.token(ls.get(KEY.hint)).then(function (w) { setMsMain(w); return w.token; });
+  }
   function ensure() {
+    if (isMsMain()) return ls.get(KEY.flag) ? ensureMs() : Promise.reject(cerr("server_not_connected", "Not connected"));
     if (tok.access && Date.now() < tok.exp) return Promise.resolve(tok.access);
     if (!configured()) return Promise.reject(cerr("not_configured", "Google sign-in isn't set up yet."));
     if (!ls.get(KEY.flag)) return Promise.reject(cerr("server_not_connected", "Not connected to Google"));
@@ -129,6 +139,7 @@
     var x = xs[K - 1];
     if (!x) return Promise.reject(cerr("server_not_connected", "That account isn't connected"));
     if (x.tok.access && Date.now() < x.tok.exp) return Promise.resolve(x.tok.access);
+    if (x.type === "ms") { if (!x.inflight) x.inflight = (window.WyzMS ? window.WyzMS.token(x.email) : Promise.reject(cerr("ms_unavailable", "Microsoft sign-in didn't load"))).then(function (w) { x.inflight = null; x.tok = { access: w.token, exp: w.exp - 60000, scope: "" }; x.err = ""; return w.token; }, function (e) { x.inflight = null; x.err = "reauth"; throw e; }); return x.inflight; }
     if (!x.inflight) x.inflight = requestToken("none", x).then(function (t) { x.inflight = null; return t; }, function (e) { x.inflight = null; x.err = "reauth"; throw e; });
     return x.inflight;
   }
@@ -177,6 +188,7 @@
 
   var profileCache = null;
   async function profile() {
+    if (isMsMain()) { await ensureMs(); return profileCache; }
     if (profileCache) return profileCache;
     var p = await gfetchK("https://www.googleapis.com/oauth2/v3/userinfo", null, null, 0, 0);
     profileCache = p;
@@ -501,8 +513,13 @@
   }
 
   /* ---------- routing calls to the right Google account ---------- */
-  var T0 = makeTools(0), TX = {};
-  var toolsFor = function (K) { return K ? (TX[K] || (TX[K] = makeTools(K))) : T0; };
+  var T0 = makeTools(0), TX = {}, TM0 = null;
+  var msTools = function (K, email) { return window.WyzMS.makeTools(function () { return K ? ensureK(K) : ensureMs(); }, email); };
+  var toolsFor = function (K) {
+    if (!K) { if (isMsMain()) return TM0 || (TM0 = msTools(0, ls.get(KEY.hint))); return T0; }
+    if (!TX[K]) { var x = xs[K - 1] || {}; TX[K] = x.type === "ms" ? msTools(K, x.email) : makeTools(K); }
+    return TX[K];
+  };
   var PFX = /^a(\d+)~/;
   var ID_ARGS = ["threadId", "replyToMessageId", "messageId", "eventId", "fileId", "id"];
   function route(a) {
@@ -582,7 +599,7 @@
     }
   };
 
-  var connected = function () { return !!(tok.access && Date.now() < tok.exp) || !!ls.get(KEY.flag); };
+  var connected = function () { return isMsMain() ? !!ls.get(KEY.flag) : !!(tok.access && Date.now() < tok.exp) || !!ls.get(KEY.flag); };
 
   var google_ = {
     configured: configured,
@@ -592,7 +609,16 @@
     connected: connected,
     wasConnected: function () { return !!ls.get(KEY.flag); },
     /* interactive=true opens Google's window (needs a tap). false tries silently. consent=true forces the permission screen. */
+    /* sign in with a Microsoft account as the main account */
+    connectMicrosoft: async function () {
+      if (!window.WyzMS) throw cerr("ms_unavailable", "Microsoft sign-in didn't load.");
+      var w = await window.WyzMS.signIn({});
+      setMsMain(w); TM0 = null; return w.token;
+    },
+    msConfigured: function () { return !!(window.WyzMS && window.WyzMS.configured()); },
+    mainType: function () { return isMsMain() ? "ms" : "google"; },
     connect: function (interactive, consent) {
+      if (isMsMain()) { if (interactive) return this.connectMicrosoft(); return ensureMs(); }
       if (!configured()) return Promise.reject(cerr("not_configured", "Google sign-in isn't set up yet."));
       if (!consent && tok.access && Date.now() < tok.exp) return Promise.resolve(tok.access);
       if (redirectErr && !interactive) { var re = redirectErr; redirectErr = ""; return Promise.reject(cerr(re, "Google sign-in was not completed")); }
@@ -603,35 +629,49 @@
     token: ensure,
     /* every connected Google account: the main one first */
     accounts: function () {
-      var main = { email: (profileCache && profileCache.email) || ls.get(KEY.hint) || "", main: true, ok: connected(), n: 0 };
-      return [main].concat(xs.map(function (x, i) { return { email: x.email, main: false, ok: !!(x.tok.access && Date.now() < x.tok.exp), needsTap: x.err === "reauth" || !(x.tok.access && Date.now() < x.tok.exp), n: i + 1 }; }));
+      var main = { email: (profileCache && profileCache.email) || ls.get(KEY.hint) || "", main: true, ok: connected(), n: 0, type: isMsMain() ? "ms" : "google" };
+      return [main].concat(xs.map(function (x, i) { return { email: x.email, type: x.type || "google", main: false, ok: !!(x.tok.access && Date.now() < x.tok.exp), needsTap: x.err === "reauth" || !(x.tok.access && Date.now() < x.tok.exp), n: i + 1 }; }));
     },
     /* add another Google account: needs a tap, Google asks which account */
-    addAccount: async function () {
-      if (!configured()) throw cerr("not_configured", "Google sign-in isn't set up yet.");
-      var x = { email: "", tok: { access: "", exp: 0, scope: "" }, prof: null, inflight: null, err: "" };
-      await requestToken("select_account", x);
-      xs.push(x); var K = xs.length;
-      try { var p = await profileK(K); x.email = String(p.email || "").toLowerCase(); }
-      catch (e) { xs.pop(); throw e; }
+    addAccount: async function (type) {
+      var x = { email: "", type: type === "ms" ? "ms" : "google", tok: { access: "", exp: 0, scope: "" }, prof: null, inflight: null, err: "" };
+      if (x.type === "ms") {
+        if (!window.WyzMS) throw cerr("ms_unavailable", "Microsoft sign-in didn't load.");
+        var w = await window.WyzMS.signIn({ extra: true });
+        x.email = w.email; x.tok = { access: w.token, exp: w.exp - 60000, scope: "" }; x.prof = { email: w.email, name: w.name };
+        xs.push(x);
+      } else {
+        if (!configured()) throw cerr("not_configured", "Google sign-in isn't set up yet.");
+        await requestToken("select_account", x);
+        xs.push(x); var K = xs.length;
+        try { var p = await profileK(K); x.email = String(p.email || "").toLowerCase(); }
+        catch (e) { xs.pop(); throw e; }
+      }
       var main = String((profileCache && profileCache.email) || ls.get(KEY.hint) || "").toLowerCase();
       if (!x.email || x.email === main || xs.slice(0, -1).some(function (y) { return y.email === x.email; })) { xs.pop(); throw cerr("same_account", "That account is already connected. Pick your other account on Google's screen."); }
       saveXs(); TX = {}; announceX();
       return x.email;
     },
     /* an extra account whose sign-in ran out: one tap renews it */
-    reconnectAccount: async function (n) { var x = xs[n - 1]; if (!x) return; await requestToken("", x); x.err = ""; announceX(); },
+    reconnectAccount: async function (n) {
+      var x = xs[n - 1]; if (!x) return;
+      if (x.type === "ms") { var w = await window.WyzMS.signIn({ extra: true, hint: x.email }); x.tok = { access: w.token, exp: w.exp - 60000, scope: "" }; }
+      else await requestToken("", x);
+      x.err = ""; announceX();
+    },
     accountOn: function (email) { return offSet().indexOf(email) < 0; },
     setAccountOn: function (email, on) { var s = offSet().filter(function (e) { return e !== email; }); if (!on) s.push(email); ls.set(XOFF, JSON.stringify(s)); announceX(); },
-    removeAccount: function (n) { var x = xs[n - 1]; if (!x) return; try { if (x.tok.access && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(x.tok.access, function () {}); } catch (e) {} xs.splice(n - 1, 1); saveXs(); TX = {}; announceX(); },
-    hasScope: function (name) { return tok.scope.split(" ").indexOf(SC[name]) >= 0; },
+    removeAccount: function (n) { var x = xs[n - 1]; if (!x) return; if (x.type === "ms" && window.WyzMS) window.WyzMS.signOut(x.email); else try { if (x.tok.access && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(x.tok.access, function () {}); } catch (e) {} xs.splice(n - 1, 1); saveXs(); TX = {}; announceX(); },
+    hasScope: function (name) { return isMsMain() || tok.scope.split(" ").indexOf(SC[name]) >= 0; },
     scopeNames: function () { return Object.keys(SC); },
     scopeUrls: function () { return Object.keys(SC).map(function (k) { return SC[k]; }); },
-    hasAllScopes: function () { var have = tok.scope.split(" "); return [SC.gmailRead, SC.gmailDraft, SC.cal, SC.drive].every(function (s) { return have.indexOf(s) >= 0; }); },
+    hasAllScopes: function () { if (isMsMain()) return true; var have = tok.scope.split(" "); return [SC.gmailRead, SC.gmailDraft, SC.cal, SC.drive].every(function (s) { return have.indexOf(s) >= 0; }); },
     signOut: async function () {
       try { if (tok.access && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(tok.access, function () {}); } catch (e) {}
-      tok = { access: "", exp: 0, scope: "" }; profileCache = null;
-      ls.del(KEY.flag); ls.del(KEY.hint);
+      if (isMsMain() && window.WyzMS) { try { await window.WyzMS.signOut(ls.get(KEY.hint)); } catch (e) {} }
+      xs.forEach(function (x) { if (x.type === "ms" && window.WyzMS) window.WyzMS.signOut(x.email); });
+      tok = { access: "", exp: 0, scope: "" }; profileCache = null; msMain = { email: "", name: "", id: "", tok: "", exp: 0 }; TM0 = null;
+      ls.del(KEY.flag); ls.del(KEY.hint); ls.del("wyz-main");
       xs.forEach(function (x) { try { if (x.tok.access && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(x.tok.access, function () {}); } catch (e) {} });
       xs = []; saveXs(); TX = {};
     }
@@ -760,7 +800,15 @@
   function links() { try { var a = JSON.parse(ls.get(KEY.links) || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
   function saveLinks(a) { ls.set(KEY.links, JSON.stringify(a)); }
 
+  var msPending = (window.WyzMS ? window.WyzMS.pending() : Promise.resolve(null)).then(function (p) {
+    if (!p) return;
+    if (p.kind === "main") { setMsMain(p.who); TM0 = null; return; }
+    if (xs.some(function (y) { return y.email === p.who.email; })) return;
+    xs.push({ email: p.who.email, type: "ms", tok: { access: p.who.token, exp: p.who.exp - 60000, scope: "" }, prof: { email: p.who.email, name: p.who.name }, inflight: null, err: "" }); saveXs(); TX = {};
+  }, function () {});
+
   window.Connectors = {
+    msPending: msPending,
     mcp: mcp,
     perms: perms,
     google: google_,

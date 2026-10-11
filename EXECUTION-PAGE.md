@@ -154,3 +154,20 @@ Open http://localhost:8000. For sign-in to work locally, also add `http://localh
 - **Page:** English only, Gmail only, main calendar only, WhatsApp share buttons, built-in tasks plus optional Todoist, optional research import, guided first-run steps. The setup card drops to the last row, folded, once everything is connected.
 - **Company dashboard (later):** each person's board stays private. The dashboard receives counts (emails waiting, overdue tasks, meetings today) plus ChatGPT and Claude research topics and ideas. Stored in a small database such as Supabase.
 - **Delivery:** a web app installed from the browser. Free trial then monthly per user. First customers: busy executives.
+
+## Microsoft accounts (Outlook, Hotmail, Live, Microsoft 365)
+
+One time, by the owner. About 10 minutes.
+
+1. Go to https://entra.microsoft.com (or portal.azure.com) and sign in with any Microsoft account.
+2. App registrations, New registration.
+   - Name: WYZ Execution Page
+   - Supported account types: Accounts in any organizational directory and personal Microsoft accounts
+   - Redirect URI: platform Single-page application (SPA), `https://99946693.vercel.app/`
+3. Register. On the app's Authentication page add a second SPA redirect URI: `https://99946693.vercel.app/ms-redirect`
+4. API permissions, Add a permission, Microsoft Graph, Delegated: User.Read, Mail.ReadWrite, Mail.Send, Calendars.ReadWrite, Files.ReadWrite, Contacts.Read, People.Read, offline_access.
+5. Copy the Application (client) ID from Overview and paste it into `docs/config.js` as `MS_CLIENT_ID`.
+
+The Continue with Microsoft button and Add Microsoft account appear once MS_CLIENT_ID is set.
+Work accounts whose company blocks new apps need their IT to approve the app once.
+The shared AI accepts Microsoft sign-ins too (the server checks the person with Microsoft Graph), so add their email to ALLOWED_EMAILS.
