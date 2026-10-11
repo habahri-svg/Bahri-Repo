@@ -2242,12 +2242,14 @@ async function checkVersion(){
     const cur=(window.WYZ_VERSION&&window.WYZ_VERSION.version)||"";
     if(m&&cur&&m[1]!==cur&&!newVer){newVer=m[1];
       const busy=()=>!$("thr").hidden||!$("onb").hidden;
-      if(!busy()&&document.hidden){location.reload();return}
+      /* update by itself unless the person is in the middle of something (an open email, a draft, the setup steps) */
+      const typing=()=>{const a=document.activeElement;return !!(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)&&a.value)};
+      if(!busy()&&!typing()){location.reload();return}
       const bar=el("div","updbar");bar.setAttribute("role","status");bar.append(el("span","","A new version ("+newVer+") is ready."));
       const b=el("button","btn small solid","Update now");b.type="button";b.onclick=()=>{if(thr&&thr.counting)return;location.reload()};bar.append(b);document.body.append(bar);
       document.addEventListener("visibilitychange",()=>{if(document.hidden&&!busy())location.reload()})}}catch(e){}
 }
-setInterval(checkVersion,180000);document.addEventListener("visibilitychange",()=>{if(!document.hidden)checkVersion()});
+setInterval(checkVersion,180000);document.addEventListener("visibilitychange",()=>{if(!document.hidden)checkVersion()});window.addEventListener("focus",checkVersion);window.addEventListener("pageshow",checkVersion);
 (async()=>{
   await lockGate();
   collapsed.delete("c-inbox");collapsed.delete("setupCard");ORDER.forEach(k=>collapsed.delete("g-"+k));saveCol();
