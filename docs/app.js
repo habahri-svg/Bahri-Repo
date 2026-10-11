@@ -77,13 +77,16 @@ const _mkSample=Connectors.makeSample;Connectors.makeSample=function(){return sr
 const SOURCES=[["gmail","Email","Your inbox and sent mail"],["calendar","Calendar","Today's and this week's meetings"],["drive","Google Drive","Your recent files"],["contacts","Contacts","Address suggestions while you write"],["todoist","Todoist","Today's Todoist tasks"],["ai","AI assistant","Smart sorting, drafts and Ask"],["research","ChatGPT and Claude research","Follow-ups from your chats"],["alerts","Alerts on this browser","Pop-up alerts for urgent email"]];
 function renderSources(){
   const host=$("srcList");if(!host)return;host.replaceChildren();
-  const row=(on,label,sub,fn)=>{const l=el("label","srcrow");const i=el("input");i.type="checkbox";i.checked=on;i.onchange=()=>fn(i.checked);const t=el("span","");t.append(el("b","",label),el("span","status"," "+sub));l.append(i,t);host.append(l)};
+  const rows=[];
+  const row=(on,label,sub,fn,key)=>{const l=el("label","srcrow");const i=el("input");i.type="checkbox";i.checked=on;i.onchange=()=>fn(i.checked);const t=el("span","");t.style.flex="1";t.append(el("b","",label),el("span","status"," "+sub));l.append(i,t);l.dataset.key=key||label;rows.push(l)};
   SOURCES.forEach(([k,label,sub])=>{
-    if(k==="alerts"){row(!!state.alertsOn,label,sub,on=>{$("alertsOn").checked=on;$("alertsOn").onchange()});return}
+    if(k==="alerts"){row(!!state.alertsOn,label,sub,on=>{$("alertsOn").checked=on;$("alertsOn").onchange()},k);return}
     row(!srcOff(k),label,sub,on=>{state.off=state.off||{};state.off[k]=on?0:1;persist();if(k==="ai"){sample=Connectors.makeSample();try{renderAI();setAIButton()}catch(e){}}
-      const r=document.querySelector('[data-sec="research"]');if(r)r.hidden=srcOff("research");refreshAll(true);toast(label+(on?" is on.":" is off. Turn it back on here any time."))});
+      const r=document.querySelector('[data-sec="research"]');if(r)r.hidden=srcOff("research");refreshAll(true);toast(label+(on?" is on.":" is off. Turn it back on here any time."))},k);
   });
-  G.accounts().slice(1).filter(x=>x.email).forEach(x=>row(G.accountOn(x.email),"Email account: "+x.email,"Its mail, meetings and files",on=>{G.setAccountOn(x.email,on);refreshAll(true)}));
+  G.accounts().slice(1).filter(x=>x.email).forEach(x=>row(G.accountOn(x.email),"Email account: "+x.email,"Its mail, meetings and files",on=>{G.setAccountOn(x.email,on);refreshAll(true)},"acct:"+x.email));
+  const list=ordered(rows,l=>l.dataset.key,state.srcOrder),keys=list.map(l=>l.dataset.key);
+  list.forEach((l,i)=>{l.append(arrows(()=>{moveIn("srcOrder",keys,l.dataset.key,-1);renderSources()},()=>{moveIn("srcOrder",keys,l.dataset.key,1);renderSources()},i===0,i===list.length-1));host.append(l)});
 }
 window.addEventListener("wyz-accounts",()=>{try{renderSources()}catch(e){}});
 $("srcBtn").onclick=()=>{show("t-conn");renderSources();const c=$("srcCard");c.classList.remove("collapsed");try{collapsed.delete(c.dataset.col);saveCol();applyCol()}catch(e){}c.scrollIntoView({behavior:"smooth",block:"start"})};
@@ -123,6 +126,12 @@ function importLines(txt){
   String(txt||"").split(/\r?\n/).map(l=>l.replace(/^(?:\s*(?:[-*•◦▪●○☐☑✓✔]|\[[ xX]?\]|\d+[.)]))+\s*/,"").trim()).filter(l=>l&&l.length>1).reverse().forEach(l=>{if(have.has(l.toLowerCase()))return;have.add(l.toLowerCase());addTask(l,"iPhone list");n++});
   return n;
 }
+/* ---------- move connections and sources up or down (saved per person) ---------- */
+const stepKey=s=>String(s.name||"").replace(/ \(optional\)/,"").replace(/accounts$/,"account");
+function ordered(list,keyOf,order){const o=order||[];return list.map((x,i)=>({x,i,r:o.indexOf(keyOf(x))})).sort((a,b)=>(a.r<0?1000+a.i:a.r)-(b.r<0?1000+b.i:b.r)).map(y=>y.x)}
+function moveIn(field,keys,key,dir){const i=keys.indexOf(key),j=i+dir;if(i<0||j<0||j>=keys.length)return;const k=keys.slice();[k[i],k[j]]=[k[j],k[i]];state[field]=k;persist()}
+function arrows(onUp,onDown,first,last){const w=el("span","mv");const u=el("button","btn small ghost","↑");u.type="button";u.title="Move up";u.setAttribute("aria-label","Move up");u.disabled=first;u.onclick=e=>{e.preventDefault();e.stopPropagation();onUp()};
+  const d=el("button","btn small ghost","↓");d.type="button";d.title="Move down";d.setAttribute("aria-label","Move down");d.disabled=last;d.onclick=e=>{e.preventDefault();e.stopPropagation();onDown()};w.append(u,d);return w}
 function stepDefs(){
   const g=k=>connState[k];
   const skip=(flag)=>["Skip",()=>{state[flag]=1;persist();renderSetup()}];
@@ -184,7 +193,7 @@ function reportStatus(steps){
   clearTimeout(statT);statT=setTimeout(()=>{db.collection("status").doc(uid).set(Object.assign({at:Date.now()},st)).catch(()=>{})},3000);
 }
 function renderSetup(){
-  const steps=stepDefs();try{reportStatus(steps)}catch(e){}const n=steps.filter(s=>s.done).length;
+  const steps=ordered(stepDefs(),stepKey,state.connOrder);try{reportStatus(steps)}catch(e){}const n=steps.filter(s=>s.done).length;
   $("progBar").style.width=Math.round(n/steps.length*100)+"%";
   $("setupTxt").textContent=n===steps.length?"All set. Everything below runs on your own accounts.":n+" of "+steps.length+" done. Sign in to each account below, one time. Everything uses your own accounts and nobody else sees your board.";
   const allDone=n===steps.length;
@@ -200,6 +209,7 @@ function renderSetup(){
       if(s.btn){const b=el("button","btn small solid",s.btn[0]);b.type="button";b.onclick=s.btn[1];go.append(b)}
       if(s.btn2){const b=el("button","btn small ghost",s.btn2[0]);b.type="button";b.onclick=s.btn2[1];go.append(b)}
       (s.more||[]).forEach(([t,f])=>{const b=el("button","btn small ghost",t);b.type="button";b.onclick=f;go.append(b)});
+      {const keys=steps.map(stepKey);go.append(arrows(()=>{moveIn("connOrder",keys,stepKey(s),-1);renderSetup()},()=>{moveIn("connOrder",keys,stepKey(s),1);renderSetup()},ix===0,ix===steps.length-1))}
       r.append(go,el("span","ds",s.desc));host.append(r);
     });
   });
