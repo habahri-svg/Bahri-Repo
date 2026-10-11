@@ -498,7 +498,17 @@ function applyLook(l){
   document.querySelectorAll("#swatches .swatch").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.pal===p)));
   $("lookMode").value=l.m==="light"||l.m==="dark"?l.m:"auto";
   const mt=document.querySelector('meta[name="theme-color"]');if(mt)mt.content=PAL_META[p];
+  try{applyOwnColours(l)}catch(e){}
 }
+function applyOwnColours(l){
+  let st=document.getElementById("ownCol");if(!st){st=document.createElement("style");st.id="ownCol";document.head.append(st)}
+  st.textContent=(l.c1||l.c2)&&window.ownColCss?window.ownColCss(l.c1,l.c2):"";
+  if(l.c1)$("colMain").value=l.c1;if(l.c2)$("colAccent").value=l.c2;
+  const mt=document.querySelector('meta[name="theme-color"]');if(mt&&l.c1)mt.content=l.c1;
+}
+$("colMain").oninput=()=>saveLook({c1:$("colMain").value});
+$("colAccent").oninput=()=>saveLook({c2:$("colAccent").value});
+$("colReset").onclick=()=>{saveLook({c1:"",c2:"",p:"ocean"});$("colMain").value="#104b70";$("colAccent").value="#b8923c"};
 function saveLook(patch){const l=Object.assign({},lookNow(),patch);try{localStorage.setItem("wyz-look",JSON.stringify(l))}catch(e){}applyLook(l)}
 document.querySelectorAll("#swatches .swatch").forEach(b=>b.onclick=()=>saveLook({p:b.dataset.pal}));
 $("lookMode").onchange=()=>saveLook({m:$("lookMode").value});
@@ -2151,6 +2161,8 @@ function makeCollapsible(card,key,hdr){card.dataset.col=key;hdr.classList.add("h
   hdr.onclick=t;hdr.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();t()}}}
 ["setupCard","c-links","c-cal","c-tasks","c-inbox","c-res","c-docs"].forEach(id=>{const c=$(id);const h=c&&c.querySelector(".pad > h2");if(h)makeCollapsible(c,id,h)});
 $("colAll").onclick=()=>{state.top3Col=1;persist();try{renderTop3()}catch(e){}document.querySelectorAll("section:not([hidden]) [data-col]").forEach(c=>collapsed.add(c.dataset.col));if(!$("p-today").hidden)ORDER.forEach(k=>collapsed.add("g-"+k));saveCol();applyCol()};
+$("connCol").onclick=()=>{$("p-conn").querySelectorAll("[data-col]").forEach(c=>collapsed.add(c.dataset.col));saveCol();applyCol()};
+$("connExp").onclick=()=>{$("p-conn").querySelectorAll("[data-col]").forEach(c=>collapsed.delete(c.dataset.col));saveCol();applyCol()};
 $("expAll").onclick=()=>{state.top3Col=0;persist();try{renderTop3()}catch(e){}collapsed.clear();saveCol();applyCol()};
 /* every other card on every tab gets the same tap-the-heading collapse */
 document.querySelectorAll(".card").forEach(c=>{
