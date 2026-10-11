@@ -438,7 +438,7 @@ function renderHello(){
   $("who").hidden=!uid;
   if(uid){$("whoName").textContent=email||myName;const a=$("avatar");if(pic){a.src=pic;a.hidden=false}else a.hidden=true}
 }
-let loopOn=false;
+let loopOn=false,lastAct=Date.now(),lastRef=Date.now();
 async function afterConnect(){
   const p=await G.profile();
   uid=p.sub;myName=p.name||"";email=p.email||"";pic=p.picture||"";
@@ -454,9 +454,15 @@ async function afterConnect(){
   setTimeout(()=>{try{autoWeekly()}catch(e){}try{autoTidy()}catch(e){}},4000);
   {const hm=location.hash.match(/^#thread=(.+)/);if(hm){openThread(decodeURIComponent(hm[1]));history.replaceState(null,"",location.pathname+location.search)}}
   if(!loopOn){loopOn=true;
-    setInterval(()=>{if(!document.hidden)refreshAll(false)},600000);
-    setInterval(()=>{if(document.hidden&&state.alertsOn)refreshAll(false)},300000);
-    document.addEventListener("visibilitychange",()=>{if(!document.hidden&&board&&Date.now()-(board.at||0)>600000)refreshAll(false)})}
+    /* When to check for new email:
+       - the moment you open the app or come back to it
+       - every 10 minutes while you're using it (touched, typed or scrolled in the last 5 minutes)
+       - every 30 minutes otherwise (open but idle, or in the background) */
+    const since=()=>Date.now()-lastRef;
+    ["pointerdown","keydown","scroll","touchstart","mousemove"].forEach(ev=>window.addEventListener(ev,()=>{lastAct=Date.now()},{passive:true}));
+    setInterval(()=>{const active=!document.hidden&&Date.now()-lastAct<300000;if(since()>=(active?600000:1800000))refreshAll(false)},60000);
+    const onOpen=()=>{lastAct=Date.now();if(!document.hidden&&since()>60000)refreshAll(false)};
+    document.addEventListener("visibilitychange",onOpen);window.addEventListener("focus",onOpen);window.addEventListener("pageshow",onOpen)}
 }
 async function connectGoogle(consent){
   const b=$("wBtn"),old="Continue with Google";
@@ -2293,6 +2299,7 @@ applySetOrder();
 
 /* ---------- boot ---------- */
 async function refreshAll(force){
+  lastRef=Date.now();
   if(!G.connected()){showWelcome();setFresh("err","Connect Google to load your day.");return}
   await readConn();loadCal();
   if(!state.skipDrive||drive.state==="ok")loadDrive();
