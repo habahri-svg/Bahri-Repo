@@ -288,6 +288,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       <button class="btn" type="button" id="readDayBtn" title="Hear your top items, meetings and urgent emails read out loud">🔊 Read my day</button>
       <button class="btn" type="button" id="wrapBtn" title="What got done today and what is next">End-of-day wrap</button>
       <button class="btn" type="button" id="zoomBtn" title="Make the text bigger or smaller">Text size</button>
+      <button class="btn" type="button" id="srcBtn" title="Switch each source of information on or off">Sources on/off</button>
       <button class="btn" type="button" id="inviteBtn" title="Send someone the link and steps on WhatsApp">Invite someone</button>
       <span class="status" id="fresh">Not loaded yet</span>
     </div>
@@ -463,7 +464,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
 
   <!-- CONNECTIONS -->
   <section id="p-conn" role="tabpanel" aria-labelledby="t-conn" hidden class="wrap" style="gap:16px">
-    <div class="card"><div class="pad">
+    <div class="card" id="srcCard"><div class="pad">
       <h2>What your page reads</h2>
       <p class="sub">Switch any source on or off. It's saved for you only and you can change it any time.</p>
       <div id="srcList"></div>

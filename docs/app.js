@@ -86,6 +86,7 @@ function renderSources(){
   G.accounts().slice(1).filter(x=>x.email).forEach(x=>row(G.accountOn(x.email),"Email account: "+x.email,"Its mail, meetings and files",on=>{G.setAccountOn(x.email,on);refreshAll(true)}));
 }
 window.addEventListener("wyz-accounts",()=>{try{renderSources()}catch(e){}});
+$("srcBtn").onclick=()=>{show("t-conn");renderSources();const c=$("srcCard");c.classList.remove("collapsed");try{collapsed.delete(c.dataset.col);saveCol();applyCol()}catch(e){}c.scrollIntoView({behavior:"smooth",block:"start"})};
 /* ---------- more connections: a second Google account, AI through your own chat account, apps, list import ---------- */
 const CHAT={chatgpt:{name:"ChatGPT",url:"https://chatgpt.com/?q={prompt}",home:"https://chatgpt.com/"},claude:{name:"Claude",url:"https://claude.ai/new?q={prompt}",home:"https://claude.ai/"}};
 const chatAI=()=>CHAT[state.chatAI]?state.chatAI:"";
