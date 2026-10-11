@@ -260,8 +260,8 @@ h2.hdr::after{margin-left:8px}
 .mvb:disabled{opacity:.3}
 .group h3.hdr::after{margin-left:8px}
 .collapsed > .pad > h2.hdr::after,.group.collapsed h3.hdr::after{transform:rotate(-90deg)}
-.card.collapsed:not(.group) > .pad > :not(h2){display:none}
-.card.collapsed:not(.group) > :not(.pad){display:none}
+.card.collapsed:not(.group) > .pad > :not(h2.hdr){display:none!important}
+.card.collapsed:not(.group) > :not(.pad){display:none!important}
 .group.collapsed .item{display:none}
 .group.collapsed h3{border-radius:9px}
 @media (prefers-reduced-motion: reduce){h2.hdr::after,.group h3.hdr::after{transition:none}}
@@ -484,7 +484,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
     <input type="file" id="f-chatgpt" accept=".zip,.json,application/zip,application/json" hidden>
     <input type="file" id="f-claude" accept=".zip,.json,application/zip,application/json" hidden>
     <div class="card">
-      <div class="pad" style="padding-bottom:0"><h2>WhatsApp and your research</h2></div>
+      <div class="pad"><h2>WhatsApp and your research</h2></div>
       <div class="conn">
         <span class="nm">WhatsApp</span><span class="ds">Ready to use, nothing to connect. Every draft has Send on WhatsApp, and every email and task has Share on WhatsApp in its Ask menu. WhatsApp opens with the text filled in and you pick the chat. Reading your WhatsApp chats isn't possible: WhatsApp doesn't let other apps read personal chats.</span>
         <div class="right"><span class="pill ok">Ready</span></div>

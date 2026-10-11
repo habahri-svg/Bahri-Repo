@@ -404,7 +404,7 @@ async function afterConnect(){
   uid=p.sub;myName=p.name||"";email=p.email||"";pic=p.picture||"";
   try{localStorage.setItem("wyz-last-name",myName)}catch(e){}
   LS="wyzcc-v1-"+uid;loadContactsCache();
-  setTimeout(()=>{try{sample=Connectors.makeSample();renderAI();renderSources();const r=document.querySelector('[data-sec="research"]');if(r)r.hidden=srcOff("research")}catch(e){}},0);
+  setTimeout(()=>{try{applySetOrder();sample=Connectors.makeSample();renderAI();renderSources();const r=document.querySelector('[data-sec="research"]');if(r)r.hidden=srcOff("research")}catch(e){}},0);
   $("welcome").hidden=true;renderHello();
   try{G.token().then(t=>fetch("/api/seen",{method:"POST",headers:{Authorization:"Bearer "+t}})).catch(()=>{})}catch(e){}
   const snap=lsGet();if(snap&&snap.state)restore(snap);
@@ -2212,6 +2212,17 @@ document.querySelectorAll("[data-sec]").forEach(sec=>{const h=sec.querySelector(
   [["-1","\u2191","Move up"],["1","\u2193","Move down"]].forEach(([d,t,l])=>{const b=el("button","btn small ghost mvb",t);b.type="button";b.dataset.d=d;b.setAttribute("aria-label",l+": "+name);b.title=l;
     b.onclick=e=>{e.stopPropagation();moveSec(sec.dataset.sec,+d)};b.onkeydown=e=>e.stopPropagation();mv.append(b)});h.append(mv)});
 applyCol();
+/* ---------- Settings: move each card up or down (saved per person) ---------- */
+function setCards(){return [...$("p-conn").children].filter(c=>c.classList.contains("card")&&c.dataset.col)}
+function applySetOrder(){const host=$("p-conn"),cards=setCards(),o=state.setOrder||[];
+  const sorted=cards.map((c,i)=>({c,i,r:o.indexOf(c.dataset.col)})).sort((x,y)=>(x.r<0?1000+x.i:x.r)-(y.r<0?1000+y.i:y.r)).map(x=>x.c);
+  const anchor=cards[0]&&cards[0].previousElementSibling;let prev=anchor;sorted.forEach(c=>{if(prev)prev.after(c);else host.prepend(c);prev=c});
+  sorted.forEach((c,i)=>{const m=c.querySelector(":scope > .pad > h2 .mv");if(m){m.children[0].disabled=i===0;m.children[1].disabled=i===sorted.length-1}})}
+function moveSet(key,d){const keys=setCards().map(c=>c.dataset.col),a=keys.indexOf(key),b=a+d;if(a<0||b<0||b>=keys.length)return;[keys[a],keys[b]]=[keys[b],keys[a]];state.setOrder=keys;persist();applySetOrder()}
+setCards().forEach(c=>{const h=c.querySelector(":scope > .pad > h2");if(!h)return;const mv=el("span","mv");
+  [["-1","\u2191","Move up"],["1","\u2193","Move down"]].forEach(([d,t,l])=>{const b=el("button","btn small ghost mvb",t);b.type="button";b.setAttribute("aria-label",l+": "+h.textContent);b.title=l;
+    b.onclick=e=>{e.stopPropagation();moveSet(c.dataset.col,+d)};b.onkeydown=e=>e.stopPropagation();mv.append(b)});h.append(mv)});
+applySetOrder();
 
 /* ---------- boot ---------- */
 async function refreshAll(force){
