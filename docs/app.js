@@ -435,7 +435,7 @@ function updateHero(){
   defs.forEach(([label,n,color,fn])=>{const b=el("button","hstat");b.type="button";b.append(el("b","",String(n)));const l=el("span");const dot=el("i");dot.style.background=color;l.append(dot,label);b.append(l);b.onclick=fn;b.setAttribute("aria-label",n+" "+label);box.append(b)});
 }
 function renderHello(){
-  try{$("pageName").value=state.pageName||"";applyPageName();renderTeam();$("autoDraft").checked=!!state.autoDraft;$("undoSecs").value=String(undoSecs());$("alertsOn").checked=!!state.alertsOn&&"Notification" in window&&Notification.permission==="granted";$("autoSuggest").checked=state.autoSuggest!==false;$("tidyOn").checked=!!state.tidy;$("weeklyOn").checked=!state.noWeekly;$("quickList").value=Array.isArray(state.quick)?state.quick.join(", "):"";$("driveFolder").value=state.driveFolder||""}catch(e){}
+  try{$("pageName").value=state.pageName||"";applyPageName();renderTeam();$("autoDraft").checked=!!state.autoDraft;$("undoSecs").value=String(undoSecs());if($("autoSum"))$("autoSum").checked=state.autoSum!==false;if($("badgeOn"))$("badgeOn").checked=!state.badgeOff;$("alertsOn").checked=!!state.alertsOn&&"Notification" in window&&Notification.permission==="granted";$("autoSuggest").checked=state.autoSuggest!==false;$("tidyOn").checked=!!state.tidy;$("weeklyOn").checked=!state.noWeekly;$("quickList").value=Array.isArray(state.quick)?state.quick.join(", "):"";$("driveFolder").value=state.driveFolder||""}catch(e){}
   const h=new Date().getHours();
   $("hello").textContent=myName?(h<12?"Good morning, ":h<18?"Good afternoon, ":"Good evening, ")+myName.split(" ")[0]:"Your execution page";
   try{updateHero()}catch(e){}
@@ -634,7 +634,9 @@ function renderCal(){
     if(!list.length){host.append(el("p","sub","Nothing scheduled."));return}
     list.forEach(x=>{const r=el("div","ev");r.append(el("b","",x.start.date?"All day":fmtTime(x.start.dateTime)+(x.end&&x.end.dateTime?"–"+fmtTime(x.end.dateTime):"")));
       const s=el("span");const a=x.conferenceUrl||x.htmlLink;if(a){const l=el("a","",x.summary||"(No title)");l.href=a;l.target="_blank";l.rel="noopener";l.style.color="var(--fg)";s.append(l)}else s.append(x.summary||"(No title)");
-      if(x.location)s.append(el("small",""," · "+x.location));if(x.start&&x.start.dateTime){const pb=el("button","btn small ghost","Prep brief");pb.type="button";pb.style.marginLeft="8px";pb.onclick=()=>openBrief(x);s.append(pb)}if(x.id&&x.start&&x.start.dateTime){const rs=el("button","btn small ghost","Reschedule");rs.type="button";rs.style.marginLeft="8px";rs.onclick=()=>openEvent(x);s.append(rs)}if(x.conferenceUrl){const j=el("a","btn small","Join");j.href=x.conferenceUrl;j.target="_blank";j.rel="noopener";j.style.marginLeft="8px";s.append(j)}r.append(s);host.append(r)});
+      if(x.location)s.append(el("small",""," · "+x.location));if(x.start&&x.start.dateTime){const pb=el("button","btn small ghost","Prep brief");pb.type="button";pb.style.marginLeft="8px";pb.onclick=()=>openBrief(x);s.append(pb)}if(x.id&&x.start&&x.start.dateTime){const rs=el("button","btn small ghost","Reschedule");rs.type="button";rs.style.marginLeft="8px";rs.onclick=()=>openEvent(x);s.append(rs)}if(x.conferenceUrl){const j=el("a","btn small","Join");j.href=x.conferenceUrl;j.target="_blank";j.rel="noopener";j.style.marginLeft="8px";s.append(j)}
+      if(x.start&&x.start.dateTime&&Date.parse(x.start.dateTime)<=Date.now()+30*60000){const has=state.meetNotes&&state.meetNotes[x.id]&&state.meetNotes[x.id].text;const nb=el("button","btn small"+(has?"":" ghost"),has?"📝 Notes ✓":"📝 Notes");nb.type="button";nb.style.marginLeft="8px";nb.onclick=()=>openNotes(x);s.append(nb)}
+      r.append(s);host.append(r)});
   });
 }
 
@@ -1032,13 +1034,13 @@ async function openThread(id,o){
   $("thr").hidden=false;$("thrTitle").textContent=(t.subject||"Conversation")+(t.account?" · in "+t.account:"");
   $("thrGmail").href=t.url||"https://mail.google.com/";
   $("thrSnooze").replaceChildren(snoozeDrop(id,thrClose));$("thrAIbox").hidden=true;$("thrAIbox").open=false;
-  $("thrBody").replaceChildren(el("p","sub","Loading the conversation..."));
+  $("thrBody").replaceChildren(el("p","sub","Loading the conversation..."));drawTools();
   try{if(voice.on){voice.on=false;rec.abort()}}catch(e){}micState(false);$("thrCheckOut").hidden=true;setSendButtons(false);$("thrExact").hidden=true;
   $("thrFree").hidden=true;$("thrPaste").value="";$("thrReply").hidden=true;$("thrSt").textContent="";$("thrSt").className="status";$("thrText").value="";$("thrAll").checked=false;
   ["thrSend","thrSave","thrText","thrTo","thrCc"].forEach(k=>$(k).disabled=false);
   $("thrSend").textContent="Send";
   try{const r=await mcp.callTool("Gmail","get_thread",{threadId:id,messageFormat:"PLAIN_TEXT"},{cache:false});thr.msgs=(r.payload&&r.payload.messages)||[]}catch(e){thr.msgs=[]}
-  thr.sug={state:"idle"};renderThread();threadNav();thrMore();drawQuick();drawSuggest();
+  thr.sug={state:"idle"};renderThread();threadNav();thrMore();drawQuick();drawSuggest();drawTools();drawThreadSummary();
   if(thr.msgs.length&&(lastMsg().labelIds||[]).includes("UNREAD"))mcp.callTool("Gmail","mark_read",{threadId:id}).catch(()=>{});
   if(thr.msgs.length){
     $("thrReply").hidden=false;fillTargets();syncRuleBtns();
@@ -1272,7 +1274,7 @@ $("thrFiles").onchange=async e=>{
   $("thrFileList").textContent=thr.files.map(f=>f.name+" ("+Math.max(1,Math.round(f.size/1024))+" KB)").join(", ");
 };
 /* Sending: quick local checks, then an Undo countdown, then the real send */
-const undoSecs=()=>{const n=state.undoSecs;return Number.isInteger(n)&&n>=0&&n<=60?n:0};
+const undoSecs=()=>{const n=state.undoSecs;return Number.isInteger(n)&&n>=0&&n<=60?n:10};
 function sendChecks(a){
   const issues=[],typed=$("thrText").value;
   if(/\b(attach(ed|ment|ments)?|enclosed|PFA)\b/i.test(typed.split(/\n\s*On .{5,120}wrote:/)[0])&&!thr.files.length)issues.push("You mention an attachment, but nothing is attached.");
@@ -1502,13 +1504,15 @@ function renderBoard(){
   const f=$("filters");f.replaceChildren();
   ORDER.forEach(k=>{const n=items.filter(i=>i.st===k&&!isOff(i)).length;if(!n)return;const b=el("button","chip");b.type="button";b.append(el("span","dot "+k),el("span","",ST[k]),el("b","",String(n)));b.setAttribute("aria-pressed",String(flt===k));b.onclick=()=>{flt=flt===k?null:k;renderBoard()};f.append(b)});
   const offN=items.filter(isOff).length;$("showOff").textContent=(showOff?"Hide":"Show")+" done and snoozed ("+offN+")";
+  const pins=flt?[]:vis.filter(i=>isPinned(i.id)&&!isOff(i));
+  if(pins.length){const g=el("div","card group");const h=el("h3");h.append(el("span","","📌 "),el("span","","Pinned"),el("span","n",pins.length+" item"+(pins.length>1?"s":"")));g.append(h);makeCollapsible(g,"g-pin",h);pins.forEach(i=>g.append(itemRow(i)));host.append(g)}
   ORDER.forEach(k=>{
-    if(flt&&flt!==k)return;const list=vis.filter(i=>i.st===k);if(!list.length)return;
+    if(flt&&flt!==k)return;const list=vis.filter(i=>i.st===k&&!pins.includes(i));if(!list.length)return;
     const g=el("div","card group");const h=el("h3");h.append(el("span","dot "+k),el("span","",ST[k]),el("span","n",list.length+" item"+(list.length>1?"s":"")));g.append(h);makeCollapsible(g,"g-"+k,h);
     list.forEach(i=>g.append(itemRow(i)));host.append(g);
   });
   if(!vis.length&&(board.items||[]).length)host.append(el("p","sub","All clear. Everything is done or snoozed."));
-  applyCol();
+  applyCol();updateBadge();
   try{renderTop3();renderHandoffs()}catch(e){}
 }
 /* select several emails and act on them together */
@@ -1591,7 +1595,7 @@ function itemRow(i){
   row.append(el("span","dot "+i.st));const m=el("div","main");
   {const ttl=el("span","t");if(selOn){const cb=el("input","selbox");cb.type="checkbox";cb.checked=sel.has(i.id);cb.setAttribute("aria-label","Select this email");cb.onchange=()=>{cb.checked?sel.add(i.id):sel.delete(i.id);bulkBar()};ttl.append(cb)}ttl.append(document.createTextNode(i.title||t.subject||""));m.append(ttl)}
   if(i.summary)m.append(el("span","s",i.summary));
-  const meta=el("span","m");const u=el("span","urg u"+i.g,UR[i.g]||"");meta.append(u,(i.vip?" · \u2605 VIP":"")+(state.snooze[i.id]===todayKey()?" · Back today":"")+(state.repeat&&state.repeat[i.id]?" · Weekly":"")+(state.drafted&&state.drafted[i.id]?" · Draft ready in Gmail":"")+" · "+(t.lastFromMe?"You wrote to "+(nameOf((t.lastTo||[])[0])||"them"):(nameOf(t.from)||""))+(i.when?" · "+i.when:t.date?" · "+fmtWhen(t.date):""));m.append(meta);
+  const meta=el("span","m");const u=el("span","urg u"+i.g,UR[i.g]||"");meta.append(u,(isPinned(i.id)?" · 📌 Pinned":"")+(i.vip?" · \u2605 VIP":"")+(state.snooze[i.id]===todayKey()?" · Back today":"")+(state.repeat&&state.repeat[i.id]?" · Weekly":"")+(state.drafted&&state.drafted[i.id]?" · Draft ready in Gmail":"")+" · "+(t.lastFromMe?"You wrote to "+(nameOf((t.lastTo||[])[0])||"them"):(nameOf(t.from)||""))+(i.when?" · "+i.when:t.date?" · "+fmtWhen(t.date):""));m.append(meta);
   const a=el("div","acts");
   if(t.url){const o=el("a","btn small","Open in Gmail");o.href=t.url;o.target="_blank";o.rel="noopener";a.append(o)}
   {const rd=el("button","btn small","Read thread");rd.type="button";rd.onclick=()=>openThread(i.id,{item:i});a.append(rd)}
@@ -1599,9 +1603,10 @@ function itemRow(i){
     const q=el("button","btn small solid",chase?"Chase here":"Reply here");q.type="button";q.title="Write and send the answer right here";q.onclick=()=>draftFor(i,m,q);a.append(q);
     const d=el("button","btn small",chase?"Open to chase":"Open to reply");d.type="button";d.onclick=()=>openThread(i.id,{item:i,draft:true});a.append(d)}
   const dn=el("button","btn small ghost",state.done[i.id]?"Undo done":"Done");dn.type="button";dn.onclick=()=>{if(state.done[i.id]){delete state.done[i.id];persist();renderBoard()}else markDone(i)};
+  const pn=el("button","btn small ghost",isPinned(i.id)?"Unpin":"📌 Pin");pn.type="button";pn.title="Keep it at the top until it's done";pn.onclick=()=>togglePin(i.id);
   const sz=snoozeDrop(i.id);const ib=el("div","instr");const ins=el("button","btn small ghost","Instruct AI");ins.type="button";ins.onclick=()=>toggleInstruct(i,ib);
   const at=el("button","btn small ghost","Add to tasks");at.type="button";at.onclick=()=>{addTask(i.title||t.subject,"Email from "+nameOf(t.from));at.textContent="Added";at.disabled=true};
-  a.append(askDrop("I need help with an email. From: "+(t.lastFromMe?"me, to "+((t.lastTo||[]).join(", ")):(t.from||""))+". Subject: "+(t.subject||"")+". What it's about: "+(i.summary||t.snippet||"")+" What's the best way to handle it? If a reply or chaser is needed, draft one I can edit.",(i.title||t.subject||"")+(i.summary?"\n"+i.summary:"")),dn,sz,at,ins);m.append(a,ib);row.append(m);return row;
+  a.append(askDrop("I need help with an email. From: "+(t.lastFromMe?"me, to "+((t.lastTo||[]).join(", ")):(t.from||""))+". Subject: "+(t.subject||"")+". What it's about: "+(i.summary||t.snippet||"")+" What's the best way to handle it? If a reply or chaser is needed, draft one I can edit.",(i.title||t.subject||"")+(i.summary?"\n"+i.summary:"")),dn,sz,pn,at,ins);m.append(a,ib);row.append(m);return row;
 }
 async function draftFor(i,host,btn){
   btn.disabled=true;btn.textContent="Reading the thread";
@@ -1610,6 +1615,8 @@ async function draftFor(i,host,btn){
   const text=msgs.slice(-6).map(x=>"From: "+(x.sender||"")+"\nDate: "+(x.date||"")+"\n"+String(x.plaintextBody||x.plaintext_body||x.snippet||"").slice(0,3000)).join("\n\n---\n\n");
   const toRow=el("div","ask");const toSel=el("select","in");toSel.style.flex="0 1 220px";toSel.setAttribute("aria-label","Reply to");
   toSel.append(new Option("Reply to sender only","sender"),new Option("Reply to everyone (all)","all"));toRow.append(toSel);
+  const remSel=el("select","in");remSel.style.flex="0 1 230px";remSel.setAttribute("aria-label","Remind me if no reply");
+  [["0","No reminder"],["2","Remind me if no reply in 2 days"],["3","Remind me if no reply in 3 days"],["7","Remind me if no reply in 1 week"]].forEach(([v,t])=>remSel.append(new Option(t,v)));remSel.value="3";toRow.append(remSel);
   const dirRow=el("div","ask");const dirIn=el("input","in");dirIn.placeholder="Your direction for the answer (optional)";dirIn.setAttribute("aria-label","Your direction for the answer");
   const dirGo=el("button","btn small","Write it my way");dirGo.type="button";dirRow.append(dirIn,dirGo);
   const box=el("div","draftbox");box.append(toRow,dirRow);const ta=el("textarea");ta.id="d-"+i.id;ta.value="";const st=el("span","status","Writing a draft");
@@ -1633,14 +1640,20 @@ async function draftFor(i,host,btn){
   dirGo.onclick=async()=>{dirGo.disabled=true;await writeMyWay(dirIn.value,(i.st==="follow"||i.st==="wait"),text,t=>{ta.value=t;ta.dispatchEvent(new Event("input"))},(m,err)=>{st.className="status"+(err?" err":"");st.textContent=m},i);dirGo.disabled=false};
   dirIn.addEventListener("keydown",e=>{if(e.key==="Enter")dirGo.click()});
   /* Send from the list: Send, then Confirm, like in the email view */
-  const sd=el("button","btn small solid","Send");sd.type="button";let armed=0;
+  const sd=el("button","btn small solid","Send");sd.type="button";let armed=0,counting=false,cdT=0,goNow=false;
   const last=()=>msgs[msgs.length-1]||{};
   const target=()=>{const l=last(),t=tById(i.id)||{};const lastSent=(l.labelIds||[]).includes("SENT");return lastSent?addrOf((l.toRecipients||[])[0]||t.from):addrOf(l.replyTo||l.sender||t.from)};
   sd.onclick=async()=>{
+    if(counting){clearInterval(cdT);counting=false;armed=0;sd.textContent="Send";ta.disabled=false;st.className="status";st.textContent="Cancelled. Nothing was sent.";return}
     if(!ta.value.trim()){st.textContent="Write your reply first.";st.className="status err";return}
     if(/\[(DATE|DETAIL)[^\]]*\]/i.test(ta.value)){st.textContent="Fill in the [DATE] or [DETAIL] part first.";st.className="status err";ta.focus();return}
     const to=target();if(!/^\S+@\S+\.\S+$/.test(to)){st.textContent="Couldn't find who to send it to. Open the email instead.";st.className="status err";return}
     if(!armed){armed=1;sd.textContent="Confirm: send to "+to+(toSel.value==="all"?" and everyone":"");st.className="status";st.textContent="Check it, then press Confirm.";return}
+    const secs=undoSecs();
+    if(secs&&!goNow){counting=true;let left=secs;ta.disabled=true;armed=0;
+      const tick=()=>{sd.textContent="Undo ("+left+")";st.className="status";st.textContent="Sending to "+to+" in "+left+" second"+(left===1?"":"s")+". Press Undo to stop it."};tick();
+      cdT=setInterval(()=>{left--;if(left<=0){clearInterval(cdT);counting=false;goNow=true;armed=1;sd.onclick()}else tick()},1000);return}
+    goNow=false;
     sd.disabled=true;sd.textContent="Sending...";
     const mine=new Set(G.accounts().map(x=>String(x.email||"").toLowerCase()).concat([String(email||"").toLowerCase()]));
     const cc=toSel.value==="all"?[...new Set([addrOf(last().sender)].concat((last().toRecipients||[]).map(addrOf),(last().ccRecipients||[]).map(addrOf)).map(x=>String(x||"").toLowerCase()))].filter(x=>x&&x!==to.toLowerCase()&&!mine.has(x)):[];
@@ -1648,8 +1661,10 @@ async function draftFor(i,host,btn){
     const subj=(t.subject||"").match(/^re:/i)?t.subject:"Re: "+(t.subject||"");
     try{await mcp.callTool("Gmail","send_message",{to:[to],cc,subject:subj,body,replyToMessageId:l.id||t.lastId});
       sd.textContent="Sent";st.className="status";st.textContent="Sent to "+to+". Marked as done.";ta.disabled=true;sv.disabled=true;
-      state.done[i.id]=Date.now();logDone(i);persist();setTimeout(()=>{try{renderBoard()}catch(e){}},1500)}
-    catch(e){armed=0;sd.disabled=false;sd.textContent="Send";st.className="status err";st.textContent="Couldn't send it ("+clip((e&&e.message)||"unknown reason",90)+"). Check your sent mail before trying again."}
+      state.done[i.id]=Date.now();logDone(i);
+      const rn=+remSel.value;if(rn>0){const d=new Date();d.setDate(d.getDate()+rn);state.chase=state.chase||{};state.chase[i.id]={due:ymd(d),title:subj,at:Date.now(),to};st.textContent+=" You'll be reminded on "+niceDay(ymd(d))+" if there's no reply."}
+      persist();setTimeout(()=>{try{renderBoard()}catch(e){}},1500)}
+    catch(e){armed=0;ta.disabled=false;sd.disabled=false;sd.textContent="Send";st.className="status err";st.textContent="Couldn't send it ("+clip((e&&e.message)||"unknown reason",90)+"). Check your sent mail before trying again."}
   };
   ta.addEventListener("input",()=>{if(armed){armed=0;sd.textContent="Send"}});toSel.onchange=()=>{if(armed){armed=0;sd.textContent="Send"}};
   sv.className="btn small";
@@ -2672,7 +2687,7 @@ function openCompose(o){
   o=o||{};
   thr={id:"",msgs:[],item:{id:"",st:"work",title:"New email",summary:""},armed:0,done:false,mode:"new",files:[]};
   $("thr").hidden=false;$("thrTitle").textContent="New email";
-  setMode("new");renderTplSelect();renderThrPick();loadContacts();
+  setMode("new");renderTplSelect();renderThrPick();loadContacts();drawTools();
   $("thrReply").hidden=false;$("thrFiles").value="";$("thrFileList").textContent="";
   ["thrSend","thrSave","thrText","thrTo","thrCc","thrSubj"].forEach(k=>$(k).disabled=false);
   $("thrSend").textContent="Send";$("thrSt").textContent="";$("thrSt").className="status";$("thrRemind").value="3";
@@ -2805,6 +2820,8 @@ function top3Rows(){
     const mapped=c.picks.map(p=>{const x=cand.find(y=>y.kind===p.kind&&y.ref===p.ref);return x?Object.assign({},x,{why:p.why||x.why}):null}).filter(Boolean);
     if(mapped.length)rows=mapped.concat(cand.filter(y=>!mapped.some(m=>m.kind===y.kind&&m.ref===y.ref))).slice(0,N);
   }
+  const pins=cand.filter(x=>x.kind==="mail"&&isPinned(x.ref));
+  if(pins.length)rows=pins.concat(rows.filter(r=>!(r.kind==="mail"&&isPinned(r.ref)))).slice(0,Math.max(N,pins.length));
   return rows;
 }
 function renderTop3(){
@@ -2818,7 +2835,7 @@ function renderTop3(){
   $("top3Sum").hidden=open;$("top3Sum").textContent=rows.length+" item"+(rows.length>1?"s":"")+". First: "+(rows[0]?rows[0].title:"")+". Tap the heading to open.";
   rows.forEach((x,i)=>{
     const r=el("div","t3row");r.append(el("span","t3n",String(i+1)));const m=el("div","main");
-    m.append(el("span","t",x.title));if(x.why)m.append(el("span","s",x.why));
+    m.append(el("span","t",(x.kind==="mail"&&isPinned(x.ref)?"📌 ":"")+x.title));if(x.why)m.append(el("span","s",x.why));
     const a=el("div","acts");
     a.append(onbBtn("✓ Done",()=>topDone(x),"small solid"),topSnoozeDrop(x),topDelBtn(x));
     if(x.kind==="mail"){a.append(onbBtn("Read thread",()=>openThread(x.ref,{item:x.item}),"small"),onbBtn("Draft a reply",()=>openThread(x.ref,{item:x.item,draft:true}),"small solid"))}
@@ -3059,3 +3076,211 @@ async function checkHandoffs(){
   }
   if(changed){persist();renderBoard()}
 }
+
+/* ---------- 3.31: pin, quick calendar and task, call or WhatsApp, long-thread summary, attachments, meeting notes, unread badge ---------- */
+function isPinned(id){return !!(state.pin&&state.pin[id])}
+function togglePin(id){state.pin=state.pin||{};if(state.pin[id])delete state.pin[id];else state.pin[id]=Date.now();persist();try{renderBoard()}catch(e){}}
+function phonesIn(msgs){
+  const me=myAddr(),out=[];
+  msgs.slice().reverse().forEach(m=>{
+    if(addrOf(m.sender).toLowerCase()===me)return;
+    const txt=(splitQuoted(String(m.plaintextBody||"")).main)||"";
+    (txt.match(/(?:\+|00)?\d[\d ().-]{7,18}\d/g)||[]).forEach(r=>{
+      let d=r.replace(/[^\d+]/g,"");if(d.startsWith("00"))d="+"+d.slice(2);
+      const n=d.replace(/\D/g,"");if(n.length<9||n.length>15)return;
+      if(!d.startsWith("+")&&!/^0[1-9]/.test(d))return;
+      if(/^(19|20)\d{6}$/.test(n))return;
+      if(!out.some(x=>x.n===n))out.push({raw:r.trim(),plus:d.startsWith("+"),n,who:String(nameOf(m.sender)||"").split(" ")[0]});
+    });
+  });
+  return out.slice(0,2);
+}
+function drawTools(){
+  const host=$("thrTools"),box=$("thrToolBox");if(!host)return;host.replaceChildren();box.replaceChildren();
+  if(!thr.msgs.length||thr.mode==="new"){host.hidden=true;return}
+  host.hidden=false;
+  const pinned=isPinned(thr.id);
+  const pb=el("button","btn small"+(pinned?" solid":""),pinned?"📌 Pinned":"📌 Pin to top");pb.type="button";pb.title="Keep this email at the top until you mark it done";
+  pb.onclick=()=>{togglePin(thr.id);drawTools();thrNote(isPinned(thr.id)?"Pinned. It stays at the top of your board and Top for today until it's done.":"Unpinned.")};
+  const cb=el("button","btn small","📅 Add to calendar");cb.type="button";cb.onclick=()=>toolCalendar(box);
+  const tb=el("button","btn small","✅ Make it a task");tb.type="button";tb.onclick=()=>toolTask(box);
+  host.append(pb,cb,tb);
+  phonesIn(thr.msgs).forEach(p=>{
+    const intl=p.plus?p.n:"971"+p.n.replace(/^0/,"");
+    const c=el("a","btn small","📞 Call"+(p.who?" "+p.who:""));c.href="tel:"+(p.plus?"+":"")+p.n;c.title=p.raw;
+    const w=el("a","btn small","💬 WhatsApp"+(p.who?" "+p.who:""));w.href="https://wa.me/"+intl;w.target="_blank";w.rel="noopener";w.title=p.raw;
+    host.append(c,w);
+  });
+}
+async function toolCalendar(box){
+  box.replaceChildren();const f=el("div","freebox");box.append(f);
+  const id0=thr.id,t=tById(thr.id)||{};
+  const ti=el("input","in");ti.value=String(t.subject||thr.item.title||"Meeting").replace(/^(re|fwd?):\s*/i,"");ti.setAttribute("aria-label","Event title");
+  const st=el("input","in");st.type="datetime-local";st.setAttribute("aria-label","Starts");
+  const d0=new Date();d0.setDate(d0.getDate()+1);st.value=ymd(d0)+"T10:00";
+  const du=el("select","in");[["15","15 min"],["30","30 min"],["60","1 hour"],["90","1.5 hours"],["120","2 hours"]].forEach(([v,l])=>du.append(new Option(l,v)));du.value="30";
+  const lo=el("input","in");lo.placeholder="Where (optional)";lo.setAttribute("aria-label","Location");
+  const inv=el("label","status chk");const ic=el("input");ic.type="checkbox";inv.append(ic," Invite the people on this email");
+  const msg=el("p","status","");
+  const row=(l,n)=>{const r=el("div","ask");const s=el("span","status",l);s.style.minWidth="60px";r.append(s,n);return r};
+  const go=el("button","btn small solid","Add to calendar");go.type="button";
+  const x=el("button","btn small ghost","Cancel");x.type="button";x.onclick=()=>box.replaceChildren();
+  const a=el("div","acts");a.append(go,x);
+  f.append(el("b","","📅 Add to your calendar"),row("Title",ti),row("Starts",st),row("Length",du),row("Where",lo),inv,msg,a);
+  go.onclick=async()=>{
+    if(!st.value){msg.className="status err";msg.textContent="Pick a start time.";return}
+    const s=new Date(st.value),e=new Date(s.getTime()+(+du.value||30)*60000),fmt=d=>ymd(d)+"T"+pad2(d.getHours())+":"+pad2(d.getMinutes());
+    const guests=ic.checked?[...new Set(thr.msgs.flatMap(m=>[addrOf(m.sender)].concat((m.toRecipients||[]).map(addrOf),(m.ccRecipients||[]).map(addrOf))).map(v=>String(v||"").toLowerCase()))].filter(v=>/^\S+@\S+\.\S+$/.test(v)&&v!==myAddr()):[];
+    go.disabled=true;go.textContent="Adding...";
+    const acct=/^a(\d+)~/.test(id0)?+id0.match(/^a(\d+)~/)[1]:undefined;
+    try{
+      await mcp.callTool("Google Calendar","create_event",Object.assign({title:ti.value.trim()||"Meeting",start:fmt(s),end:fmt(e),location:lo.value.trim(),account:acct},guests.length?{attendees:guests}:{}));
+      f.replaceChildren(el("p","status","Added to your calendar: "+(ti.value.trim()||"Meeting")+", "+niceDay(ymd(s))+" at "+pad2(s.getHours())+":"+pad2(s.getMinutes())+(guests.length?". Invites sent to "+guests.length+" "+(guests.length===1?"person":"people")+".":".")));
+      try{loadCal()}catch(_){}
+    }catch(err){go.disabled=false;go.textContent="Add to calendar";msg.className="status err";msg.textContent="Couldn't add it ("+clip((err&&err.message)||"unknown reason",90)+")."}
+  };
+  if(sample){
+    msg.textContent="Looking for a date and time in the email...";
+    try{
+      const r=await sample.json("Today is "+new Date().toDateString()+", Dubai time. Read this email thread and find the meeting, call, viewing, visit or deadline it proposes or confirms. Return JSON only: {\"found\": true or false, \"title\": short title, \"start\": \"YYYY-MM-DDTHH:MM\" Dubai time, \"minutes\": length in minutes, \"location\": \"\"}. If there's a day but no time, use 10:00.\n\n"+threadBlock(thr.msgs),{cache:false});
+      if(thr.id!==id0||!f.isConnected)return;
+      if(r&&r.found&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(String(r.start||""))){
+        if(r.title)ti.value=String(r.title);st.value=String(r.start).slice(0,16);
+        const m=String(Math.round(+r.minutes||30));if(![...du.options].some(o=>o.value===m))du.append(new Option(m+" min",m));du.value=m;
+        if(r.location)lo.value=String(r.location);msg.textContent="Found it in the email. Check it, then press Add to calendar.";
+      }else msg.textContent="No date in the email. Pick one, then press Add to calendar.";
+    }catch(e){if(f.isConnected)msg.textContent="Pick the date and time, then press Add to calendar."}
+  }
+}
+function toolTask(box){
+  box.replaceChildren();const f=el("div","freebox");box.append(f);
+  const t=tById(thr.id)||{};
+  const ti=el("input","in");ti.value=thr.item.title||t.subject||"";ti.setAttribute("aria-label","Task");
+  const du=el("input","in");du.type="date";du.setAttribute("aria-label","Due date");du.style.flex="0 1 180px";
+  const quick=el("div","chips");
+  [["Today",0],["Tomorrow",1],["In 3 days",3],["Next week",7]].forEach(([l,n])=>{const c=el("button","chip",l);c.type="button";c.onclick=()=>{const d=new Date();d.setDate(d.getDate()+n);du.value=ymd(d);quick.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",String(b===c)))};quick.append(c)});
+  const go=el("button","btn small solid","Add task");go.type="button";
+  const x=el("button","btn small ghost","Cancel");x.type="button";x.onclick=()=>box.replaceChildren();
+  go.onclick=()=>{const v=ti.value.trim();if(!v){ti.focus();return}
+    addTask(v,"Email from "+(nameOf(t.from)||nameOf(lastMsg().sender)||"someone"),du.value||"");
+    f.replaceChildren(el("p","status","Task added"+(du.value?", due "+niceDay(du.value):"")+". You'll find it under My tasks."))};
+  const a=el("div","acts");a.append(go,x);
+  const dr=el("div","ask");dr.append(el("span","status","Due"),du);
+  f.append(el("b","","✅ Make it a task"),ti,quick,dr,a);ti.focus();
+}
+/* a 3-line summary at the top of long conversations */
+const sumMem={};
+async function drawThreadSummary(){
+  let c=$("thrSum2");if(c)c.remove();
+  if(thr.msgs.length<5||thr.mode==="new"||state.autoSum===false||!sample)return;
+  const key=thr.id+"|"+(lastMsg().id||""),id0=thr.id;
+  c=el("div","suggest");c.id="thrSum2";
+  const h=el("div","sghead");h.append(el("b","","📝 Summary of "+thr.msgs.length+" messages"));
+  const x=el("button","btn small ghost","Hide");x.type="button";x.onclick=()=>c.remove();h.append(x);c.append(h);
+  const p=el("div","mailtext",sumMem[key]||"Summarising...");c.append(p);
+  $("thrBody").prepend(c);
+  if(sumMem[key])return;
+  try{
+    const r=await sample("Summarize this email conversation in 3 short lines for a busy manager: what it's about, where it stands now, and what's needed from them, if anything. Plain words, no em dashes, no semicolons. Start each line with a dash.\n\n"+threadBlock(thr.msgs),{cache:false});
+    if(thr.id!==id0)return;sumMem[key]=String(r.text||"").trim();p.textContent=sumMem[key]||"No summary.";
+  }catch(e){if(thr.id===id0&&c.isConnected)c.remove()}
+}
+/* every attachment from the last 60 days, in one place */
+function fileDownload(m,f,b){
+  const old=b.textContent;b.textContent="Downloading...";
+  fetchFile(m,f).then(b64=>{
+    const bin=atob(b64);const u8=Uint8Array.from(bin,c=>c.charCodeAt(0));
+    const url=URL.createObjectURL(new Blob([u8],{type:f.type||"application/octet-stream"}));
+    const a=document.createElement("a");a.href=url;a.download=f.name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000);b.textContent=old;
+  }).catch(()=>{b.textContent="Couldn't download"});
+}
+async function openAttachments(q){
+  const run=(openAttachments.run||0)+1;openAttachments.run=run;
+  const kind=openAttachments.k||"all";
+  const host=infoOpen("📎 Attachments");
+  const row=el("div","ask");const inp=el("input","in");inp.placeholder="Search by file name, sender or subject";inp.value=q||"";inp.setAttribute("aria-label","Search attachments");
+  const go=el("button","btn small solid","Search");go.type="button";row.append(inp,go);host.append(row);
+  go.onclick=()=>openAttachments(inp.value.trim());inp.onkeydown=e=>{if(e.key==="Enter")go.click()};
+  const chips=el("div","chips");
+  [["all","All"],["pdf","PDFs"],["img","Pictures"],["office","Word and Excel"]].forEach(([k,l])=>{const c=el("button","chip",l);c.type="button";c.setAttribute("aria-pressed",String(kind===k));c.onclick=()=>{openAttachments.k=k;openAttachments(inp.value.trim())};chips.append(c)});
+  host.append(chips);
+  const list=el("div");host.append(list);list.append(el("p","status","Looking through the last 60 days..."));
+  const ext={pdf:"filename:pdf",img:"(filename:jpg OR filename:jpeg OR filename:png OR filename:heic)",office:"(filename:doc OR filename:docx OR filename:xls OR filename:xlsx OR filename:csv)"}[kind]||"";
+  const re={pdf:/\.pdf$/i,img:/\.(jpe?g|png|heic|gif|webp)$/i,office:/\.(docx?|xlsx?|csv|pptx?)$/i}[kind]||/./;
+  let ths=[];
+  try{const r=await mcp.callTool("Gmail","search_threads",{query:("has:attachment newer_than:60d -in:chats "+ext+(q?" "+q:"")).trim(),pageSize:12},{cache:false});ths=(r.payload&&r.payload.threads)||[]}
+  catch(e){if(run===openAttachments.run)list.replaceChildren(el("p","status err","Couldn't search your mail ("+clip((e&&e.message)||"unknown reason",90)+")."));return}
+  if(run!==openAttachments.run)return;
+  if(!ths.length){list.replaceChildren(el("p","status","No attachments found."));return}
+  list.replaceChildren();let shown=0;const wait=el("p","status","Reading "+ths.length+" emails...");list.append(wait);
+  for(let n=0;n<ths.length;n+=3){
+    const part=await Promise.all(ths.slice(n,n+3).map(t=>mcp.callTool("Gmail","get_thread",{threadId:t.id,messageFormat:"PLAIN_TEXT"},{cache:false}).then(r=>({id:t.id,msgs:(r.payload&&r.payload.messages)||[]})).catch(()=>null)));
+    if(run!==openAttachments.run)return;
+    part.filter(Boolean).forEach(th=>{
+      th.msgs.slice().reverse().forEach(m=>{
+        (m.files||[]).filter(f=>f.name&&!(f.cid&&/^image\//.test(f.type||"")&&(!f.size||f.size<60000))&&re.test(f.name)).forEach(f=>{
+          shown++;
+          const r=el("div","item");r.append(el("span","dot none"));const mm=el("div","main");
+          mm.append(el("span","t","📎 "+f.name),el("span","m",(f.size?(f.size>1048576?(f.size/1048576).toFixed(1)+" MB":Math.max(1,Math.round(f.size/1024))+" KB")+" · ":"")+(nameOf(m.sender)||"")+(m.date?" · "+fmtWhen(m.date):"")+(m.subject?" · "+clip(m.subject,60):"")));
+          const a=el("div","acts");
+          if(f.id||f.data){const dl=el("button","btn small solid","Download");dl.type="button";dl.onclick=()=>fileDownload(m,f,dl);a.append(dl);
+            if(fileKind(f.type,f.name)){a.append(onbBtn("Ask AI about it",()=>{infoClose();openFileAI(f.name,()=>attachmentLoader(m,f))},"small"))}
+            const sv=el("button","btn small","Save to Drive");sv.type="button";sv.onclick=()=>saveToDrive(m,f,sv);a.append(sv)}
+          a.append(onbBtn("Open the email",()=>{infoClose();openThread(th.id)},"small ghost"));
+          mm.append(a);r.append(mm);list.insertBefore(r,wait);
+        });
+      });
+    });
+    wait.textContent=n+3<ths.length?"Reading more emails...":"";
+  }
+  if(!shown)wait.textContent="No matching files found.";else if(!wait.textContent)wait.remove();
+}
+/* notes for a meeting, turned into tasks or a follow-up email */
+function openNotes(ev){
+  state.meetNotes=state.meetNotes||{};const k=ev.id||ev.summary||"meeting";
+  const title=ev.summary||"Meeting";
+  const host=infoOpen("📝 Notes: "+title);
+  const when=ev.start&&ev.start.dateTime;if(when)host.append(el("p","status",niceDay(ymd(new Date(when)))+" at "+fmtTime(when)));
+  const ta=el("textarea","in");ta.rows=8;ta.style.minHeight="160px";ta.placeholder="What was agreed, who does what, and by when. Tap the mic on your keyboard to dictate.";ta.setAttribute("aria-label","Meeting notes");
+  ta.value=(state.meetNotes[k]&&state.meetNotes[k].text)||"";
+  ta.oninput=()=>{state.meetNotes[k]={text:ta.value,title,at:Date.now()};clearTimeout(openNotes.t);openNotes.t=setTimeout(persist,500)};
+  const st=el("p","status","Saved on this device as you type.");const out=el("div");
+  const people=(ev.attendees||[]).filter(a=>a.email&&!a.self&&!a.resource&&a.email!==myEmailLc()).map(a=>a.email);
+  const tk=onbBtn("Turn into tasks",async()=>{
+    const txt=ta.value.trim();if(!txt){ta.focus();return}
+    tk.disabled=true;st.className="status";st.textContent="Finding the tasks...";let list=[];
+    try{
+      if(sample){const r=await sample.json("Today is "+new Date().toDateString()+". These are "+(myName||"a manager")+"'s notes from the meeting \""+title+"\". List the action items. Return JSON only: {\"tasks\": [ {\"title\": short task, \"owner\": first name or \"me\", \"due\": \"YYYY-MM-DD\" or \"\"} ] }.\n\nNotes:\n"+txt,{cache:false});list=(r&&r.tasks)||[]}
+      else list=txt.split(/\n|\.\s+/).map(s=>s.replace(/^[-*\d.\s]+/,"").trim()).filter(s=>s.length>2).map(s=>({title:s,owner:"me",due:""}));
+      list=list.filter(x=>x&&x.title).slice(0,12);
+      list.forEach(x=>{const mine=!x.owner||/^me$/i.test(x.owner)||(myName&&String(x.owner).toLowerCase()===myName.split(" ")[0].toLowerCase());addTask((mine?"":x.owner+": ")+x.title,"Meeting: "+title,/^\d{4}-\d{2}-\d{2}$/.test(x.due||"")?x.due:"")});
+      st.textContent=list.length?list.length+" task"+(list.length>1?"s":"")+" added under My tasks.":"No action items found in the notes.";
+      out.replaceChildren();list.forEach(x=>out.append(el("p","status","✅ "+(x.owner&&!/^me$/i.test(x.owner)?x.owner+": ":"")+x.title+(x.due?" · due "+niceDay(x.due):""))));
+    }catch(e){st.className="status err";st.textContent="Couldn't read the tasks ("+clip((e&&e.message)||"unknown reason",90)+")."}
+    tk.disabled=false;
+  },"small solid");
+  const fu=onbBtn("Write follow-up email",async()=>{
+    const txt=ta.value.trim();if(!txt){ta.focus();return}
+    fu.disabled=true;st.className="status";st.textContent="Writing it...";let body="";
+    try{
+      if(sample){const tone=await toneExamples().catch(()=>"");const r=await sample("Write a short follow-up email from "+(myName||"me")+" at WYZ Rent after the meeting \""+title+"\", to the people who attended. Thank them in one line, then list what was agreed and who does what by when, from the notes. Plain text, use contractions, no em dashes, no semicolons, "+(sigText()?"no sign-off, the signature is added automatically":"signed with the first name")+". Return only the email body.\n\nNotes:\n"+txt+(tone?"\n\n"+tone:""),{cache:false});body=String(r.text||"").trim()}
+    }catch(e){}
+    if(!body)body="Thanks for your time today. Here's what we agreed:\n\n"+txt;
+    fu.disabled=false;infoClose();openCompose({to:people.join(", "),subject:"Follow-up: "+title,body});
+  },"small");
+  const a=el("div","acts");a.append(tk,fu);
+  host.append(ta,a,st,out);ta.focus();
+}
+/* unread count on the app icon and the browser tab */
+function updateBadge(){
+  try{
+    const n=(threads||[]).filter(t=>t.unread&&!t.lastFromMe&&!state.done[t.id]&&!(state.snooze[t.id]&&state.snooze[t.id]>todayKey())).length;
+    if(!updateBadge.base)updateBadge.base=document.title.replace(/^\(\d+\)\s*/,"");
+    document.title=(n?"("+n+") ":"")+updateBadge.base;
+    if(state.badgeOff){if("clearAppBadge" in navigator)navigator.clearAppBadge().catch(()=>{});return}
+    if("setAppBadge" in navigator)(n?navigator.setAppBadge(n):navigator.clearAppBadge()).catch(()=>{});
+  }catch(e){}
+}
+if($("attBtn"))$("attBtn").onclick=()=>{if(!G.connected()){showWelcome();return}openAttachments("")};
+if($("autoSum"))$("autoSum").onchange=()=>{state.autoSum=$("autoSum").checked;persist()};
+if($("badgeOn"))$("badgeOn").onchange=()=>{state.badgeOff=!$("badgeOn").checked;persist();updateBadge()};

@@ -295,6 +295,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       <button class="btn" type="button" id="refresh">Refresh now</button>
       <button class="btn" type="button" id="newMailBtn" title="Write a new email">New email</button>
       <button class="btn" type="button" id="planBtn" title="A plan for today from your meetings, emails and tasks">Plan my day</button>
+      <button class="btn" type="button" id="attBtn" title="Every file you received in the last 60 days, in one place">📎 Attachments</button>
       <button class="btn" type="button" id="readDayBtn" title="Hear your top items, meetings and urgent emails read out loud">🔊 Read my day</button>
       <button class="btn" type="button" id="wrapBtn" title="What got done today and what is next">End-of-day wrap</button>
       <button class="btn" type="button" id="zoomBtn" title="Make the text bigger or smaller">Text size</button>
@@ -560,6 +561,8 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       <label class="status" style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" id="weeklyOn" checked style="margin-top:3px"><span>On Sundays, show my weekly review by itself.</span></label>
       <label class="status" style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" id="autoDraft" style="margin-top:3px"><span>Write draft replies for me when I open the page, once a day. They go to Gmail drafts and are never sent.</span></label>
       <div class="ask"><label class="status" for="undoSecs">Undo send. After you press Send, wait this long before it really goes</label><select class="in" id="undoSecs" style="flex:0 1 150px"><option value="0">Send at once</option><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="20">20 seconds</option><option value="30">30 seconds</option></select></div>
+      <label class="status chk"><input type="checkbox" id="autoSum" checked> Show a 3-line AI summary at the top of long email threads (5 or more messages)</label>
+      <label class="status chk"><input type="checkbox" id="badgeOn" checked> Show the unread count on the app icon</label>
       <span class="status">Drive folder for saved attachments. It is created the first time you save one.</span>
       <input class="in" id="driveFolder" aria-label="Drive folder name" placeholder="WYZ Rent Attachments" autocomplete="off" maxlength="80">
       <span class="status">One-tap replies. The buttons under an email. Separate them with commas. Each one tells the AI what to say.</span>
@@ -640,6 +643,8 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
 <div id="thr" class="thr" hidden role="dialog" aria-modal="true" aria-labelledby="thrTitle">
   <div class="thrbox card"><div class="pad">
     <div class="headrow"><h2 id="thrTitle" style="flex:1 1 200px;overflow-wrap:anywhere"></h2><span class="status" id="thrPos"></span><button class="btn small" type="button" id="thrPrev" title="Previous email (left arrow)" aria-label="Previous email">‹ Prev</button><button class="btn small" type="button" id="thrNext" title="Next email (right arrow)" aria-label="Next email">Next ›</button><span id="thrSnooze"></span><span id="thrMore"></span><button class="btn small" type="button" id="thrVip" title="Always show this sender as urgent">VIP</button><button class="btn small" type="button" id="thrMute" title="Hide this sender from your board">Mute</button><button class="btn small" type="button" id="thrArchive">Archive</button><a id="thrGmail" class="btn small" target="_blank" rel="noopener">Open in Gmail</a><button class="btn small" type="button" id="thrClose">Close</button></div>
+    <div class="acts" id="thrTools" hidden></div>
+    <div id="thrToolBox"></div>
     <div id="thrBody"></div>
     <details class="msg" id="thrAIbox" hidden><summary>Instruct AI about this email</summary><div id="thrInstruct" class="instr"></div></details>
     <div id="thrReply" hidden>
