@@ -1,3 +1,3 @@
 /* Shown at the top of the page. Change these three lines each time you publish a new version.
    "updated" is in UTC, the page shows it in Dubai time. */
-window.WYZ_VERSION = { version: "3.9", name: "Send and confirm, WYZ colours, guided install", updated: "2026-10-11T12:26:00Z" };
+window.WYZ_VERSION = { version: "3.10", name: "Top 10 for today, choose how many, fold it away", updated: "2026-10-11T12:35:00Z" };

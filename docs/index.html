@@ -212,6 +212,8 @@ ol.steps li::marker{color:var(--gold);font-weight:700}
 label.chk{display:flex;gap:6px;align-items:center}
 .onb{position:fixed;inset:0;z-index:20;background:rgba(14,34,56,.6);display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto}
 .onbbox{width:100%;max-width:520px;max-height:100%;overflow:auto;box-shadow:0 12px 40px rgba(14,34,56,.35)}
+.t3tog{display:flex;align-items:center;gap:8px;flex:1 1 200px;background:none;border:0;padding:0;color:inherit;font:inherit;cursor:pointer;text-align:left}
+.t3tog h2{margin:0}.t3tog span{color:var(--soft);transition:transform .15s}.t3tog[aria-expanded="false"] span{transform:rotate(-90deg)}
 .updbar{position:fixed;left:16px;right:16px;margin-inline:auto;width:fit-content;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:30;display:flex;gap:10px;align-items:center;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-left:4px solid var(--gold);border-radius:12px;padding:10px 14px;box-shadow:0 8px 24px rgba(0,0,0,.18);max-width:calc(100% - 32px)}
 .onbrow{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-top:1px solid var(--line)}
 .onbrow:first-child{border-top:0}
@@ -277,7 +279,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       <button class="btn" type="button" id="refresh">Refresh now</button>
       <button class="btn" type="button" id="newMailBtn" title="Write a new email">New email</button>
       <button class="btn" type="button" id="planBtn" title="A plan for today from your meetings, emails and tasks">Plan my day</button>
-      <button class="btn" type="button" id="readDayBtn" title="Hear your top 3, meetings and urgent emails read out loud">🔊 Read my day</button>
+      <button class="btn" type="button" id="readDayBtn" title="Hear your top items, meetings and urgent emails read out loud">🔊 Read my day</button>
       <button class="btn" type="button" id="wrapBtn" title="What got done today and what is next">End-of-day wrap</button>
       <button class="btn" type="button" id="zoomBtn" title="Make the text bigger or smaller">Text size</button>
       <button class="btn" type="button" id="inviteBtn" title="Send someone the link and steps on WhatsApp">Invite someone</button>
@@ -334,7 +336,10 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
     </div>
 
     <div class="card note" id="top3" hidden><div class="pad">
-      <div class="headrow"><h2 style="flex:1 1 200px">Top 3 for today</h2><button class="btn small ghost" type="button" id="top3Refresh" title="Ask the AI to choose again">Pick again</button></div>
+      <div class="headrow"><button class="t3tog" type="button" id="top3Tog" aria-expanded="true" aria-controls="top3List"><h2 id="top3Title">Top 10 for today</h2><span aria-hidden="true">▾</span></button>
+        <label class="status" for="top3N">Show</label><select class="in" id="top3N" style="flex:0 0 auto;width:auto;padding:4px 8px"><option>3</option><option>5</option><option>10</option><option>15</option><option>20</option></select>
+        <button class="btn small ghost" type="button" id="top3Refresh" title="Ask the AI to choose again">Pick again</button></div>
+      <p class="status" id="top3Sum" hidden></p>
       <div id="top3List"></div>
     </div></div>
     <div class="card note" id="handoffCard" hidden><div class="pad">

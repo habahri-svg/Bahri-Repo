@@ -1770,7 +1770,7 @@ function dayScript(){
   const open=allItems().filter(i=>!isOff(i));
   const rep=open.filter(i=>i.st==="reply").length,fol=open.filter(i=>i.st==="follow").length;
   out.push(rep||fol?"You have "+(rep?rep+" email"+(rep>1?"s":"")+" to reply to":"")+(rep&&fol?" and ":"")+(fol?fol+" to follow up":"")+".":"Your inbox needs nothing from you right now.");
-  const rows=top3Rows();
+  const rows=top3Rows().slice(0,5);
   if(rows.length){out.push("Your top "+(rows.length===1?"item":rows.length+" things")+" for today.");rows.forEach((x,i)=>out.push((i+1)+". "+x.title+(x.why?". "+x.why:"")+"."))}
   const ev=(events||[]).filter(e=>e.start&&e.start.dateTime&&ymd(new Date(e.start.dateTime))===todayKey()&&e.status!=="cancelled"&&Date.parse(e.end&&e.end.dateTime||e.start.dateTime)>=now).slice(0,6);
   out.push(ev.length?"You have "+ev.length+" meeting"+(ev.length>1?"s":"")+" left today.":"No more meetings today.");
@@ -2044,8 +2044,8 @@ function makeCollapsible(card,key,hdr){card.dataset.col=key;hdr.classList.add("h
   const t=()=>{collapsed.has(key)?collapsed.delete(key):collapsed.add(key);saveCol();applyCol()};
   hdr.onclick=t;hdr.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();t()}}}
 ["setupCard","c-links","c-cal","c-tasks","c-inbox","c-res","c-docs"].forEach(id=>{const c=$(id);const h=c&&c.querySelector(".pad > h2");if(h)makeCollapsible(c,id,h)});
-$("colAll").onclick=()=>{document.querySelectorAll("section:not([hidden]) [data-col]").forEach(c=>collapsed.add(c.dataset.col));if(!$("p-today").hidden)ORDER.forEach(k=>collapsed.add("g-"+k));saveCol();applyCol()};
-$("expAll").onclick=()=>{collapsed.clear();saveCol();applyCol()};
+$("colAll").onclick=()=>{state.top3Col=1;persist();try{renderTop3()}catch(e){}document.querySelectorAll("section:not([hidden]) [data-col]").forEach(c=>collapsed.add(c.dataset.col));if(!$("p-today").hidden)ORDER.forEach(k=>collapsed.add("g-"+k));saveCol();applyCol()};
+$("expAll").onclick=()=>{state.top3Col=0;persist();try{renderTop3()}catch(e){}collapsed.clear();saveCol();applyCol()};
 /* every other card on every tab gets the same tap-the-heading collapse */
 document.querySelectorAll(".card").forEach(c=>{
   if(c.dataset.col||c.classList.contains("group")||c.closest(".onb,.thr,#report"))return;
@@ -2472,34 +2472,38 @@ function top3Candidates(){
   return out.sort((a,b)=>b.score-a.score);
 }
 let top3Busy=false,top3Fail=0;
+const topN=()=>{const n=+state.topN;return [3,5,10,15,20].includes(n)?n:10};
 async function pickTop3(force){
   if(top3Busy||!sample||(!force&&Date.now()-top3Fail<600000))return;
-  const cand=top3Candidates().slice(0,10);if(cand.length<=3)return;
+  const N=topN(),cand=top3Candidates().slice(0,Math.max(15,N*2));if(cand.length<=N)return;
   const c=state.top3;
-  if(!force&&c&&c.day===todayKey()&&Date.now()-c.at<3*3600000)return;
+  if(!force&&c&&c.day===todayKey()&&c.n===N&&Date.now()-c.at<3*3600000)return;
   top3Busy=true;
   try{
     const list=cand.map((x,i)=>"c"+i+" ["+x.kind+"] "+x.title+(x.why?" - "+x.why:"")).join("\n");
-    const r=await creditFallback(prov=>sample.json("You are the chief of staff of "+(myName||"a manager")+" at WYZ Rent, a Dubai holiday home management company. Today is "+new Date().toDateString()+", the time is "+new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})+".\nChoose the 3 things "+(myName||"they")+" should do first today, from this list. Prefer things that block other people, owners or guests, money, and anything with a deadline. Give each a reason in 12 words or fewer. No em dashes.\n\n"+list+"\n\nReturn JSON only: {\"picks\":[{\"id\":\"c0\",\"why\":\"reason\"}]} with exactly 3 picks, best first.",{cache:false,provider:prov}));
-    const picks=(r.picks||[]).map(p=>({x:cand[+String(p.id||"").replace(/\D/g,"")],why:String(p.why||"")})).filter(p=>p.x).slice(0,3);
-    state.top3={day:todayKey(),at:Date.now(),picks:picks.map(p=>({kind:p.x.kind,ref:p.x.ref,why:p.why}))};persist();
+    const r=await creditFallback(prov=>sample.json("You are the chief of staff of "+(myName||"a manager")+" at WYZ Rent, a Dubai holiday home management company. Today is "+new Date().toDateString()+", the time is "+new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})+".\nChoose the "+N+" things "+(myName||"they")+" should do first today, in order, from this list. Prefer things that block other people, owners or guests, money, and anything with a deadline. Give each a reason in 12 words or fewer. No em dashes.\n\n"+list+"\n\nReturn JSON only: {\"picks\":[{\"id\":\"c0\",\"why\":\"reason\"}]} with exactly "+N+" picks, best first.",{cache:false,provider:prov}));
+    const picks=(r.picks||[]).map(p=>({x:cand[+String(p.id||"").replace(/\D/g,"")],why:String(p.why||"")})).filter(p=>p.x).slice(0,N);
+    state.top3={day:todayKey(),at:Date.now(),n:N,picks:picks.map(p=>({kind:p.x.kind,ref:p.x.ref,why:p.why}))};persist();
   }catch(e){top3Fail=Date.now()}
   top3Busy=false;renderTop3();
 }
 function top3Rows(){
-  const cand=top3Candidates();let rows=cand.slice(0,3);
+  const N=topN(),cand=top3Candidates();let rows=cand.slice(0,N);
   const c=state.top3;
-  if(c&&c.day===todayKey()&&c.picks&&c.picks.length){
+  if(c&&c.day===todayKey()&&c.n===N&&c.picks&&c.picks.length){
     const mapped=c.picks.map(p=>{const x=cand.find(y=>y.kind===p.kind&&y.ref===p.ref);return x?Object.assign({},x,{why:p.why||x.why}):null}).filter(Boolean);
-    if(mapped.length>=Math.min(3,cand.length))rows=mapped.slice(0,3);
+    if(mapped.length>=Math.min(N,cand.length))rows=mapped.slice(0,N);
   }
   return rows;
 }
 function renderTop3(){
   const card=$("top3"),host=$("top3List");
   if(!G.connected()||(!board&&!(state.tasks||[]).length)){card.hidden=true;return}
-  const rows=top3Rows();
+  const rows=top3Rows(),open=!state.top3Col;
   card.hidden=!rows.length;host.replaceChildren();
+  $("top3Title").textContent="Top "+topN()+" for today";$("top3N").value=String(topN());
+  $("top3Tog").setAttribute("aria-expanded",String(open));host.hidden=!open;
+  $("top3Sum").hidden=open;$("top3Sum").textContent=rows.length+" item"+(rows.length>1?"s":"")+". First: "+(rows[0]?rows[0].title:"")+". Tap the heading to open.";
   rows.forEach((x,i)=>{
     const r=el("div","t3row");r.append(el("span","t3n",String(i+1)));const m=el("div","main");
     m.append(el("span","t",x.title));if(x.why)m.append(el("span","s",x.why));
@@ -2511,6 +2515,8 @@ function renderTop3(){
   });
   pickTop3(false);
 }
+$("top3Tog").onclick=()=>{state.top3Col=state.top3Col?0:1;persist();renderTop3()};
+$("top3N").onchange=()=>{state.topN=+$("top3N").value;state.top3Col=0;persist();renderTop3()};
 $("top3Refresh").onclick=()=>{if(!sample){$("top3Refresh").textContent="Connect an AI first";return}$("top3Refresh").textContent="Choosing...";pickTop3(true).then(()=>{$("top3Refresh").textContent="Pick again"})};
 
 /* ---------- Meeting prep brief ---------- */
