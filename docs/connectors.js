@@ -15,9 +15,10 @@
     drive: "https://www.googleapis.com/auth/drive.metadata.readonly",
     contacts: "https://www.googleapis.com/auth/contacts.readonly",
     otherContacts: "https://www.googleapis.com/auth/contacts.other.readonly",
-    driveRead: "https://www.googleapis.com/auth/drive.readonly"
+    driveRead: "https://www.googleapis.com/auth/drive.readonly",
+    driveFile: "https://www.googleapis.com/auth/drive.file"
   };
-  var SCOPES = ["openid", "email", "profile", SC.gmailRead, SC.gmailDraft, SC.gmailModify, SC.cal, SC.calEvents, SC.drive, SC.contacts, SC.otherContacts, SC.driveRead].join(" ");
+  var SCOPES = ["openid", "email", "profile", SC.gmailRead, SC.gmailDraft, SC.gmailModify, SC.cal, SC.calEvents, SC.drive, SC.contacts, SC.otherContacts, SC.driveRead, SC.driveFile].join(" ");
   var KEY = { flag: "wyz-google-flag", hint: "wyz-google-hint", todo: "wyz-todoist-token", ai: "wyz-claude-key", cid: "wyz-google-client-id", model: "wyz-claude-model" };
 
   var ls = {
@@ -387,6 +388,27 @@
         buf = await gfetch(base + "?alt=media", { as: "buffer" }, SC.driveRead);
         if (/^text\/|json|csv/.test(mime)) return { text: new TextDecoder().decode(buf).slice(0, 200000) };
         return { data: b64FromBuffer(buf), mime: mime };
+      },
+      save_file: async function (a) {
+        var base = "https://www.googleapis.com/drive/v3/files", name = String(a.folder || "WYZ Rent Attachments").replace(/[\\\/]/g, " ").slice(0, 80).trim() || "WYZ Rent Attachments";
+        var folderId = String(a.folderId || "");
+        if (folderId) {
+          try { var chk = await gfetch(base + "/" + encodeURIComponent(folderId) + "?fields=id,trashed", null, SC.driveFile); if (chk.trashed) folderId = ""; } catch (e) { if (e && e.code === "consent_required") throw e; folderId = ""; }
+        }
+        if (!folderId) {
+          var q = "mimeType='application/vnd.google-apps.folder' and trashed=false and name='" + name.replace(/\\/g, "\\\\").replace(/'/g, "\\'") + "'";
+          var found = await gfetch(base + "?pageSize=1&fields=files(id)&q=" + encodeURIComponent(q), null, SC.driveFile);
+          folderId = found.files && found.files[0] && found.files[0].id;
+          if (!folderId) {
+            var made = await gfetch(base + "?fields=id", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name, mimeType: "application/vnd.google-apps.folder" }) }, SC.driveFile);
+            folderId = made.id;
+          }
+        }
+        var boundary = "wyzb" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+        var body = "--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify({ name: String(a.name || "attachment").slice(0, 200), parents: [folderId] }) +
+          "\r\n--" + boundary + "\r\nContent-Type: " + (a.mime || "application/octet-stream") + "\r\nContent-Transfer-Encoding: base64\r\n\r\n" + String(a.data || "").replace(/-/g, "+").replace(/_/g, "/") + "\r\n--" + boundary + "--";
+        var f = await gfetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink", { method: "POST", headers: { "Content-Type": "multipart/related; boundary=" + boundary }, body: body }, SC.driveFile);
+        return { id: f.id, name: f.name, link: f.webViewLink || ("https://drive.google.com/file/d/" + f.id + "/view"), folderId: folderId, folder: name };
       },
       list_recent_files: async function (a) {
         var q = "pageSize=" + (a.pageSize || 10) + "&orderBy=" + encodeURIComponent("modifiedByMeTime desc") +

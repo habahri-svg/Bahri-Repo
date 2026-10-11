@@ -32,6 +32,7 @@ Without this the page can't log anyone in. It shows "One-time setup needed" unti
    - `.../auth/calendar.events` (create and move meetings)
    - `.../auth/drive.metadata.readonly`
    - `.../auth/drive.readonly` (lets the AI read a Drive file or PDF only when someone asks it to)
+   - `.../auth/drive.file` (lets the page save an email attachment into one Drive folder it creates, and see only files it created)
    - `.../auth/contacts.readonly` and `.../auth/contacts.other.readonly` (address suggestions from your contacts and people you've emailed)
 5. On the **Audience** page tap **Publish app**. This lets anyone with a Google account sign in, with no test-user list and no 7-day expiry. Until Google verifies the app (see "Going beyond 100 people" below) it shows an "unverified app" warning (Advanced, Go to app) and is capped at 100 people in total.
 6. **APIs and Services, Credentials, Create credentials, OAuth client ID**:
@@ -101,6 +102,12 @@ Without step 2 everything still works. The page then explains what is missing, a
 - **Undo send and a check before sending.** After you press Send there is a countdown (default 10 seconds, changeable) with an Undo button. Quick checks catch a missing attachment or a leftover [DATE]. "Check it first" asks the AI to read the email.
 - **Top 3 for today** at the top of the Today tab, chosen by the AI from your mail, tasks and next meetings.
 - **Prep brief** on every meeting, **person card** (click "About" a sender, or More, About this person), and **Search everything** (mail, files, meetings, tasks and people in one box).
+- **One-tap replies.** Buttons under every email (Yes, Not now, Need more info, Call me, Thanks). One tap and the AI writes the full reply. Change the buttons under Replies and rules.
+- **Smart snooze.** In any Snooze menu, "Suggest a time" picks the best day to bring the email back and snoozes it in one tap.
+- **Save attachments to Drive.** Each attachment has Save to Drive (and Save all). Files go into a folder (default "WYZ Rent Attachments") named by date and sender. This asks everyone to allow one more Google permission.
+- **Read my day aloud.** The header button reads your top 3, emails, meetings and overdue tasks. English or Arabic (Arabic needs an AI connected and an Arabic voice on the device).
+- **Alerts for urgent mail.** Under Connections, Alerts and security. A notification when a VIP or critical email arrives, while the page or installed app is open. A page that is fully closed can't alert, because that needs a server.
+- **PIN lock.** Under Connections, Alerts and security. A 4 to 8 digit PIN before the page opens and after you have been away, with optional fingerprint or face. The PIN is stored only as a salted hash on that device. "Forgot the PIN" removes the lock but signs you out, so Google sign-in is needed again.
 - **Hand off to a team member.** More, Hand off sends the email to Karim or Louloua (edit the team under Replies and rules) and tracks it under "Waiting on the team" until they answer. You can nudge them from there.
 
 ## What happens when someone opens it

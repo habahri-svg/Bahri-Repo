@@ -278,7 +278,7 @@ function updateHero(){
   defs.forEach(([label,n,color,fn])=>{const b=el("button","hstat");b.type="button";b.append(el("b","",String(n)));const l=el("span");const dot=el("i");dot.style.background=color;l.append(dot,label);b.append(l);b.onclick=fn;b.setAttribute("aria-label",n+" "+label);box.append(b)});
 }
 function renderHello(){
-  try{$("pageName").value=state.pageName||"";applyPageName();renderTeam();$("autoDraft").checked=!!state.autoDraft;$("undoSecs").value=String(undoSecs());$("autoSuggest").checked=state.autoSuggest!==false}catch(e){}
+  try{$("pageName").value=state.pageName||"";applyPageName();renderTeam();$("autoDraft").checked=!!state.autoDraft;$("undoSecs").value=String(undoSecs());$("alertsOn").checked=!!state.alertsOn&&"Notification" in window&&Notification.permission==="granted";$("autoSuggest").checked=state.autoSuggest!==false;$("quickList").value=Array.isArray(state.quick)?state.quick.join(", "):"";$("driveFolder").value=state.driveFolder||""}catch(e){}
   const h=new Date().getHours();
   $("hello").textContent=myName?(h<12?"Good morning, ":h<18?"Good afternoon, ":"Good evening, ")+myName.split(" ")[0]:"Your execution page";
   try{updateHero()}catch(e){}
@@ -297,8 +297,10 @@ async function afterConnect(){
   await loadResearch();renderTasks();renderSetup();loadContacts();
   if(!state.onboarded)onbOpen();
   await refreshAll(false);
+  {const hm=location.hash.match(/^#thread=(.+)/);if(hm){openThread(decodeURIComponent(hm[1]));history.replaceState(null,"",location.pathname+location.search)}}
   if(!loopOn){loopOn=true;
     setInterval(()=>{if(!document.hidden)refreshAll(false)},600000);
+    setInterval(()=>{if(document.hidden&&state.alertsOn)refreshAll(false)},300000);
     document.addEventListener("visibilitychange",()=>{if(!document.hidden&&board&&Date.now()-(board.at||0)>300000)refreshAll(false)})}
 }
 async function connectGoogle(consent){
@@ -537,6 +539,24 @@ function snoozeDrop(id,after){
   const add=(t,fn)=>{const b=el("button","",t);b.type="button";b.onclick=()=>{d.open=false;fn();if(after)after()};m.append(b)};
   add("Tomorrow",()=>snoozeUntil(id,1));add("In 3 days",()=>snoozeUntil(id,3));add("In 1 week",()=>snoozeUntil(id,7));
   add(state.repeat&&state.repeat[id]?"Stop repeating weekly":"Repeat weekly",()=>{state.repeat=state.repeat||{};if(state.repeat[id])delete state.repeat[id];else state.repeat[id]=1;persist();renderBoard()});
+  if(sample){
+    const sb=el("button","","✨ Suggest a time");sb.type="button";
+    sb.onclick=async()=>{
+      sb.disabled=true;sb.textContent="Thinking...";
+      try{
+        const busy={};(events||[]).forEach(e=>{const s=e.start&&(e.start.date||(e.start.dateTime||"").slice(0,10));if(s)busy[s]=(busy[s]||0)+1});
+        const days=Array.from({length:10},(_,n)=>{const x=new Date();x.setDate(x.getDate()+n+1);return ymd(x)+" "+x.toLocaleDateString("en-GB",{weekday:"short"})+(busy[ymd(x)]?" ("+busy[ymd(x)]+" meetings)":"")}).join(", ");
+        const txt=await threadText(id);
+        const r=await creditFallback(prov=>sample.json("Pick the best day to bring this email back to "+(myName||"me")+" at WYZ Rent. Today is "+new Date().toDateString()+". Days ahead: "+days+". Rules: if the email names a date or deadline, pick the day before it or the same morning. If it waits on someone else, pick the day they should have answered. Prefer days with few meetings. Never pick today. Do not pick a weekend (Friday and Saturday are the weekend in Dubai, prefer Sunday to Thursday) unless the email says so.\n\nThe email:\n"+String(txt).slice(0,3000)+"\n\nReturn JSON only: {\"date\":\"YYYY-MM-DD\",\"why\":\"one short reason, 12 words or fewer\"}",{cache:false,provider:prov}));
+        const when=String(r.date||"");const max=new Date();max.setDate(max.getDate()+60);
+        if(!/^\d{4}-\d{2}-\d{2}$/.test(when)||when<=todayKey()||when>ymd(max))throw new Error("no sensible date");
+        const ok=el("button","","Snooze to "+niceDay(when)+(r.why?", "+clip(String(r.why),60):""));ok.type="button";ok.title="Snooze to "+niceDay(when);
+        ok.onclick=()=>{d.open=false;snoozeUntil(id,0,when);if(after)after()};
+        sb.replaceWith(ok);
+      }catch(e){sb.disabled=false;sb.textContent="Couldn't suggest a time. Try again"}
+    };
+    m.append(sb);
+  }
   const row=el("div","snzrow");const dt=el("input","in");dt.type="date";const t=new Date();t.setDate(t.getDate()+1);dt.min=ymd(t);dt.setAttribute("aria-label","Pick a date");
   const go=el("button","","Set");go.type="button";go.onclick=()=>{if(!dt.value)return;d.open=false;snoozeUntil(id,0,dt.value);if(after)after()};
   row.append(dt,go);m.append(row);
@@ -763,7 +783,9 @@ function msgBody(m,d){
       };
       row.append(b);
       if((f.id||f.data)&&fileKind(f.type,f.name)){const q=el("button","chip","Ask AI about it");q.type="button";q.onclick=()=>openFileAI(f.name,()=>attachmentLoader(m,f));row.append(q)}
+      if(f.id||f.data){const sv=el("button","chip","Save to Drive");sv.type="button";sv.onclick=()=>saveToDrive(m,f,sv);row.append(sv)}
     });
+    if(files.filter(f=>f.id||f.data).length>1){const all=el("button","chip","Save all to Drive");all.type="button";all.onclick=async()=>{all.disabled=true;let n=0;for(const b of [...row.querySelectorAll("button")].filter(x=>x.textContent==="Save to Drive")){await b.onclick();n++}all.textContent="Saved "+n+" file"+(n===1?"":"s")+" to Drive"};row.append(all)}
     wrap.append(row);
   }
   return wrap;
@@ -821,7 +843,7 @@ async function openThread(id,o){
   ["thrSend","thrSave","thrText","thrTo","thrCc"].forEach(k=>$(k).disabled=false);
   $("thrSend").textContent="Send";
   try{const r=await mcp.callTool("Gmail","get_thread",{threadId:id,messageFormat:"PLAIN_TEXT"},{cache:false});thr.msgs=(r.payload&&r.payload.messages)||[]}catch(e){thr.msgs=[]}
-  thr.sug={state:"idle"};renderThread();threadNav();thrMore();drawSuggest();
+  thr.sug={state:"idle"};renderThread();threadNav();thrMore();drawQuick();drawSuggest();
   if(thr.msgs.length&&(lastMsg().labelIds||[]).includes("UNREAD"))mcp.callTool("Gmail","mark_read",{threadId:id}).catch(()=>{});
   if(thr.msgs.length){
     $("thrReply").hidden=false;fillTargets();syncRuleBtns();
@@ -866,8 +888,41 @@ function drawSuggest(){
     b.onclick=()=>{Connectors.ai.setChosen(o.id);renderAI();renderThrPick();suggestReply({prov:o.id,force:true})};row.append(b)});
   const fr=el("button","chip","Free chat (no credit)");fr.type="button";fr.onclick=showFree;row.append(fr);
   c.append(row);
-  body.append(c);
+  body.insertBefore(c,$("thrQuick")||null);
 }
+/* One-tap replies: buttons under the email, each tells the AI what to say */
+const QUICK_DEFAULT=["Yes","Not now","Need more info","Call me","Thanks"];
+const QUICK_HINT={"yes":"Say yes and confirm, in one or two lines.","not now":"Politely say it is not possible right now and that you will come back to it.","need more info":"Ask for the specific details you need before you can decide.","call me":"Ask them to call you, and say you are free to talk soon.","thanks":"Thank them warmly and close the loop."};
+const quickList=()=>{const q=Array.isArray(state.quick)&&state.quick.length?state.quick:QUICK_DEFAULT;return q.map(x=>String(x).trim()).filter(Boolean).slice(0,8)};
+function drawQuick(){
+  let q=$("thrQuick");if(q)q.remove();
+  if(thr.mode!=="reply"||!thr.msgs.length)return;
+  q=el("div","acts");q.id="thrQuick";q.append(el("span","status","One tap:"));
+  quickList().forEach(label=>{
+    const b=el("button","chip",label);b.type="button";
+    b.onclick=async()=>{
+      const all=[...q.querySelectorAll("button")];all.forEach(x=>x.disabled=true);const old=b.textContent;b.textContent="Writing...";
+      const st=$("thrSt"),idAtStart=thr.id;
+      try{
+        const chase=thrChase(),tone=await toneExamples(),text=threadBlock(thr.msgs);
+        const hint=QUICK_HINT[label.toLowerCase()]||"The reply should say: "+label+".";
+        let t;
+        if(!sample){t={yes:"Yes, that works for me.","not now":"Thanks for this. It's not possible right now, but I'll come back to you.","need more info":"Thanks. Could you send me a few more details so I can decide?","call me":"Could you give me a call when you have a moment?",thanks:"Thank you, I appreciate it."}[label.toLowerCase()]||label}
+        else{
+          const r=await creditFallback(prov=>sample(replyPrompt(chase,tone,text)+"\n\nThe reply is a one-tap answer: "+hint+" Keep it short.",{cache:false,provider:prov}));t=String(r.text||"").trim();
+        }
+        if(thr.id!==idAtStart)return;
+        if(!t)throw new Error("the AI sent back nothing");
+        if(!$("thrText").value.trim()){$("thrText").value=t;st.className="status";st.textContent="Edit it, then send it or save it as a draft.";$("thrText").focus()}
+        else{thr.sug={state:"ready",prov:Connectors.ai.active()||"claude",text:t,note:"One tap: "+label};drawSuggest();st.className="status";st.textContent="Your reply box already had text, so the answer is in the suggestion above."}
+      }catch(e){st.className="status err";st.textContent="Couldn't write it ("+clip((e&&e.message)||"unknown reason",90)+")."+(isCreditErr(e)?" Use a free chat below.":"");if(isCreditErr(e))showFree()}
+      all.forEach(x=>x.disabled=false);b.textContent=old;
+    };
+    q.append(b);
+  });
+  $("thrBody").append(q);
+}
+$("quickList").onchange=()=>{const v=$("quickList").value.split(",").map(x=>x.trim()).filter(Boolean).slice(0,8);state.quick=v.length?v:null;persist();if(!$("thr").hidden)drawQuick()};
 async function suggestReply(o){
   o=o||{};if(thr.mode!=="reply"||!thr.msgs.length)return;
   const key=sugKey(),idAtStart=thr.id;
@@ -1647,6 +1702,224 @@ if(standalone())$("installNote").textContent="You are already using the installe
 else if(/iphone|ipad|ipod/i.test(navigator.userAgent))$("installNote").textContent="On iPhone or iPad: tap Share, then Add to Home Screen.";
 if(location.hash==="#new-email"){window.addEventListener("load",()=>setTimeout(()=>{try{if(G.connected())openCompose()}catch(e){}},2500))}
 
+/* save an email attachment to a Drive folder */
+const safeFile=t=>String(t||"").replace(/[\\/:*?"<>|\u0000-\u001f]/g," ").replace(/\s+/g," ").trim();
+async function saveToDrive(m,f,btn){
+  const old="Save to Drive";btn.disabled=true;btn.textContent="Saving...";
+  try{
+    const raw=await fetchFile(m,f);
+    if(Math.floor(raw.length*3/4)>15*1024*1024)throw new Error("That file is over 15 MB. Open it in Gmail.");
+    const day=String(m.date||"").slice(0,10)||todayKey(),who=safeFile(nameOf(m.sender)||"sender").slice(0,40);
+    const name=day+" "+who+" - "+safeFile(f.name||"attachment");
+    const folder=(state.driveFolder&&state.driveFolder.trim())||"WYZ Rent Attachments";
+    state.driveFolderIds=state.driveFolderIds||{};
+    const r=await mcp.callTool("Google Drive","save_file",{name,mime:f.type||"application/octet-stream",data:raw,folder,folderId:state.driveFolderIds[folder]||""},{cache:false});
+    const p=r.payload||{};if(p.folderId){state.driveFolderIds[folder]=p.folderId;persist()}
+    btn.textContent="Saved to Drive";
+    const a=el("a","chip","Open in Drive");a.href=p.link;a.target="_blank";a.rel="noopener";btn.after(a);
+  }catch(e){
+    btn.disabled=false;btn.textContent=old;
+    const st=$("thrSt");st.className="status err";st.replaceChildren();
+    if(e&&e.code==="consent_required"){st.append(document.createTextNode("Saving to Drive needs one more Google permission. "));const l=el("button","btn small solid","Allow");l.type="button";l.onclick=()=>connectGoogle(true);st.append(l)}
+    else st.textContent="Couldn't save it to Drive ("+clip((e&&e.message)||"unknown reason",90)+")."
+  }
+  return true;
+}
+$("driveFolder").onchange=()=>{state.driveFolder=$("driveFolder").value.trim();persist()};
+
+/* ---------- Read my day aloud ---------- */
+function dayScript(){
+  const first=(myName||"").split(" ")[0]||"",h=new Date().getHours(),now=Date.now();
+  const greet=h<12?"Good morning":h<18?"Good afternoon":"Good evening";
+  const out=[greet+(first?", "+first:"")+". Today is "+new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"})+"."];
+  const open=allItems().filter(i=>!isOff(i));
+  const rep=open.filter(i=>i.st==="reply").length,fol=open.filter(i=>i.st==="follow").length;
+  out.push(rep||fol?"You have "+(rep?rep+" email"+(rep>1?"s":"")+" to reply to":"")+(rep&&fol?" and ":"")+(fol?fol+" to follow up":"")+".":"Your inbox needs nothing from you right now.");
+  const rows=top3Rows();
+  if(rows.length){out.push("Your top "+(rows.length===1?"item":rows.length+" things")+" for today.");rows.forEach((x,i)=>out.push((i+1)+". "+x.title+(x.why?". "+x.why:"")+"."))}
+  const ev=(events||[]).filter(e=>e.start&&e.start.dateTime&&ymd(new Date(e.start.dateTime))===todayKey()&&e.status!=="cancelled"&&Date.parse(e.end&&e.end.dateTime||e.start.dateTime)>=now).slice(0,6);
+  out.push(ev.length?"You have "+ev.length+" meeting"+(ev.length>1?"s":"")+" left today.":"No more meetings today.");
+  ev.forEach(e=>out.push("At "+new Date(e.start.dateTime).toLocaleTimeString("en-GB",{hour:"numeric",minute:"2-digit",hour12:true}).replace(/^0/,"")+", "+(e.summary||"a meeting")+(e.location?", at "+e.location:"")+"."));
+  const today=todayKey(),due=(state.tasks||[]).filter(t=>!t.done&&t.due&&t.due<=today);
+  if(due.length)out.push(due.length+" task"+(due.length>1?"s are":" is")+" due or overdue: "+due.slice(0,4).map(t=>t.t).join(", ")+".");
+  out.push("That is your day.");
+  return out.join("\n");
+}
+let dayTalk={stop:()=>{}};
+function openReadDay(){
+  const host=infoOpen("Your day, read aloud");
+  const synth=window.speechSynthesis;
+  if(!synth||!window.SpeechSynthesisUtterance){host.append(el("p","status err","This browser can't read aloud. Use Chrome, Edge or Safari."));return}
+  const ctl=el("div","acts"),lang=el("select","in");lang.style.cssText="flex:0 1 140px;padding:5px 8px";lang.setAttribute("aria-label","Language");
+  lang.append(new Option("English","en-GB"),new Option("العربية","ar-AE"));
+  try{const l=localStorage.getItem("wyz-day-lang");if(l)lang.value=l}catch(e){}
+  const play=el("button","btn solid small","⏸ Pause");play.type="button";const stop=el("button","btn small","⏹ Stop");stop.type="button";
+  ctl.append(lang,play,stop);host.append(ctl);
+  const note=el("p","status");host.append(note);
+  const txt=el("div","mailtext");host.append(txt);
+  let text=dayScript(),speaking=false,paused=false,runId=0;
+  const pickVoice=l=>{const vs=synth.getVoices()||[];return vs.find(v=>v.lang===l)||vs.find(v=>v.lang&&v.lang.toLowerCase().startsWith(l.slice(0,2)))||null};
+  const finish=()=>{speaking=false;paused=false;play.textContent="▶ Play again"};
+  const say=()=>{
+    synth.cancel();runId++;const mine=runId;speaking=true;paused=false;play.textContent="⏸ Pause";
+    const lines=text.split("\n").map(x=>x.trim()).filter(Boolean),v=pickVoice(lang.value);
+    note.className="status";note.textContent=v?"":(lang.value.startsWith("ar")?"This device has no Arabic voice. Add one in your device's speech settings. Reading in the default voice.":"");
+    lines.forEach((ln,i)=>{const u=new SpeechSynthesisUtterance(ln);u.lang=lang.value;if(v)u.voice=v;u.rate=1;u.onend=()=>{if(mine===runId&&i===lines.length-1)finish()};u.onerror=()=>{if(mine===runId)finish()};synth.speak(u)});
+  };
+  const build=async()=>{
+    text=dayScript();
+    if(lang.value.startsWith("ar")){
+      if(sample){
+        note.className="status";note.textContent="Translating to Arabic...";
+        try{const r=await creditFallback(prov=>sample("Translate this morning briefing into natural, warm spoken Arabic (Modern Standard, easy to listen to). Keep names, numbers and times. Return only the Arabic text, one line per original line.\n\n"+text,{cache:false,provider:prov}));const t=String(r.text||"").trim();if(t)text=t}
+        catch(e){note.className="status err";note.textContent="Couldn't translate it ("+clip((e&&e.message)||"unknown reason",80)+"). Reading in English."}
+      }else{note.className="status";note.textContent="Connect Claude or ChatGPT to hear it in Arabic. Reading in English."}
+    }
+    txt.textContent=text;txt.dir=lang.value.startsWith("ar")&&/[؀-ۿ]/.test(text)?"rtl":"ltr";
+    if(!(lang.value.startsWith("ar")&&!/[؀-ۿ]/.test(text)))say();else{lang.value="en-GB";say()}
+  };
+  play.onclick=()=>{if(!speaking){say();return}if(paused){synth.resume();paused=false;play.textContent="⏸ Pause"}else{synth.pause();paused=true;play.textContent="▶ Resume"}};
+  stop.onclick=()=>{synth.cancel();runId++;finish()};
+  lang.onchange=()=>{try{localStorage.setItem("wyz-day-lang",lang.value)}catch(e){}synth.cancel();build()};
+  dayTalk.stop=()=>{synth.cancel();runId++};
+  build();
+}
+$("readDayBtn").onclick=()=>{if(!G.connected()){showWelcome();return}openReadDay()};
+
+/* ---------- Alerts for urgent mail ---------- */
+function alertCandidates(){return allItems().filter(i=>!isOff(i)&&["reply","follow","work"].includes(i.st)&&((i.g||0)>=4||i.vip))}
+async function showAlert(title,opts){
+  try{
+    const reg=navigator.serviceWorker&&navigator.serviceWorker.getRegistration?await navigator.serviceWorker.getRegistration():null;
+    if(reg&&reg.showNotification){await reg.showNotification(title,opts);return}
+  }catch(e){}
+  try{const n=new Notification(title,opts);n.onclick=()=>{window.focus();if(opts.data&&opts.data.thread)openThread(opts.data.thread);n.close()}}catch(e){}
+}
+function alertFor(i){
+  const t=tById(i.id)||{};
+  return showAlert((i.vip?"VIP":"Urgent")+": "+(nameOf(t.from)||"New email"),{body:clip((i.title||t.subject||"")+(i.summary?". "+i.summary:""),140),tag:"wyz-"+i.id,icon:"icon-192.png",badge:"icon-192.png",data:{thread:i.id}});
+}
+async function maybeAlert(){
+  if(!state.alertsOn||!("Notification" in window)||Notification.permission!=="granted")return;
+  const cur=alertCandidates();
+  if(!state.alertSeeded){state.alerted=cur.map(i=>i.id);state.alertSeeded=1;persist();return}
+  const seen=new Set(state.alerted||[]),fresh=cur.filter(i=>!seen.has(i.id));
+  if(fresh.length>3){await showAlert(fresh.length+" urgent emails need you",{body:fresh.slice(0,3).map(i=>i.title).join(". "),tag:"wyz-many",icon:"icon-192.png"})}
+  else for(const i of fresh)await alertFor(i);
+  if(fresh.length){state.alerted=Array.from(new Set((state.alerted||[]).concat(cur.map(i=>i.id)))).slice(-300);persist()}
+}
+$("alertsOn").onchange=async()=>{
+  const note=$("alertsNote"),box=$("alertsOn");note.className="status";
+  if(!box.checked){state.alertsOn=false;persist();note.textContent="Alerts are off.";return}
+  if(!("Notification" in window)){box.checked=false;note.className="status err";note.textContent="This browser can't show alerts. On iPhone, add the page to your Home Screen first, then try again.";return}
+  let perm=Notification.permission;
+  if(perm==="default"){try{perm=await Notification.requestPermission()}catch(e){}}
+  if(perm!=="granted"){box.checked=false;state.alertsOn=false;persist();note.className="status err";note.textContent="Your browser blocked alerts. Allow them for this site in the address bar, then switch this on again.";return}
+  state.alertsOn=true;state.alertSeeded=0;persist();note.textContent="Alerts are on. You will be told about new VIP and critical emails.";
+  maybeAlert();
+};
+$("alertTest").onclick=async()=>{
+  const note=$("alertsNote");
+  if(!("Notification" in window)||Notification.permission!=="granted"){note.className="status err";note.textContent="Switch alerts on first.";return}
+  await showAlert("Test alert",{body:"This is what an urgent email alert looks like.",tag:"wyz-test",icon:"icon-192.png"});note.className="status";note.textContent="Sent. Check your notifications."
+};
+if(navigator.serviceWorker)navigator.serviceWorker.addEventListener("message",e=>{if(e.data&&e.data.thread&&G.connected())openThread(e.data.thread)});
+
+/* ---------- PIN lock ---------- */
+const LOCK_KEY="wyz-lock";
+const lockData=()=>{try{return JSON.parse(localStorage.getItem(LOCK_KEY)||"null")}catch(e){return null}};
+const lockSave=d=>{try{if(d)localStorage.setItem(LOCK_KEY,JSON.stringify(d));else localStorage.removeItem(LOCK_KEY)}catch(e){}};
+const u8b64=u=>btoa(String.fromCharCode(...u)),b64u8=b=>Uint8Array.from(atob(b),c=>c.charCodeAt(0));
+async function pinHash(pin,salt,iter){
+  const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(pin),"PBKDF2",false,["deriveBits"]);
+  return u8b64(new Uint8Array(await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt:b64u8(salt),iterations:iter},key,256)));
+}
+async function lockSetPin(pin){
+  const old=lockData()||{},salt=u8b64(crypto.getRandomValues(new Uint8Array(16))),iter=150000;
+  lockSave({salt,iter,hash:await pinHash(pin,salt,iter),mins:old.mins!=null?old.mins:5,cred:old.cred||"",fails:0,until:0});
+}
+async function lockCheck(pin){
+  const d=lockData();if(!d)return true;
+  const h=await pinHash(pin,d.salt,d.iter);let diff=h.length^d.hash.length;for(let i=0;i<h.length;i++)diff|=h.charCodeAt(i)^(d.hash.charCodeAt(i)||0);
+  return diff===0;
+}
+let locked=false,lastActive=Date.now(),lockWait=null;
+const bodyKids=()=>[...document.body.children].filter(x=>x.id!=="lock"&&x.tagName!=="SCRIPT");
+function lockCover(on){bodyKids().forEach(x=>{if(on)x.setAttribute("inert","");else x.removeAttribute("inert")});$("lock").hidden=!on}
+const bioSupported=async()=>{try{return !!(window.PublicKeyCredential&&await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable())}catch(e){return false}};
+async function bioUnlock(){
+  const d=lockData();if(!d||!d.cred)return false;
+  try{const r=await navigator.credentials.get({publicKey:{challenge:crypto.getRandomValues(new Uint8Array(32)),allowCredentials:[{type:"public-key",id:b64u8(d.cred)}],userVerification:"required",timeout:60000}});return !!r}catch(e){return false}
+}
+/* Ask for the PIN. Resolves true when it is right, or false if the person cancels (only when cancelable). */
+function askPin(title,cancelable){
+  return new Promise(async resolve=>{
+    const d=lockData();if(!d){resolve(true);return}
+    $("lockTitle").textContent=title||"Enter your PIN";$("lockPin").value="";$("lockMsg").textContent="";$("lockCancel").hidden=!cancelable;
+    $("lockForgot").hidden=!!cancelable;
+    $("lockBio").hidden=!(d.cred&&await bioSupported());
+    lockCover(true);setTimeout(()=>$("lockPin").focus(),50);
+    const done=ok=>{lockWait=null;lockCover(false);resolve(ok)};
+    const tryPin=async()=>{
+      const dd=lockData()||d,now=Date.now();
+      if(dd.until&&dd.until>now){$("lockMsg").textContent="Too many tries. Wait "+Math.ceil((dd.until-now)/1000)+" seconds.";return}
+      const pin=$("lockPin").value.trim();if(!/^\d{4,8}$/.test(pin)){$("lockMsg").textContent="Type your 4 to 8 digit PIN.";return}
+      $("lockGo").disabled=true;
+      let ok=false;try{ok=await lockCheck(pin)}catch(e){}
+      $("lockGo").disabled=false;
+      if(ok){dd.fails=0;dd.until=0;lockSave(dd);done(true);return}
+      dd.fails=(dd.fails||0)+1;if(dd.fails>=5)dd.until=Date.now()+30000*(dd.fails-4);lockSave(dd);
+      $("lockPin").value="";$("lockMsg").textContent=dd.until>Date.now()?"Wrong PIN. Too many tries, wait "+Math.ceil((dd.until-Date.now())/1000)+" seconds.":"Wrong PIN. "+(5-dd.fails)+" tries left before a short wait.";
+    };
+    lockWait={tryPin,done};
+    $("lockGo").onclick=tryPin;$("lockPin").onkeydown=e=>{if(e.key==="Enter")tryPin()};
+    $("lockCancel").onclick=()=>done(false);
+    $("lockBio").onclick=async()=>{if(await bioUnlock())done(true);else $("lockMsg").textContent="That didn't work. Use your PIN."};
+    $("lockForgot").onclick=()=>{
+      if(!confirm("Sign in with Google again to remove the lock?\nThis page signs you out. Your board stays saved on this device."))return;
+      lockSave(null);try{G.signOut()}catch(e){}location.reload();
+    };
+    if(!cancelable&&d.cred&&await bioSupported())bioUnlock().then(ok=>{if(ok&&lockWait)done(true)});
+  });
+}
+async function lockNow(){
+  if(!lockData()||locked)return;
+  locked=true;try{speechSynthesis.cancel()}catch(e){}
+  await askPin("Enter your PIN",false);locked=false;lastActive=Date.now();
+}
+["mousemove","keydown","touchstart","click","scroll"].forEach(ev=>window.addEventListener(ev,()=>{if(!locked)lastActive=Date.now()},{passive:true}));
+function idleMins(){const d=lockData();return d&&+d.mins>0?+d.mins:0}
+setInterval(()=>{const m=idleMins();if(m&&!locked&&Date.now()-lastActive>m*60000)lockNow()},10000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden){const m=idleMins();if(m&&!locked&&Date.now()-lastActive>m*60000)lockNow()}});
+async function lockGate(){if(lockData()){locked=true;await askPin("Enter your PIN",false);locked=false;lastActive=Date.now()}}
+async function renderLockCard(){
+  const d=lockData();$("lockSetup").hidden=!!d;$("lockOn").hidden=!d;
+  if(d)$("lockMins").value=String(d.mins!=null?d.mins:5);
+  $("lockBioSet").hidden=!(d&&await bioSupported());
+  if(d)$("lockBioSet").textContent=d.cred?"Fingerprint or face: on (tap to remove)":"Use fingerprint or face";
+}
+$("lockOnBtn").onclick=async()=>{
+  const m=$("lockSetMsg"),a=$("lockNew").value.trim(),b=$("lockNew2").value.trim();m.className="status err";
+  if(!/^\d{4,8}$/.test(a)){m.textContent="Use 4 to 8 digits for the PIN.";return}
+  if(a!==b){m.textContent="The two PINs don't match.";return}
+  try{await lockSetPin(a)}catch(e){m.textContent="This browser can't set a PIN here.";return}
+  $("lockNew").value="";$("lockNew2").value="";m.className="status";m.textContent="Lock is on. It asks for the PIN when the page opens and after you have been away.";renderLockCard();
+};
+$("lockMins").onchange=()=>{const d=lockData();if(d){d.mins=+$("lockMins").value;lockSave(d)}};
+$("lockNowBtn").onclick=()=>lockNow();
+$("lockOffBtn").onclick=async()=>{
+  const ok=await askPin("Enter your PIN to turn off the lock",true);
+  if(ok){lockSave(null);$("lockSetMsg").className="status";$("lockSetMsg").textContent="Lock is off.";renderLockCard()}
+};
+$("lockBioSet").onclick=async()=>{
+  const d=lockData(),m=$("lockSetMsg");if(!d)return;
+  if(d.cred){d.cred="";lockSave(d);m.className="status";m.textContent="Fingerprint or face is off. The PIN still works.";renderLockCard();return}
+  try{
+    const c=await navigator.credentials.create({publicKey:{challenge:crypto.getRandomValues(new Uint8Array(32)),rp:{name:"WYZ Execution Page"},user:{id:crypto.getRandomValues(new Uint8Array(16)),name:email||"user",displayName:myName||"You"},pubKeyCredParams:[{type:"public-key",alg:-7},{type:"public-key",alg:-257}],authenticatorSelection:{authenticatorAttachment:"platform",userVerification:"required"},timeout:60000}});
+    d.cred=u8b64(new Uint8Array(c.rawId));lockSave(d);m.className="status";m.textContent="Fingerprint or face is on. The PIN still works as a backup.";renderLockCard();
+  }catch(e){m.className="status err";m.textContent="Couldn't set that up on this device ("+clip((e&&e.name)||"cancelled",40)+"). The PIN still works."}
+};
+renderLockCard();
 /* ---------- quick links ---------- */
 const LINKS=[
   ["WYZ Dashboard","https://dashboard.wyzrent.com"],
@@ -1723,12 +1996,13 @@ async function refreshAll(force){
   await readConn();loadCal();
   if(!state.skipDrive||drive.state==="ok")loadDrive();
   if(!state.skipTodo||todo.state==="ok")loadTodoist();
-  await loadMail(force);followups(false);checkHandoffs();
+  await loadMail(force);followups(false);checkHandoffs();maybeAlert();
   if(state.autoDraft&&sample&&state.autoDraftDay!==todayKey()){state.autoDraftDay=todayKey();persist();draftAll(true)}
   if(state.shareDash&&Date.now()-(state.dashAt||0)>1800000)shareSummary();
 }
 $("refresh").onclick=()=>refreshAll(false);
 (async()=>{
+  await lockGate();
   collapsed.delete("c-inbox");collapsed.delete("setupCard");ORDER.forEach(k=>collapsed.delete("g-"+k));saveCol();
   try{applyOrder();applyCol();renderLinks();renderSetup();renderTasks();renderResearch()}catch(e){}
   mcp=Connectors.mcp;perms=Connectors.perms;await Connectors.ai.detect();sample=Connectors.makeSample();try{renderAI()}catch(e){}
@@ -1777,7 +2051,7 @@ async function weeklyReview(){
 $("weekGo").onclick=weeklyReview;
 
 /* ---------- system check: test every connection, read-only ---------- */
-const SCOPE_LABEL={contacts:"see your contacts",otherContacts:"see people you have emailed",calEvents:"create and move calendar events",gmailRead:"read your email",gmailDraft:"save drafts and send replies",cal:"read your calendar",drive:"list your Drive files",driveRead:"read a Drive file when you ask the AI about it",gmailModify:"archive, star, label, bin and mark as read"};
+const SCOPE_LABEL={driveFile:"save attachments to your Drive",contacts:"see your contacts",otherContacts:"see people you have emailed",calEvents:"create and move calendar events",gmailRead:"read your email",gmailDraft:"save drafts and send replies",cal:"read your calendar",drive:"list your Drive files",driveRead:"read a Drive file when you ask the AI about it",gmailModify:"archive, star, label, bin and mark as read"};
 let lastReport="";
 async function testEverything(){
   const out=$("testOut"),sum=$("testSum"),btn=$("testGo");
@@ -2064,7 +2338,7 @@ attachAutocomplete($("thrTo"));attachAutocomplete($("thrCc"));attachAutocomplete
 function infoOpen(title){
   $("infoTitle").textContent=title;const b=$("infoBody");b.replaceChildren();$("info").hidden=false;return b;
 }
-const infoClose=()=>{$("info").hidden=true};
+const infoClose=()=>{$("info").hidden=true;try{speechSynthesis.cancel()}catch(e){}};
 $("infoClose").onclick=infoClose;
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("info").hidden)infoClose()});
 function infoSection(host,title){const d=el("div","infosec");d.append(el("h3","",title));const body=el("div");d.append(body);host.append(d);return body}
@@ -2113,15 +2387,19 @@ async function pickTop3(force){
   }catch(e){top3Fail=Date.now()}
   top3Busy=false;renderTop3();
 }
-function renderTop3(){
-  const card=$("top3"),host=$("top3List");
-  if(!G.connected()||(!board&&!(state.tasks||[]).length)){card.hidden=true;return}
+function top3Rows(){
   const cand=top3Candidates();let rows=cand.slice(0,3);
   const c=state.top3;
   if(c&&c.day===todayKey()&&c.picks&&c.picks.length){
     const mapped=c.picks.map(p=>{const x=cand.find(y=>y.kind===p.kind&&y.ref===p.ref);return x?Object.assign({},x,{why:p.why||x.why}):null}).filter(Boolean);
     if(mapped.length>=Math.min(3,cand.length))rows=mapped.slice(0,3);
   }
+  return rows;
+}
+function renderTop3(){
+  const card=$("top3"),host=$("top3List");
+  if(!G.connected()||(!board&&!(state.tasks||[]).length)){card.hidden=true;return}
+  const rows=top3Rows();
   card.hidden=!rows.length;host.replaceChildren();
   rows.forEach((x,i)=>{
     const r=el("div","t3row");r.append(el("span","t3n",String(i+1)));const m=el("div","main");

@@ -285,6 +285,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       <button class="btn" type="button" id="refresh">Refresh now</button>
       <button class="btn" type="button" id="newMailBtn" title="Write a new email">New email</button>
       <button class="btn" type="button" id="planBtn" title="A plan for today from your meetings, emails and tasks">Plan my day</button>
+      <button class="btn" type="button" id="readDayBtn" title="Hear your top 3, meetings and urgent emails read out loud">🔊 Read my day</button>
       <button class="btn" type="button" id="wrapBtn" title="What got done today and what is next">End-of-day wrap</button>
       <button class="btn" type="button" id="zoomBtn" title="Make the text bigger or smaller">Text size</button>
       <button class="btn" type="button" id="inviteBtn" title="Send someone the link and steps on WhatsApp">Invite someone</button>
@@ -503,12 +504,31 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       <p class="status" id="aiMsg"></p>
     </div></div>
     <div class="card note"><div class="pad">
+      <h2>Alerts and security</h2>
+      <label class="status" style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" id="alertsOn" style="margin-top:3px"><span>Alert me when a VIP or critical email arrives. It works while this page, or the installed app, is open on your phone or computer.</span></label>
+      <div class="ask"><button class="btn small" type="button" id="alertTest">Send a test alert</button><span class="status" id="alertsNote" role="status"></span></div>
+      <h2 style="font-size:15px;margin-top:8px">Lock this page</h2>
+      <span class="status" id="lockNote">Ask for a PIN before this page opens and after you have been away. Your email stays hidden on a shared or lost device.</span>
+      <div id="lockSetup">
+        <div class="ask"><input class="in" id="lockNew" type="password" inputmode="numeric" autocomplete="new-password" maxlength="8" placeholder="New PIN, 4 to 8 digits" aria-label="New PIN"><input class="in" id="lockNew2" type="password" inputmode="numeric" autocomplete="new-password" maxlength="8" placeholder="Type it again" aria-label="Repeat the PIN"><button class="btn solid" type="button" id="lockOnBtn">Turn on lock</button></div>
+      </div>
+      <div id="lockOn" hidden>
+        <div class="ask"><label class="status" for="lockMins">Lock again after</label><select class="in" id="lockMins" style="flex:0 1 170px"><option value="1">1 minute away</option><option value="5">5 minutes away</option><option value="15">15 minutes away</option><option value="30">30 minutes away</option><option value="0">Only when I close it</option></select></div>
+        <div class="headrow"><button class="btn small solid" type="button" id="lockNowBtn">Lock now</button><button class="btn small" type="button" id="lockBioSet" hidden>Use fingerprint or face</button><button class="btn small ghost" type="button" id="lockOffBtn">Turn off lock</button></div>
+      </div>
+      <p class="status" id="lockSetMsg" role="status"></p>
+    </div></div>
+    <div class="card note"><div class="pad">
       <h2>Replies and rules</h2>
       <span class="status">Your signature. It is added to the end of every reply you send from the page.</span>
       <textarea id="sigText" aria-label="Signature" style="min-height:90px" placeholder="Houssam Bahri&#10;WYZ Rent"></textarea>
       <label class="status" style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" id="autoSuggest" checked style="margin-top:3px"><span>When I open an email, suggest an answer in the thread straight away. Turn this off to suggest only when I ask.</span></label>
       <label class="status" style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" id="autoDraft" style="margin-top:3px"><span>Write draft replies for me when I open the page, once a day. They go to Gmail drafts and are never sent.</span></label>
       <div class="ask"><label class="status" for="undoSecs">Undo send. After you press Send, wait this long before it really goes</label><select class="in" id="undoSecs" style="flex:0 1 150px"><option value="0">Send at once</option><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="20">20 seconds</option><option value="30">30 seconds</option></select></div>
+      <span class="status">Drive folder for saved attachments. It is created the first time you save one.</span>
+      <input class="in" id="driveFolder" aria-label="Drive folder name" placeholder="WYZ Rent Attachments" autocomplete="off" maxlength="80">
+      <span class="status">One-tap replies. The buttons under an email. Separate them with commas. Each one tells the AI what to say.</span>
+      <input class="in" id="quickList" aria-label="One-tap replies" placeholder="Yes, Not now, Need more info, Call me, Thanks" autocomplete="off">
       <span class="status">Team. People you can hand an email to. They get it by email and you see when they answer.</span>
       <div id="teamList"></div>
       <div class="ask"><input class="in" id="teamName" placeholder="Name" aria-label="Team member name" style="flex:0 1 140px"><input class="in" id="teamEmail" placeholder="Email address" aria-label="Team member email"><button class="btn" type="button" id="teamAdd">Add</button></div>
@@ -608,6 +628,15 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       </div>
       <div class="headrow"><select class="in" id="thrAIpick" aria-label="Which AI writes it" style="flex:0 1 130px;padding:5px 8px" hidden></select><button class="btn small" type="button" id="thrAI">Write it for me</button><button class="btn small" type="button" id="thrMic" title="Press, speak your answer, press again to stop" aria-pressed="false" hidden>🎤 Speak</button><select class="in" id="thrLang" aria-label="Language you speak" style="flex:0 1 120px;padding:5px 8px" hidden><option value="en-GB">English</option><option value="ar-AE">العربية</option></select><button class="btn small ghost" type="button" id="thrExact" hidden>Use my exact words</button><button class="btn small ghost" type="button" id="thrFreeBtn" title="Write it with your free ChatGPT or Claude chat, no API credit">No credit? Use a free chat</button><button class="btn solid" type="button" id="thrSend">Send</button><button class="btn" type="button" id="thrCheck" title="The AI reads your email before you send it and points out mistakes">Check it first</button><button class="btn" type="button" id="thrSave">Save to Gmail drafts</button><button class="btn ghost" type="button" id="thrFwd">Forward</button><button class="btn ghost" type="button" id="thrWA">Send on WhatsApp</button></div>
     </div>
+  </div></div>
+</div>
+<div id="lock" class="onb" hidden role="dialog" aria-modal="true" aria-labelledby="lockTitle" style="background:var(--bg);z-index:100">
+  <div class="onbbox card"><div class="pad">
+    <h2 id="lockTitle">Enter your PIN</h2>
+    <input class="in" id="lockPin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" aria-label="PIN" style="font-size:22px;letter-spacing:.3em;text-align:center">
+    <p class="status err" id="lockMsg" role="alert"></p>
+    <div class="headrow"><button class="btn solid" type="button" id="lockGo">Unlock</button><button class="btn" type="button" id="lockBio" hidden>Use fingerprint or face</button><button class="btn ghost" type="button" id="lockCancel" hidden>Cancel</button></div>
+    <button class="btn ghost small" type="button" id="lockForgot">Forgot the PIN? Sign in with Google again</button>
   </div></div>
 </div>
 <div id="info" class="onb" hidden role="dialog" aria-modal="true" aria-labelledby="infoTitle">
