@@ -141,11 +141,15 @@
     var headers = Object.assign({ Authorization: "Bearer " + t }, opt.headers || {});
     var r = await fetch(url, Object.assign({}, opt, { headers: headers }));
     if (r.status === 401 && tries < 1) { tokOf(K).exp = 0; return gfetch(url, opt, scope, tries + 1); }
-    if ((r.status === 429 || r.status === 503) && tries < 3) { await sleep(700 * (tries + 1)); return gfetch(url, opt, scope, tries + 1); }
-    if (r.status === 403) {
+    if (r.status === 503 && tries < 3) { await sleep(700 * (tries + 1)); return gfetch(url, opt, scope, tries + 1); }
+    if (r.status === 429 || r.status === 403) {
       var msg = "", reason = "";
       try { var j = await r.json(); msg = (j.error && j.error.message) || ""; reason = (j.error && j.error.errors && j.error.errors[0] && j.error.errors[0].reason) || ""; } catch (e) {}
-      if (/ratelimit/i.test(reason) && tries < 3) { await sleep(800 * (tries + 1)); return gfetch(url, opt, scope, tries + 1); }
+      if (r.status === 429 || /ratelimit|quota/i.test(reason + " " + msg)) {
+        /* Google's per-minute limit: wait it out quietly, then say so in plain words */
+        if (tries < 2) { await sleep(tries ? 20000 : 4000); return gfetch(url, opt, scope, tries + 1); }
+        throw cerr("rate_limited", "Google asked the page to slow down for a minute. It clears by itself, then tap Refresh.");
+      }
       if (/accessNotConfigured|has not been used|is disabled/i.test(reason + " " + msg)) throw cerr("api_disabled", "That Google API is switched off in your Google Cloud project. See EXECUTION-PAGE.md, step 2.");
       throw cerr("consent_required", msg || "Google refused access");
     }
@@ -258,6 +262,7 @@
   function makeTools(K) {
   var gfetch = function (u, o, s, n) { return gfetchK(u, o, s, n, K); };
   var profile = function () { return profileK(K); };
+  var seen = new Map();   /* thread id -> {h: historyId, t: thread}: unchanged threads aren't read again */
   var mailTo = function () { var p = K ? (xs[K - 1] || {}).prof : profileCache; return p && p.email ? p.email : (K ? (xs[K - 1] || {}).email || "" : ""); };
   async function buildMessage(a) {
     var threadId = "", inReply = "", refs = "";
@@ -296,8 +301,11 @@
       search_threads: async function (a) {
         await profile();
         var list = await gfetch(GM + "/threads?q=" + encodeURIComponent(a.query || "") + "&maxResults=" + (a.pageSize || 20), null, SC.gmailRead);
-        var ids = (list.threads || []).map(function (t) { return t.id; });
-        var full = await pool(ids, 8, function (id) { return gfetch(GM + "/threads/" + id + "?" + META, null, SC.gmailRead); });
+        var full = await pool(list.threads || [], 4, function (x) {
+          var c = seen.get(x.id);
+          if (c && c.h === x.historyId) return c.t;
+          return gfetch(GM + "/threads/" + x.id + "?" + META, null, SC.gmailRead).then(function (t) { seen.set(x.id, { h: x.historyId, t: t }); if (seen.size > 600) seen.clear(); return t; });
+        });
         return {
           threads: full.filter(Boolean).map(function (t) {
             var ms = (t.messages || []).map(function (m) { return slimMsg(m, false); });
