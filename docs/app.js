@@ -644,7 +644,8 @@ const addrOf=s=>{s=String(s||"");const m=s.match(/<([^>]+)>/);return (m?m[1]:s).
 function slimThread(t){const ms=t.messages||[];const last=ms[ms.length-1]||{};const first=ms[0]||{};
   const mine=(last.labelIds||[]).includes("SENT");const lastOther=[...ms].reverse().find(m=>!(m.labelIds||[]).includes("SENT"))||{};
   const days=last.date?Math.floor((Date.now()-Date.parse(last.date))/86400000):null;
-  return {account:t.account||"",id:t.id,from:mine?(lastOther.sender||first.sender||""):(last.sender||first.sender||""),subject:first.subject||last.subject||"(No subject)",snippet:(last.snippet||"").replace(/&#39;/g,"'").replace(/&quot;/g,'"').replace(/&amp;/g,"&").slice(0,280),date:last.date||first.date||"",count:t.messageCount||ms.length,unread:(last.labelIds||[]).includes("UNREAD"),important:(last.labelIds||[]).includes("IMPORTANT"),url:t.viewUrl||last.viewUrl||"",lastId:last.id||t.id,lastFromMe:mine,lastTo:mine?(last.toRecipients||[]).slice(0,3):[],daysSinceLast:days,auto:(last.labelIds||[]).some(l=>/^CATEGORY_(PROMOTIONS|SOCIAL|UPDATES|FORUMS)$/.test(l))}}
+  const myLast=[...ms].reverse().find(m=>(m.labelIds||[]).includes("SENT"));
+  return {account:t.account||"",mineAt:myLast&&myLast.date||"",id:t.id,from:mine?(lastOther.sender||first.sender||""):(last.sender||first.sender||""),subject:first.subject||last.subject||"(No subject)",snippet:(last.snippet||"").replace(/&#39;/g,"'").replace(/&quot;/g,'"').replace(/&amp;/g,"&").slice(0,280),date:last.date||first.date||"",count:t.messageCount||ms.length,unread:(last.labelIds||[]).includes("UNREAD"),important:(last.labelIds||[]).includes("IMPORTANT"),url:t.viewUrl||last.viewUrl||"",lastId:last.id||t.id,lastFromMe:mine,lastTo:mine?(last.toRecipients||[]).slice(0,3):[],daysSinceLast:days,auto:(last.labelIds||[]).some(l=>/^CATEGORY_(PROMOTIONS|SOCIAL|UPDATES|FORUMS)$/.test(l))}}
 async function loadMail(force){
   if(!mcp||busy)return;busy=true;setFresh("load","Reading your inbox and sent mail");
   try{
@@ -1322,7 +1323,7 @@ async function thrDeliver(kind,a){
     if(kind==="send"){
       const tid=thr.mode==="new"?(r.payload&&r.payload.threadId):thr.id;
       if(thr.mode==="new"){logDone({id:tid,title:"Sent: "+a.subject},"sent");st.textContent="Sent to "+a.to.join(", ")+"."}
-      else{state.done[thr.id]=1;logDone(thr.item)}
+      else{state.done[thr.id]=Date.now();logDone(thr.item)}
       const n=+$("thrRemind").value;if((thr.mode==="reply"||thr.mode==="new")&&n>0&&tid){const d=new Date();d.setDate(d.getDate()+n);state.chase=state.chase||{};state.chase[tid]={due:ymd(d),title:a.subject,at:Date.now(),to:a.to[0]};st.textContent+=" You'll be reminded on "+niceDay(ymd(d))+" if there's no reply."}
       persist();renderBoard()}
     else if(r.payload&&r.payload.viewUrl){const l=el("a","btn small","Open draft");l.href=r.payload.viewUrl;l.target="_blank";l.rel="noopener";$("thrSt").append(" ",l)}
@@ -1353,7 +1354,7 @@ $("thrCheck").onclick=thrCheck;
 $("undoSecs").onchange=()=>{state.undoSecs=+$("undoSecs").value;persist()};
 async function thrArchive(){
   const b=$("thrArchive"),st=$("thrSt");b.disabled=true;b.textContent="Archiving...";
-  try{await mcp.callTool("Gmail","archive_thread",{threadId:thr.id});b.textContent="Archived";state.done[thr.id]=1;logDone(thr.item,"archived");persist();renderBoard();setTimeout(thrClose,600)}
+  try{await mcp.callTool("Gmail","archive_thread",{threadId:thr.id});b.textContent="Archived";state.done[thr.id]=Date.now();logDone(thr.item,"archived");persist();renderBoard();setTimeout(thrClose,600)}
   catch(e){b.disabled=false;b.textContent="Archive";st.className="status err";
     if(e&&e.code==="consent_required"){st.textContent="Archive needs one more Google permission. ";const l=el("button","btn small solid","Allow");l.type="button";l.onclick=()=>connectGoogle(true);st.append(l)}
     else st.textContent="Couldn't archive it ("+clip((e&&e.message)||"unknown reason",90)+")."}
@@ -1390,7 +1391,7 @@ function thrMore(){
     m.replaceChildren(el("p","status","Loading your labels..."));d.open=true;
     let labels=[];try{labels=((await mcp.callTool("Gmail","list_labels",{},{cache:false})).payload||{}).labels||[]}catch(e){thrMore();return thrErr(e,"load your labels")}
     m.replaceChildren(el("p","meta",labels.length?"Pick a label. The email leaves your inbox.":"You have no labels yet. Make one below."));
-    const mv=async(id,name)=>{d.open=false;try{await mcp.callTool("Gmail","modify_thread",{threadId:thr.id,add:[id],remove:["INBOX"]});state.done[thr.id]=1;logDone(thr.item,"moved to "+name);persist();renderBoard();thrNote("Moved to "+name+".");setTimeout(thrClose,700)}catch(e){thrErr(e,"move it")}};
+    const mv=async(id,name)=>{d.open=false;try{await mcp.callTool("Gmail","modify_thread",{threadId:thr.id,add:[id],remove:["INBOX"]});state.done[thr.id]=Date.now();logDone(thr.item,"moved to "+name);persist();renderBoard();thrNote("Moved to "+name+".");setTimeout(thrClose,700)}catch(e){thrErr(e,"move it")}};
     labels.slice(0,40).forEach(l=>{const b=el("button","",l.name);b.type="button";b.onclick=()=>mv(l.id,l.name);m.append(b)});
     const row=el("div","snzrow");const inp=el("input","in");inp.placeholder="New label name";inp.setAttribute("aria-label","New label name");
     const go=el("button","","Create and move");go.type="button";go.onclick=async()=>{const n=inp.value.trim();if(!n)return;try{const r=(await mcp.callTool("Gmail","create_label",{name:n})).payload;mv(r.id,r.name)}catch(e){d.open=false;thrErr(e,"create the label")}};
@@ -1411,7 +1412,7 @@ function thrMore(){
   add("Hand off to a team member...",async()=>openHandoff());
   add("Move to bin",async()=>{
     if(!confirm("Move this whole conversation to the bin in Gmail?"))return;
-    await mcp.callTool("Gmail","trash_thread",{threadId:thr.id});state.done[thr.id]=1;logDone(thr.item,"binned");persist();renderBoard();thrNote("Moved to the bin.");setTimeout(thrClose,600);
+    await mcp.callTool("Gmail","trash_thread",{threadId:thr.id});state.done[thr.id]=Date.now();logDone(thr.item,"binned");persist();renderBoard();thrNote("Moved to the bin.");setTimeout(thrClose,600);
   });
   host.append(d);
 }
@@ -1448,7 +1449,11 @@ $("mailGo").onclick=searchMail;$("mailQ").addEventListener("keydown",e=>{if(e.ke
 /* ---------- board ---------- */
 const tById=id=>threads.find(t=>t.id===id)||found.find(t=>t.id===id);
 const todayKey=()=>ymd(new Date());
-const isOff=i=>!!state.done[i.id]||(state.snooze[i.id]&&state.snooze[i.id]>todayKey())||!!(state.handoffs&&state.handoffs[i.id]&&(state.handoffs[i.id].status==="waiting"||state.handoffs[i.id].status==="replied"));
+/* Done holds until someone else writes again in that conversation */
+function doneNow(i){const v=state.done[i.id];if(!v)return false;const t=tById(i.id);
+  if(t&&!t.lastFromMe&&t.date){const at=v>1?v:Date.parse(t.mineAt||0)||0;if(at&&Date.parse(t.date)>at+1000){delete state.done[i.id];return false}}
+  return true}
+const isOff=i=>doneNow(i)||(state.snooze[i.id]&&state.snooze[i.id]>todayKey())||!!(state.handoffs&&state.handoffs[i.id]&&(state.handoffs[i.id].status==="waiting"||state.handoffs[i.id].status==="replied"));
 function reminderItems(){
   const c=state.chase||{},today=todayKey(),out=[];
   Object.keys(c).forEach(id=>{
@@ -1471,7 +1476,7 @@ const backFirst=i=>state.snooze[i.id]===todayKey()?1:0;
 function logDone(i,kind){state.log=(state.log||[]).concat({t:String(i.title||i.id).slice(0,120),at:Date.now(),k:kind||""}).slice(-300)}
 function markDone(i){
   if(state.repeat&&state.repeat[i.id]){logDone(i,"weekly");snoozeUntil(i.id,7);return}
-  state.done[i.id]=1;if(state.chase)delete state.chase[i.id];logDone(i);persist();renderBoard();
+  state.done[i.id]=Date.now();if(state.chase)delete state.chase[i.id];logDone(i);persist();renderBoard();
 }
 function renderBoard(){
   try{updateHero()}catch(e){}
@@ -1515,7 +1520,7 @@ function bulkBar(){
   const btn=(t,fn,cls)=>{const x=el("button","btn small"+(cls?" "+cls:""),t);x.type="button";x.onclick=()=>fn(x);b.append(x);return x};
   btn("Select all shown",()=>{visibleIds().forEach(id=>sel.add(id));renderBoard();bulkBar()},"ghost");
   if(n){
-    btn("Done",()=>{allItems().filter(i=>sel.has(i.id)).forEach(i=>{if(state.repeat&&state.repeat[i.id]){logDone(i,"weekly");const d=new Date();d.setDate(d.getDate()+7);state.snooze[i.id]=ymd(d)}else{state.done[i.id]=1;logDone(i)}});persist();sel.clear();renderBoard();bulkBar()},"solid");
+    btn("Done",()=>{allItems().filter(i=>sel.has(i.id)).forEach(i=>{if(state.repeat&&state.repeat[i.id]){logDone(i,"weekly");const d=new Date();d.setDate(d.getDate()+7);state.snooze[i.id]=ymd(d)}else{state.done[i.id]=Date.now();logDone(i)}});persist();sel.clear();renderBoard();bulkBar()},"solid");
     const d=el("details","askdd");d.append(el("summary","","Snooze ▾"));const m=el("div","askmenu");
     [["Tomorrow",1],["In 3 days",3],["In 1 week",7]].forEach(([t,days])=>{const x=el("button","",t);x.type="button";x.onclick=()=>{const dd=new Date();dd.setDate(dd.getDate()+days);const v=ymd(dd);sel.forEach(id=>{state.snooze[id]=v});persist();sel.clear();renderBoard();bulkBar()};m.append(x)});
     d.append(m);b.append(d);
@@ -1622,7 +1627,7 @@ async function draftFor(i,host,btn){
     const subj=(t.subject||"").match(/^re:/i)?t.subject:"Re: "+(t.subject||"");
     try{await mcp.callTool("Gmail","send_message",{to:[to],subject:subj,body,replyToMessageId:l.id||t.lastId});
       sd.textContent="Sent";st.className="status";st.textContent="Sent to "+to+". Marked as done.";ta.disabled=true;sv.disabled=true;
-      state.done[i.id]=1;logDone(i);persist();setTimeout(()=>{try{renderBoard()}catch(e){}},1500)}
+      state.done[i.id]=Date.now();logDone(i);persist();setTimeout(()=>{try{renderBoard()}catch(e){}},1500)}
     catch(e){armed=0;sd.disabled=false;sd.textContent="Send";st.className="status err";st.textContent="Couldn't send it ("+clip((e&&e.message)||"unknown reason",90)+"). Check your sent mail before trying again."}
   };
   ta.addEventListener("input",()=>{if(armed){armed=0;sd.textContent="Send"}});
@@ -1638,8 +1643,10 @@ async function ask(){
   if(!sample&&chatAI()){const ctx=(board&&board.items||[]).slice(0,25).map(i=>"- "+ST[i.st]+": "+i.title).join("\n");const c=CHAT[chatAI()];out.replaceChildren(outsideOffer({name:c.name,url:c.url,kind:"chat"},"I'm "+(myName||"a WYZ Rent team member")+". My board today:\n"+ctx+"\n\nQuestion: "+q));return}
   if(!sample){out.textContent="Ask needs an AI connected. Connect Claude or ChatGPT in the setup steps.";return}
   out.textContent="Thinking...";
-  const ctx={today:new Date().toString(),board:(board&&board.items||[]).map(i=>({status:ST[i.st],urgency:UR[i.g],title:i.title,summary:i.summary,from:nameOf((tById(i.id)||{}).from)})),calendar:(events||[]).map(e=>({when:e.start&&(e.start.dateTime||e.start.date),what:e.summary}))};
-  try{const r=await sample("You help "+(myName||"a WYZ Rent team member")+" run their day. Answer briefly and plainly, no em dashes. Their board and calendar (JSON):\n"+JSON.stringify(ctx)+"\n\nQuestion: "+q,{cache:false,onText:u=>{out.textContent=u.text}});out.textContent=r.text}
+  let live=[];try{const w=q.replace(/[^\p{L}\p{N}@. ]/gu," ").split(/\s+/).filter(x=>x.length>2&&!/^(the|and|what|did|does|have|from|with|about|any|send|sent|email|emails|mail|today|this|that|who|when|where|why|how)$/i.test(x)).slice(0,4);
+    if(w.length){const r=await mcp.callTool("Gmail","search_threads",{query:w.join(" OR ")+" newer_than:30d",pageSize:8},{cache:false});live=((r.payload&&r.payload.threads)||[]).map(slimThread).map(t=>({from:nameOf(t.from)||t.from,subject:t.subject,when:t.date,latest:t.snippet,lastFromMe:t.lastFromMe}))}}catch(e){}
+  const ctx={liveMailSearch:live,today:new Date().toString(),board:(board&&board.items||[]).map(i=>({status:ST[i.st],urgency:UR[i.g],title:i.title,summary:i.summary,from:nameOf((tById(i.id)||{}).from)})),calendar:(events||[]).map(e=>({when:e.start&&(e.start.dateTime||e.start.date),what:e.summary}))};
+  try{const r=await sample("You help "+(myName||"a WYZ Rent team member")+" run their day. Answer briefly and plainly, no em dashes. Their board, calendar and a live search of their mail for this question (liveMailSearch, newest mail included) (JSON):\n"+JSON.stringify(ctx)+"\n\nQuestion: "+q,{cache:false,onText:u=>{out.textContent=u.text}});out.textContent=r.text}
   catch(e){out.textContent=e&&e.code==="not_granted"?"Allow Claude for this page to use Ask.":"Couldn't answer just now. Try again in a moment."}
 }
 
@@ -2803,7 +2810,7 @@ function renderTop3(){
 function topHideToday(x){const d=todayKey();if(!state.topHide||state.topHide.day!==d)state.topHide={day:d,ids:[]};state.topHide.ids.push(x.kind+":"+x.ref)}
 function topRefresh(){persist();try{renderBoard()}catch(e){}try{renderTasks()}catch(e){}renderTop3()}
 function topDone(x){
-  if(x.kind==="mail"){state.done[x.ref]=1;logDone(x.item||{id:x.ref,title:x.title})}
+  if(x.kind==="mail"){state.done[x.ref]=Date.now();logDone(x.item||{id:x.ref,title:x.title})}
   else if(x.kind==="task"){const t=(state.tasks||[]).find(y=>y.id===x.ref);if(t)t.done=1;logDone({id:x.ref,title:x.title},"task")}
   else{topHideToday(x);logDone({id:x.ref,title:x.title},"meeting")}
   topRefresh();
@@ -2815,7 +2822,7 @@ function topDelBtn(x){
   b.onclick=()=>{
     if(!armed){armed=1;b.textContent="Tap again to delete";tm=setTimeout(()=>{armed=0;b.textContent="Delete"},8000);return}
     clearTimeout(tm);
-    if(x.kind==="mail"){state.done[x.ref]=1;logDone(x.item||{id:x.ref,title:x.title},"removed")}
+    if(x.kind==="mail"){state.done[x.ref]=Date.now();logDone(x.item||{id:x.ref,title:x.title},"removed")}
     else if(x.kind==="task"){state.tasks=(state.tasks||[]).filter(y=>y.id!==x.ref)}
     else topHideToday(x);
     topRefresh();
@@ -3002,7 +3009,7 @@ function renderHandoffs(){
       n.disabled=true;n.textContent="Sending...";
       try{await mcp.callTool("Gmail","send_message",{to:[h.to],cc:[],subject:/^re:/i.test(h.subject)?h.subject:"Re: Please handle: "+h.subject,body:"Hi "+h.name+", a quick reminder about this one. Can you let me know where it stands?"+(sigText()?"\n\n"+sigText():""),replyToMessageId:h.msgId||undefined,attachments:[]});h.nudged=Date.now();persist();n.textContent="Nudged"}
       catch(e){n.disabled=false;n.textContent="Couldn't nudge"}};a.append(n)}
-    const d=el("button","btn small ghost","Done");d.type="button";d.onclick=()=>{h.status="closed";state.done[id]=1;persist();renderBoard()};
+    const d=el("button","btn small ghost","Done");d.type="button";d.onclick=()=>{h.status="closed";state.done[id]=Date.now();persist();renderBoard()};
     const back=el("button","btn small ghost","Take it back");back.type="button";back.onclick=()=>{delete state.handoffs[id];persist();renderBoard()};
     a.append(d,back);m.append(a);r.append(m);host.append(r);
   });
