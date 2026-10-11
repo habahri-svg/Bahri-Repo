@@ -523,6 +523,9 @@
   }
   /* Shared AI: the site owner's key sits on the server (api/claude.js and api/chatgpt.js). Signed-in people use it with no key of their own. */
   var shared = { claude: false, chatgpt: false };
+  var down = {};
+  function creditLike(e) { var m = String((e && e.message) || ""); return /no credit|credit left|credit balance|billing|quota|insufficient|rejected the API key/i.test(m) || !!(e && (e.code === "not_granted" || e.code === "rate_limited")); }
+  function announce() { try { window.dispatchEvent(new CustomEvent("wyz-ai-status")); } catch (e) {} }
   function detectShared() {
     var probe = function (p, url) { return fetch(url, { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : { ok: false }; }).then(function (j) { shared[p] = !!(j && j.ok); }, function () { shared[p] = false; }); };
     return Promise.all([probe("claude", "/api/claude"), probe("chatgpt", "/api/chatgpt")]).then(function () { return shared.claude || shared.chatgpt; });
@@ -564,11 +567,35 @@
   }
   function makeSample() {
     if (!active()) return null;
+    /* If one AI has no credit (or its key is refused), the other one answers. The broken one is skipped for a few minutes. */
     async function call(input, opts) {
       var p = (opts && opts.provider) || active();
       if (!avail(p)) { p = active(); if (!p) throw cerr("not_granted", "No AI is connected"); }
       var messages = typeof input === "string" ? [{ role: "user", content: input }] : input;
-      return keyOf(p) ? callDirect(p, messages) : callShared(p, messages);
+      var files = messages.some(function (m) { return Array.isArray(m.content); });
+      var other = p === "claude" ? "chatgpt" : "claude";
+      var canSwitch = !(opts && opts.noFallback) && !files && avail(other);
+      var run = function (pp) { return keyOf(pp) ? callDirect(pp, messages) : callShared(pp, messages); };
+      if (canSwitch && down[p] && down[p].until > Date.now() && !(down[other] && down[other].until > Date.now())) {
+        try { var r0 = await run(other); r0.usedOther = other; r0.skipped = p; return r0; }
+        catch (e0) { if (!creditLike(e0)) throw e0; down[other] = { until: Date.now() + 2 * 60000, why: String(e0.message || "").slice(0, 160), credit: /credit|billing|quota/i.test(String(e0.message || "")) }; announce(); throw e0; }
+      }
+      try {
+        var ok = await run(p);
+        if (down[p]) { delete down[p]; announce(); }
+        return ok;
+      } catch (e) {
+        if (!creditLike(e)) throw e;
+        var credit = /credit|billing|quota|insufficient/i.test(String(e.message || ""));
+        down[p] = { until: Date.now() + (credit || e.code === "not_granted" ? 10 : 2) * 60000, why: String(e.message || "").slice(0, 160), credit: credit };
+        announce();
+        if (!canSwitch) throw e;
+        try { var r = await run(other); r.usedOther = other; r.skipped = p; return r; }
+        catch (e2) {
+          if (creditLike(e2)) { var c2 = /credit|billing|quota|insufficient/i.test(String(e2.message || "")); down[other] = { until: Date.now() + (c2 || e2.code === "not_granted" ? 10 : 2) * 60000, why: String(e2.message || "").slice(0, 160), credit: c2 }; announce(); }
+          throw e2;
+        }
+      }
     }
     var sample = async function (input, opts) {
       var r = await call(input, opts);
@@ -595,6 +622,7 @@
       detect: detectShared, names: NAMES,
       chosen: chosen, setChosen: function (p) { ls.set(KEY.provider, p === "chatgpt" ? "chatgpt" : "claude"); },
       active: active, avail: avail, mode: modeOf,
+      down: function (p) { return down[p] && down[p].until > Date.now() ? down[p] : null; }, clearDown: function (p) { delete down[p]; announce(); },
       /* Claude */
       models: MODEL_LIST, getModel: getModel, setModel: function (m) { ls.set(KEY.model, m); }, modelLabel: modelLabel,
       set: function (k) { ls.set(KEY.ai, String(k || "").trim()); }, clear: function () { ls.del(KEY.ai); }, has: function () { return !!ls.get(KEY.ai); },

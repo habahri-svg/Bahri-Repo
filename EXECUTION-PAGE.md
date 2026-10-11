@@ -108,6 +108,7 @@ Without step 2 everything still works. The page then explains what is missing, a
 - **Read my day aloud.** The header button reads your top 3, emails, meetings and overdue tasks. English or Arabic (Arabic needs an AI connected and an Arabic voice on the device).
 - **Alerts for urgent mail.** Under Connections, Alerts and security. A notification when a VIP or critical email arrives, while the page or installed app is open. A page that is fully closed can't alert, because that needs a server.
 - **PIN lock.** Under Connections, Alerts and security. A 4 to 8 digit PIN before the page opens and after you have been away, with optional fingerprint or face. The PIN is stored only as a salted hash on that device. "Forgot the PIN" removes the lock but signs you out, so Google sign-in is needed again.
+- **Automatic AI switch.** If Claude has no credit, its key is refused, or it is busy, ChatGPT answers instead (and the other way round). The page remembers for a few minutes, so it doesn't waste a call on the broken one. Questions about PDFs and pictures stay with Claude, because ChatGPT can't read those here. A line at the very top of the page shows which AI is connected and which one is answering.
 - **Hand off to a team member.** More, Hand off sends the email to Karim or Louloua (edit the team under Replies and rules) and tracks it under "Waiting on the team" until they answer. You can nudge them from there.
 
 ## What happens when someone opens it

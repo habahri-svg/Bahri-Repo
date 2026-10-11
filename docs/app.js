@@ -323,7 +323,7 @@ async function connectAI(p,raw){
   if(p==="chatgpt"&&!/^sk-/.test(key))return {ok:false,msg:"OpenAI keys start with sk-. Copy the key again."};
   const had=A.active();
   p==="claude"?A.set(key):A.setOpenAI(key);sample=Connectors.makeSample();
-  try{await sample("Reply with the single word OK.",{provider:p,cache:false})}
+  try{await sample("Reply with the single word OK.",{provider:p,cache:false,noFallback:true})}
   catch(e){p==="claude"?A.clear():A.clearOpenAI();sample=Connectors.makeSample();
     return {ok:false,msg:e&&e.code==="not_granted"?name+" rejected that key. Check it and try again.":e&&e.code==="rate_limited"?name+" is busy. Try again in a minute.":"Couldn't use "+name+" ("+clip((e&&e.message)||"unknown reason",110)+")."}}
   if(!had)A.setChosen(p);
@@ -405,6 +405,7 @@ function renderAI(){
   A.links().forEach(l=>{const r=el("div","tplrow");r.append(el("b","",l.name),el("span","status",l.url));const b=el("button","btn small ghost","Remove");b.type="button";b.onclick=()=>{A.removeLink(l.id);renderAI()};r.append(b);ll.append(r)});
   const pr=$("linkPresets");if(!pr.childNodes.length)[["Perplexity","https://www.perplexity.ai/search?q={prompt}"],["Microsoft Copilot","https://copilot.microsoft.com/?q={prompt}"],["Grok","https://grok.com/?q={prompt}"],["Gemini","https://gemini.google.com/app"]].forEach(([n,u])=>{const c=el("button","chip","+ "+n);c.type="button";c.onclick=()=>{if(!A.links().some(x=>x.name===n))A.addLink(n,u);renderAI()};pr.append(c)});
   try{renderThrPick()}catch(e){}
+  try{renderAIStat()}catch(e){}
 }
 $("aiProv").onchange=()=>{Connectors.ai.setChosen($("aiProv").value);renderAI();if(threads.length&&sample)triage(board&&board.sig||"",true)};
 $("modelSel").onchange=()=>{Connectors.ai.setModel($("modelSel").value)};
@@ -1938,14 +1939,31 @@ $("aiTest").onclick=async()=>{
     line.textContent=name+" ("+model+", "+mode+"): testing...";
     try{
       const s=Connectors.makeSample();
-      const t0=Date.now(),r=await s("Reply with exactly: OK",{cache:false,provider:id});
+      const t0=Date.now(),r=await s("Reply with exactly: OK",{cache:false,provider:id,noFallback:true});A.clearDown(id);
       line.className="status";line.textContent="✅ "+name+" ("+model+", "+mode+"): working. Answered in "+((Date.now()-t0)/1000).toFixed(1)+" seconds.";
     }catch(e){
       line.className="status err";line.textContent="❌ "+name+" ("+model+", "+mode+"): "+((e&&e.message)||"failed");
+      if(/no credit|credit|billing|quota|rejected/i.test((e&&e.message)||"")){const o=id==="claude"?"chatgpt":"claude";line.textContent+=A.avail(o)?" "+A.names[o]+" will answer instead.":" Nothing else is connected to answer instead."}
     }
   }
   btn.disabled=false;btn.textContent="Test Claude and ChatGPT now";
 };
+
+/* ---------- AI status line at the top: which AI is connected and whether it works ---------- */
+function renderAIStat(){
+  const A=Connectors.ai,bar=$("aiStat");if(!bar)return;bar.replaceChildren();
+  const one=(p,name)=>{
+    const d=A.down(p),has=A.avail(p);
+    const s=el("span","",(has?(d?"⚠ ":"✅ "):"⛔ ")+name+(has?(d?(d.credit?" no credit":" problem"):" ready"):" not connected"));
+    s.title=has?(d?d.why:"Connected ("+(A.mode(p)==="key"?"your own key":"shared account")+"). Press Test under Connections to be sure."):"Not connected. See Connections.";return s;
+  };
+  bar.append(el("b","","AI"),document.createTextNode(" "),one("claude","Claude"),document.createTextNode(" · "),one("chatgpt","ChatGPT"));
+  const c=A.down("claude"),g=A.down("chatgpt");
+  if(c&&A.avail("chatgpt")&&!g)bar.append(document.createTextNode(" · ChatGPT is answering instead"));
+  else if(g&&A.avail("claude")&&!c)bar.append(document.createTextNode(" · Claude is answering instead"));
+  else if(c&&g)bar.append(document.createTextNode(" · both need attention, see Connections"));
+}
+window.addEventListener("wyz-ai-status",renderAIStat);
 /* ---------- quick links ---------- */
 const LINKS=[
   ["WYZ Dashboard","https://dashboard.wyzrent.com"],
@@ -2124,7 +2142,7 @@ async function testEverything(){
      const nm=A.names[p]+(p===A.active()?" (in use)":"");
      if(!A.avail(p)){add(nm,"na","Not connected"+(p==="chatgpt"?" (optional).":".")+(!sample&&p==="claude"?" Sorting uses simple rules until an AI is connected.":""));continue}
      const mode=A.mode(p);
-     try{const r=await sample("Reply with the single word OK.",{provider:p,cache:false});add(nm,"ok",(mode==="shared"?"Working through the shared connection":"Working with your own key")+", using "+(p==="chatgpt"?A.getOModel():A.modelLabel())+". It answered: "+clip(r.text,20)+".")}
+     try{const r=await sample("Reply with the single word OK.",{provider:p,cache:false,noFallback:true});Connectors.ai.clearDown(p);add(nm,"ok",(mode==="shared"?"Working through the shared connection":"Working with your own key")+", using "+(p==="chatgpt"?A.getOModel():A.modelLabel())+". It answered: "+clip(r.text,20)+".")}
      catch(e){add(nm,"bad",A.names[p]+" is switched on but failed ("+msg(e)+")."+(mode==="shared"?" Check the key, credit and ALLOWED_EMAILS in Vercel.":" Check your key, the model name and credit under Connections, Personalise."))}
    }}
   // 8 todoist
