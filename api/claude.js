@@ -19,7 +19,7 @@ const allowedModels = function () { return S.list(process.env.ALLOWED_MODELS || 
 
 module.exports = async function handler(req, res) {
   const ready = !!(process.env.ANTHROPIC_API_KEY && process.env.GOOGLE_CLIENT_ID);
-  const ctx = await S.gate(req, res, ready, overLimit);
+  const ctx = await S.gate(req, res, ready, overLimit, { blocks: true });
   if (!ctx) return;
   const b = ctx.body;
   try {

@@ -10,6 +10,7 @@
 <meta name="apple-mobile-web-app-title" content="Execution Page">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23104b70'/%3E%3Cpath d='M18 34l10 10 18-22' fill='none' stroke='%23d8a23c' stroke-width='7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<script>try{var L=JSON.parse(localStorage.getItem("wyz-look")||"{}");if(L.p)document.documentElement.setAttribute("data-palette",L.p);if(L.m==="light"||L.m==="dark")document.documentElement.setAttribute("data-theme",L.m)}catch(e){}</script>
 <style>
 /* Layout: one column run sheet. Header, three tabs (Today, Connections, Install). Colour lives in status dots only. WYZ navy, gold, sky. */
 :root{
@@ -24,6 +25,30 @@
 :root[data-theme="dark"]{
   --bg:#0b1a2b; --panel:#0e2238; --fg:#e8f2fa; --soft:#9db2c6; --line:#22405c;
   --navy:#9cc9e8; --gold:#d8a23c; --sky:#16324e; --onnavy:#0b1a2b; color-scheme:dark}
+/* Colour palettes: pick one under Connections, Personalise. Each has a light and a dark look. */
+:root[data-palette="ocean"]{--bg:#f4f8fc;--panel:#ffffff;--fg:#0e2238;--soft:#56697c;--line:#dbe5ee;--navy:#104b70;--gold:#b8923c;--sky:#e8f2fa;--onnavy:#ffffff;--hero1:#0f5a85;--hero2:#0b3350}
+:root[data-palette="emerald"]{--bg:#f3f9f6;--panel:#ffffff;--fg:#0d2a21;--soft:#4f6b60;--line:#d4e6dc;--navy:#0f6b52;--gold:#c08a2b;--sky:#e6f4ee;--onnavy:#ffffff;--hero1:#11785c;--hero2:#0a4a39}
+:root[data-palette="indigo"]{--bg:#f6f6fd;--panel:#ffffff;--fg:#1a1c3f;--soft:#5b5d86;--line:#dcdcf0;--navy:#3b3fa8;--gold:#d49a2a;--sky:#ecedfb;--onnavy:#ffffff;--hero1:#4348b8;--hero2:#2a2d78}
+:root[data-palette="sunset"]{--bg:#fdf7f3;--panel:#ffffff;--fg:#35190f;--soft:#7a5646;--line:#efdcd2;--navy:#b4492b;--gold:#c9962b;--sky:#fcefe8;--onnavy:#ffffff;--hero1:#c4532f;--hero2:#8a2f17}
+:root[data-palette="plum"]{--bg:#fbf7fd;--panel:#ffffff;--fg:#2a1633;--soft:#6d5679;--line:#e8d9ee;--navy:#7a2e8e;--gold:#d99a1f;--sky:#f5ebf8;--onnavy:#ffffff;--hero1:#8a37a0;--hero2:#531a66}
+@media (prefers-color-scheme: dark){:root[data-palette="ocean"]:not([data-theme="light"]){--bg:#0b1a2b;--panel:#0e2238;--fg:#e8f2fa;--soft:#9db2c6;--line:#22405c;--navy:#9cc9e8;--gold:#d8a23c;--sky:#16324e;--onnavy:#0b1a2b;--hero1:#145a85;--hero2:#0a2a44;color-scheme:dark}}
+@media (prefers-color-scheme: dark){:root[data-palette="emerald"]:not([data-theme="light"]){--bg:#0a1d17;--panel:#0f2a21;--fg:#e6f4ee;--soft:#98b8aa;--line:#1f4435;--navy:#7fd1b0;--gold:#d8a23c;--sky:#14382c;--onnavy:#0a1d17;--hero1:#11785c;--hero2:#083628;color-scheme:dark}}
+@media (prefers-color-scheme: dark){:root[data-palette="indigo"]:not([data-theme="light"]){--bg:#0f1030;--panel:#171947;--fg:#ecedfb;--soft:#a9acd8;--line:#2c2f6b;--navy:#a5a9f5;--gold:#e0a82e;--sky:#1f2260;--onnavy:#0f1030;--hero1:#4348b8;--hero2:#22256a;color-scheme:dark}}
+@media (prefers-color-scheme: dark){:root[data-palette="sunset"]:not([data-theme="light"]){--bg:#1d100b;--panel:#2a1810;--fg:#fcefe8;--soft:#c9a898;--line:#4a2d20;--navy:#f0956f;--gold:#e0a82e;--sky:#3a2016;--onnavy:#1d100b;--hero1:#b4492b;--hero2:#6e2410;color-scheme:dark}}
+@media (prefers-color-scheme: dark){:root[data-palette="plum"]:not([data-theme="light"]){--bg:#1a0f20;--panel:#261630;--fg:#f5ebf8;--soft:#bda5c8;--line:#432b52;--navy:#d596ea;--gold:#e0a82e;--sky:#35204a;--onnavy:#1a0f20;--hero1:#8a37a0;--hero2:#431456;color-scheme:dark}}
+:root[data-palette="ocean"][data-theme="dark"]{--bg:#0b1a2b;--panel:#0e2238;--fg:#e8f2fa;--soft:#9db2c6;--line:#22405c;--navy:#9cc9e8;--gold:#d8a23c;--sky:#16324e;--onnavy:#0b1a2b;--hero1:#145a85;--hero2:#0a2a44;color-scheme:dark}
+:root[data-palette="emerald"][data-theme="dark"]{--bg:#0a1d17;--panel:#0f2a21;--fg:#e6f4ee;--soft:#98b8aa;--line:#1f4435;--navy:#7fd1b0;--gold:#d8a23c;--sky:#14382c;--onnavy:#0a1d17;--hero1:#11785c;--hero2:#083628;color-scheme:dark}
+:root[data-palette="indigo"][data-theme="dark"]{--bg:#0f1030;--panel:#171947;--fg:#ecedfb;--soft:#a9acd8;--line:#2c2f6b;--navy:#a5a9f5;--gold:#e0a82e;--sky:#1f2260;--onnavy:#0f1030;--hero1:#4348b8;--hero2:#22256a;color-scheme:dark}
+:root[data-palette="sunset"][data-theme="dark"]{--bg:#1d100b;--panel:#2a1810;--fg:#fcefe8;--soft:#c9a898;--line:#4a2d20;--navy:#f0956f;--gold:#e0a82e;--sky:#3a2016;--onnavy:#1d100b;--hero1:#b4492b;--hero2:#6e2410;color-scheme:dark}
+:root[data-palette="plum"][data-theme="dark"]{--bg:#1a0f20;--panel:#261630;--fg:#f5ebf8;--soft:#bda5c8;--line:#432b52;--navy:#d596ea;--gold:#e0a82e;--sky:#35204a;--onnavy:#1a0f20;--hero1:#8a37a0;--hero2:#431456;color-scheme:dark}
+:root[data-theme="light"]{color-scheme:light}
+.card{box-shadow:0 1px 2px color-mix(in srgb,var(--navy) 10%,transparent),0 4px 14px color-mix(in srgb,var(--navy) 6%,transparent)}
+body{background:linear-gradient(180deg,color-mix(in srgb,var(--sky) 55%,var(--bg)) 0,var(--bg) 340px) fixed,var(--bg)}
+.swatches{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0}
+.swatch{display:flex;flex-direction:column;align-items:center;gap:5px;background:none;border:2px solid transparent;border-radius:12px;padding:6px 8px;cursor:pointer;color:var(--fg);font:inherit;font-size:12.5px}
+.swatch i{display:block;width:54px;height:34px;border-radius:9px;border:1px solid var(--line)}
+.swatch[aria-pressed="true"]{border-color:var(--navy);background:var(--sky);font-weight:600}
+.swatch:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 .toolbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);display:flex;flex-wrap:nowrap;gap:6px;align-items:center;overflow-x:auto;padding-block:8px;scrollbar-width:thin}
@@ -44,7 +69,7 @@ body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px
 .wrap{max-width:900px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
 .wrap .wrap{width:100%;max-width:none}
 header{display:flex;flex-direction:column;gap:6px}
-.hero{gap:10px;padding:18px 18px 16px;border-radius:14px;color:#fff;background:linear-gradient(135deg,#104b70 0%,#0b3350 100%);box-shadow:0 6px 20px rgba(11,51,80,.25)}
+.hero{gap:10px;padding:18px 18px 16px;border-radius:14px;color:#fff;background:linear-gradient(135deg,var(--hero1,#104b70) 0%,var(--hero2,#0b3350) 100%);box-shadow:0 6px 20px color-mix(in srgb,var(--hero2,#0b3350) 30%,transparent)}
 .hero .eyebrow{color:#e5c06a}
 .hero h1{color:#fff;font-size:30px;line-height:1.15}
 .herotop{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
@@ -138,6 +163,12 @@ ol.steps li::marker{color:var(--gold);font-weight:700}
 .msg pre{white-space:pre-wrap;font:inherit;overflow-wrap:anywhere;margin:8px 0 4px}
 .msg .meta{font-size:13px;color:var(--soft);font-weight:400}
 .found{display:flex;flex-direction:column}
+.selbox{width:18px;height:18px;margin:0 8px 0 0;vertical-align:-3px;accent-color:var(--navy);cursor:pointer}
+.bulkbar{position:fixed;left:50%;transform:translateX(-50%);bottom:max(12px,env(safe-area-inset-bottom,0px));z-index:12;display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:calc(100vw - 24px);background:var(--panel);border:1px solid var(--navy);border-radius:14px;padding:8px 10px;box-shadow:0 8px 28px color-mix(in srgb,var(--navy) 30%,transparent)}
+.bulkbar .askmenu{top:auto;bottom:calc(100% + 4px)}
+.bulkbar b{font-size:14px;margin-right:4px}
+.freebox{border:1px solid var(--gold);background:var(--sky);border-radius:10px;padding:10px 12px;margin:8px 0;display:flex;flex-direction:column;gap:8px}
+.freebox p{margin:0;font-size:14px}
 .mailframe{width:100%;border:1px solid var(--line);border-radius:8px;background:#fff;min-height:60px;display:block}
 .mailtext{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.55;margin:8px 0 4px;font-size:14px}
 .mailtext a,.lnk:hover{color:var(--navy)}
@@ -316,7 +347,8 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       </div>
     </div>
     <div id="board" class="wrap" style="gap:14px"></div>
-    <div class="headrow"><button class="btn ghost small" type="button" id="showOff">Show done and snoozed (0)</button></div>
+    <div class="headrow"><button class="btn ghost small" type="button" id="showOff">Show done and snoozed (0)</button><button class="btn ghost small" type="button" id="selMode" aria-pressed="false">Select several</button><button class="btn small" type="button" id="draftAll" title="Writes a draft reply for each email that needs an answer and saves it to Gmail drafts. Nothing is sent.">Draft all replies</button><span class="status" id="draftAllSt" role="status"></span></div>
+    <div class="bulkbar" id="bulkBar" role="region" aria-label="Actions for the selected emails" hidden></div>
     </div>
     <div class="sec wrap" data-sec="cal" style="gap:14px">
     <div class="card" id="c-cal">
@@ -414,6 +446,10 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       <h2>Personalise</h2>
       <span class="status">Page name. It shows at the top of the page and on the browser tab.</span>
       <div class="ask"><input class="in" id="pageName" placeholder="WYZ Rent · Execution Page" maxlength="40" aria-label="Page name" autocomplete="off"><button class="btn ghost" type="button" id="pageNameReset">Reset</button></div>
+      <h2 style="font-size:15px;margin-top:8px">Colours</h2>
+      <span class="status">Pick a look. It is saved on this device.</span>
+      <div class="swatches" id="swatches" role="group" aria-label="Colour palette"><button class="swatch" type="button" data-pal="ocean" aria-pressed="false"><i style="background:linear-gradient(135deg,#0f5a85,#b8923c)"></i>Ocean</button><button class="swatch" type="button" data-pal="emerald" aria-pressed="false"><i style="background:linear-gradient(135deg,#11785c,#c08a2b)"></i>Emerald</button><button class="swatch" type="button" data-pal="indigo" aria-pressed="false"><i style="background:linear-gradient(135deg,#4348b8,#d49a2a)"></i>Indigo</button><button class="swatch" type="button" data-pal="sunset" aria-pressed="false"><i style="background:linear-gradient(135deg,#c4532f,#c9962b)"></i>Sunset</button><button class="swatch" type="button" data-pal="plum" aria-pressed="false"><i style="background:linear-gradient(135deg,#8a37a0,#d99a1f)"></i>Plum</button></div>
+      <div class="ask"><label class="status" for="lookMode">Light or dark</label><select class="in" id="lookMode" style="flex:0 1 160px"><option value="auto">Match my device</option><option value="light">Always light</option><option value="dark">Always dark</option></select></div>
       <h2 style="font-size:15px;margin-top:8px">AI assistants</h2>
       <span class="status">Answers on this page come from</span>
       <select class="in" id="aiProv" aria-label="Which AI writes the answers"><option value="claude">Claude</option><option value="chatgpt">ChatGPT</option></select>
@@ -436,6 +472,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       <h2>Replies and rules</h2>
       <span class="status">Your signature. It is added to the end of every reply you send from the page.</span>
       <textarea id="sigText" aria-label="Signature" style="min-height:90px" placeholder="Houssam Bahri&#10;WYZ Rent"></textarea>
+      <label class="status" style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" id="autoDraft" style="margin-top:3px"><span>Write draft replies for me when I open the page, once a day. They go to Gmail drafts and are never sent.</span></label>
       <span class="status">Reply templates. Use {name} for the person's first name.</span>
       <div id="tplList"></div>
       <div class="ask"><input class="in" id="tplName" placeholder="Template name" aria-label="Template name" style="flex:1 1 160px"><input class="in" id="tplText" placeholder="Text of the reply" aria-label="Template text" style="flex:3 1 260px"><button class="btn" type="button" id="tplAdd">Add</button></div>
@@ -506,7 +543,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
 </div>
 <div id="thr" class="thr" hidden role="dialog" aria-modal="true" aria-labelledby="thrTitle">
   <div class="thrbox card"><div class="pad">
-    <div class="headrow"><h2 id="thrTitle" style="flex:1 1 200px;overflow-wrap:anywhere"></h2><span class="status" id="thrPos"></span><button class="btn small" type="button" id="thrPrev" title="Previous email (left arrow)" aria-label="Previous email">‹ Prev</button><button class="btn small" type="button" id="thrNext" title="Next email (right arrow)" aria-label="Next email">Next ›</button><span id="thrSnooze"></span><button class="btn small" type="button" id="thrVip" title="Always show this sender as urgent">VIP</button><button class="btn small" type="button" id="thrMute" title="Hide this sender from your board">Mute</button><button class="btn small" type="button" id="thrArchive">Archive</button><a id="thrGmail" class="btn small" target="_blank" rel="noopener">Open in Gmail</a><button class="btn small" type="button" id="thrClose">Close</button></div>
+    <div class="headrow"><h2 id="thrTitle" style="flex:1 1 200px;overflow-wrap:anywhere"></h2><span class="status" id="thrPos"></span><button class="btn small" type="button" id="thrPrev" title="Previous email (left arrow)" aria-label="Previous email">‹ Prev</button><button class="btn small" type="button" id="thrNext" title="Next email (right arrow)" aria-label="Next email">Next ›</button><span id="thrSnooze"></span><span id="thrMore"></span><button class="btn small" type="button" id="thrVip" title="Always show this sender as urgent">VIP</button><button class="btn small" type="button" id="thrMute" title="Hide this sender from your board">Mute</button><button class="btn small" type="button" id="thrArchive">Archive</button><a id="thrGmail" class="btn small" target="_blank" rel="noopener">Open in Gmail</a><button class="btn small" type="button" id="thrClose">Close</button></div>
     <div id="thrBody"></div>
     <details class="msg" id="thrAIbox" hidden><summary>Instruct AI about this email</summary><div id="thrInstruct" class="instr"></div></details>
     <div id="thrReply" hidden>
@@ -522,8 +559,23 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       <label class="status chk" id="thrSumWrap" hidden><input type="checkbox" id="thrSum"> Send a short AI summary instead of the full email</label>
       <label class="status chk" id="thrRemWrap">Remind me if no reply in <select id="thrRemind"><option value="0">never</option><option value="2">2 days</option><option value="3" selected>3 days</option><option value="7">1 week</option></select></label>
       <p class="status" id="thrSt"></p>
-      <div class="headrow"><select class="in" id="thrAIpick" aria-label="Which AI writes it" style="flex:0 1 130px;padding:5px 8px" hidden></select><button class="btn small" type="button" id="thrAI">Write it for me</button><button class="btn solid" type="button" id="thrSend">Send</button><button class="btn" type="button" id="thrSave">Save to Gmail drafts</button><button class="btn ghost" type="button" id="thrFwd">Forward</button><button class="btn ghost" type="button" id="thrWA">Send on WhatsApp</button></div>
+      <div class="freebox" id="thrFree" hidden>
+        <p><b>No credit needed.</b> Use your own ChatGPT or Claude chat on their website. The email and your instruction are filled in for you. Copy the answer it gives, then paste it below.</p>
+        <div class="headrow"><button class="btn small" type="button" id="thrFreeGPT">Open ChatGPT</button><button class="btn small" type="button" id="thrFreeClaude">Open Claude (choose Sonnet 5.5)</button></div>
+        <textarea class="in" id="thrPaste" rows="4" placeholder="Paste the answer here" aria-label="Paste the answer here"></textarea>
+        <button class="btn small solid" type="button" id="thrPasteUse">Use as my reply</button>
+      </div>
+      <div class="headrow"><select class="in" id="thrAIpick" aria-label="Which AI writes it" style="flex:0 1 130px;padding:5px 8px" hidden></select><button class="btn small" type="button" id="thrAI">Write it for me</button><button class="btn small ghost" type="button" id="thrFreeBtn" title="Write it with your free ChatGPT or Claude chat, no API credit">No credit? Use a free chat</button><button class="btn solid" type="button" id="thrSend">Send</button><button class="btn" type="button" id="thrSave">Save to Gmail drafts</button><button class="btn ghost" type="button" id="thrFwd">Forward</button><button class="btn ghost" type="button" id="thrWA">Send on WhatsApp</button></div>
     </div>
+  </div></div>
+</div>
+<div id="fileAI" class="onb" hidden role="dialog" aria-modal="true" aria-labelledby="fileAITitle">
+  <div class="onbbox card"><div class="pad">
+    <div class="headrow"><h2 id="fileAITitle" style="flex:1 1 200px;overflow-wrap:anywhere"></h2><button class="btn small" type="button" id="fileAIClose">Close</button></div>
+    <span class="status" id="fileAINote">The AI reads this file when you ask. Nothing is saved.</span>
+    <div class="chips" id="fileAIChips"></div>
+    <div class="ask"><input class="in" id="fileAIQ" placeholder="Ask about this file" aria-label="Ask about this file" autocomplete="off"><button class="btn solid" type="button" id="fileAIGo">Ask</button></div>
+    <div id="fileAIOut" role="status"></div>
   </div></div>
 </div>
 <div id="evt" class="onb" hidden role="dialog" aria-modal="true" aria-labelledby="evtTitle">

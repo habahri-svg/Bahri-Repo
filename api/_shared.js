@@ -38,7 +38,23 @@ function makeLimiter(name) {
 }
 
 /* Runs the checks every AI function shares. Returns {who, msgs} or sends the error response and returns null. */
-async function gate(req, res, ready, overLimit) {
+const MEDIA = ["application/pdf", "image/png", "image/jpeg", "image/gif", "image/webp"];
+function okContent(c, blocks) {
+  if (typeof c === "string") return true;
+  if (!blocks || !Array.isArray(c) || !c.length || c.length > 6) return false;
+  return c.every(function (b) {
+    return b && ((b.type === "text" && typeof b.text === "string") ||
+      ((b.type === "document" || b.type === "image") && b.source && b.source.type === "base64" && typeof b.source.data === "string" && MEDIA.indexOf(b.source.media_type) >= 0));
+  });
+}
+function weigh(c) {
+  if (typeof c === "string") return c.length;
+  return c.reduce(function (n, b) { return n + (b.text ? b.text.length : (b.source && b.source.data ? b.source.data.length : 0)); }, 0);
+}
+
+/* opts.blocks lets the caller send files (PDF and pictures) as content blocks. Only Claude's function turns this on. */
+async function gate(req, res, ready, overLimit, opts) {
+  const blocks = !!(opts && opts.blocks);
   res.setHeader("Cache-Control", "no-store");
   if (req.method === "GET") { res.status(200).json({ ok: ready }); return null; }
   if (req.method !== "POST") { res.status(405).json({ error: "Method not allowed" }); return null; }
@@ -52,9 +68,9 @@ async function gate(req, res, ready, overLimit) {
   if (overLimit(who.email)) { res.status(429).json({ error: "Daily limit reached. Try again tomorrow." }); return null; }
   const b = typeof req.body === "string" ? safeParse(req.body) : (req.body || {});
   const msgs = Array.isArray(b.messages) ? b.messages : [];
-  const valid = msgs.length && msgs.every(function (m) { return m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string"; });
-  const size = msgs.reduce(function (n, m) { return n + (m && m.content ? m.content.length : 0); }, 0);
-  if (!valid || size > 250000) { res.status(400).json({ error: "Bad request." }); return null; }
+  const valid = msgs.length && msgs.every(function (m) { return m && (m.role === "user" || m.role === "assistant") && okContent(m.content, blocks && m.role === "user"); });
+  const size = valid ? msgs.reduce(function (n, m) { return n + weigh(m.content); }, 0) : 0;
+  if (!valid || size > (blocks ? 4300000 : 250000)) { res.status(400).json({ error: "Bad request." }); return null; }
   return { who: who, msgs: msgs, body: b };
 }
 

@@ -278,7 +278,7 @@ function updateHero(){
   defs.forEach(([label,n,color,fn])=>{const b=el("button","hstat");b.type="button";b.append(el("b","",String(n)));const l=el("span");const dot=el("i");dot.style.background=color;l.append(dot,label);b.append(l);b.onclick=fn;b.setAttribute("aria-label",n+" "+label);box.append(b)});
 }
 function renderHello(){
-  try{$("pageName").value=state.pageName||"";applyPageName()}catch(e){}
+  try{$("pageName").value=state.pageName||"";applyPageName();$("autoDraft").checked=!!state.autoDraft}catch(e){}
   const h=new Date().getHours();
   $("hello").textContent=myName?(h<12?"Good morning, ":h<18?"Good afternoon, ":"Good evening, ")+myName.split(" ")[0]:"Your execution page";
   try{updateHero()}catch(e){}
@@ -362,6 +362,21 @@ function applyPageName(){
   document.querySelector(".hero .eyebrow").textContent=n||"WYZ Rent · Execution Page";
   document.title=baseTitle();try{updateHero()}catch(e){}
 }
+/* colour palette and light/dark look, saved per device and applied before first paint by a tiny script in index.html */
+const PAL_META={ocean:"#104b70",emerald:"#0f6b52",indigo:"#3b3fa8",sunset:"#b4492b",plum:"#7a2e8e"};
+function lookNow(){try{return JSON.parse(localStorage.getItem("wyz-look")||"{}")}catch(e){return {}}}
+function applyLook(l){
+  const r=document.documentElement,p=PAL_META[l.p]?l.p:"ocean";
+  r.setAttribute("data-palette",p);
+  if(l.m==="light"||l.m==="dark")r.setAttribute("data-theme",l.m);else r.removeAttribute("data-theme");
+  document.querySelectorAll("#swatches .swatch").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.pal===p)));
+  $("lookMode").value=l.m==="light"||l.m==="dark"?l.m:"auto";
+  const mt=document.querySelector('meta[name="theme-color"]');if(mt)mt.content=PAL_META[p];
+}
+function saveLook(patch){const l=Object.assign({},lookNow(),patch);try{localStorage.setItem("wyz-look",JSON.stringify(l))}catch(e){}applyLook(l)}
+document.querySelectorAll("#swatches .swatch").forEach(b=>b.onclick=()=>saveLook({p:b.dataset.pal}));
+$("lookMode").onchange=()=>saveLook({m:$("lookMode").value});
+applyLook(lookNow());
 $("pageName").addEventListener("input",()=>{state.pageName=$("pageName").value;persist();applyPageName()});
 $("pageNameReset").onclick=()=>{state.pageName="";$("pageName").value="";persist();applyPageName()};
 function renderAI(){
@@ -736,6 +751,7 @@ function msgBody(m,d){
         }catch(e){b.textContent="Couldn't download, open in Gmail"}
       };
       row.append(b);
+      if((f.id||f.data)&&fileKind(f.type,f.name)){const q=el("button","chip","Ask AI about it");q.type="button";q.onclick=()=>openFileAI(f.name,()=>attachmentLoader(m,f));row.append(q)}
     });
     wrap.append(row);
   }
@@ -788,11 +804,11 @@ async function openThread(id,o){
   $("thrGmail").href=t.url||"https://mail.google.com/";
   $("thrSnooze").replaceChildren(snoozeDrop(id,thrClose));$("thrAIbox").hidden=true;$("thrAIbox").open=false;
   $("thrBody").replaceChildren(el("p","sub","Loading the conversation..."));
-  $("thrReply").hidden=true;$("thrSt").textContent="";$("thrSt").className="status";$("thrText").value="";$("thrAll").checked=false;
+  $("thrFree").hidden=true;$("thrPaste").value="";$("thrReply").hidden=true;$("thrSt").textContent="";$("thrSt").className="status";$("thrText").value="";$("thrAll").checked=false;
   ["thrSend","thrSave","thrText","thrTo","thrCc"].forEach(k=>$(k).disabled=false);
   $("thrSend").textContent="Send";
   try{const r=await mcp.callTool("Gmail","get_thread",{threadId:id,messageFormat:"PLAIN_TEXT"},{cache:false});thr.msgs=(r.payload&&r.payload.messages)||[]}catch(e){thr.msgs=[]}
-  renderThread();threadNav();
+  renderThread();threadNav();thrMore();
   if(thr.msgs.length&&(lastMsg().labelIds||[]).includes("UNREAD"))mcp.callTool("Gmail","mark_read",{threadId:id}).catch(()=>{});
   if(thr.msgs.length){
     $("thrReply").hidden=false;fillTargets();syncRuleBtns();
@@ -803,6 +819,45 @@ async function openThread(id,o){
   }
   $("thr").querySelector(".pad").scrollTop=0;
 }
+/* Writing without API credit: the person's own free ChatGPT or Claude chat on its website, then paste the answer back */
+async function creditFallback(run){
+  const first=aiPickValue()||Connectors.ai.active();
+  try{return await run(first)}
+  catch(e){
+    const other=first==="claude"?"chatgpt":"claude";
+    if(/no credit|credit left|billing|quota/i.test((e&&e.message)||"")&&Connectors.ai.avail(other)){const r=await run(other);r.usedOther=other;r.skipped=first;return r}
+    throw e;
+  }
+}
+const isCreditErr=e=>/no credit|credit left|billing|quota/i.test((e&&e.message)||"");
+function freePrompt(){
+  if(thr.mode==="new"){
+    return "Write an email for "+(myName||"me")+" at WYZ Rent, a Dubai holiday home management company.\nIt is to: "+($("thrTo").value.trim()||"someone")+".\nWhat it should say: "+($("thrBrief").value.trim()||"(describe it here)")+"\n\nPlain text only, short, warm, professional, with contractions. No em dashes. Give a subject line first, then the email body.";
+  }
+  const chase=thrChase();
+  return (chase?"Write a short, polite follow-up email chasing an answer that is still owed":"Write a reply email")+" for "+(myName||"me")+" at WYZ Rent, a Dubai holiday home management company. Plain text only, short, warm, professional, with contractions. No em dashes, no semicolons. Use [DATE] or [DETAIL] where a fact is unknown. Give only the email body.\n\nSubject: "+$("thrTitle").textContent+"\nThread (latest last):\n"+threadBlock(thr.msgs).slice(-6000);
+}
+function showFree(){
+  $("thrFree").hidden=false;$("thrFree").scrollIntoView({block:"nearest"});
+}
+function openFree(url,name){
+  const p=freePrompt();
+  try{navigator.clipboard.writeText(p)}catch(e){}
+  const short=p.length>1800;
+  const msg=openOutside({url,name},p);
+  $("thrSt").className="status";$("thrSt").textContent=msg+(short?" The email was long, so the full text is also copied. Paste it if the page looks cut.":"")+" Paste the answer in the box below when it's ready.";
+  $("thrPaste").focus();
+}
+$("thrFreeBtn").onclick=showFree;
+$("thrFreeGPT").onclick=()=>openFree("https://chatgpt.com/?q={prompt}","ChatGPT");
+$("thrFreeClaude").onclick=()=>openFree("https://claude.ai/new?q={prompt}","Claude");
+$("thrPasteUse").onclick=()=>{
+  const v=$("thrPaste").value.trim();if(!v){$("thrPaste").focus();return}
+  let body=v,subj="";
+  if(thr.mode==="new"){const m=v.match(/^\s*Subject:\s*(.+)\n+/i);if(m){subj=m[1].trim();body=v.slice(m[0].length).trim()}}
+  $("thrText").value=body;if(subj&&!$("thrSubj").value.trim())$("thrSubj").value=subj;
+  $("thrFree").hidden=true;$("thrPaste").value="";$("thrSt").className="status";$("thrSt").textContent="Edit it, then send it or save it as a draft.";$("thrText").focus();
+};
 function thrChase(){const l=lastMsg();return thr.item.st==="follow"||thr.item.st==="wait"||addrOf(l.sender).toLowerCase()===myAddr()}
 async function thrDraft(){
   const ta=$("thrText"),st=$("thrSt"),chase=thrChase();
@@ -810,9 +865,9 @@ async function thrDraft(){
   const text=threadBlock(thr.msgs);
   try{
     const tone=sample?await toneExamples():"";
-    const r=!sample?{text:templateDraft(thr.item,chase)}:await sample((chase?"Write a short, polite follow-up email chasing an answer that is still owed, ":"Write a reply email ")+"for "+(myName||"me")+" at WYZ Rent. Plain text only, ready to edit, "+(sigText()?"with no sign-off and no name, because their signature is added automatically":"signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject, no quoted text."+(tone?"\n\n"+tone:"")+"\n\nWhat it's about: "+(thr.item.title||"")+". "+(thr.item.summary||"")+"\n\nThread (latest last):\n"+text,{cache:false,provider:aiPickValue(),onText:u=>{ta.value=u.text}});
-    ta.value=r.text;st.textContent="Edit it, then send it or save it as a draft."
-  }catch(e){st.className="status err";st.textContent="Couldn't write a draft ("+clip((e&&e.message)||"unknown reason",110)+"). Write your own here."}
+    const r=!sample?{text:templateDraft(thr.item,chase)}:await creditFallback(prov=>sample((chase?"Write a short, polite follow-up email chasing an answer that is still owed, ":"Write a reply email ")+"for "+(myName||"me")+" at WYZ Rent. Plain text only, ready to edit, "+(sigText()?"with no sign-off and no name, because their signature is added automatically":"signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject, no quoted text."+(tone?"\n\n"+tone:"")+"\n\nWhat it's about: "+(thr.item.title||"")+". "+(thr.item.summary||"")+"\n\nThread (latest last):\n"+text,{cache:false,provider:prov,onText:u=>{ta.value=u.text}}));
+    ta.value=r.text;st.textContent=r.usedOther?Connectors.ai.names[r.skipped]+" has no credit, so "+Connectors.ai.names[r.usedOther]+" wrote this. Edit it, then send it or save it as a draft.":"Edit it, then send it or save it as a draft."
+  }catch(e){st.className="status err";st.textContent="Couldn't write a draft ("+clip((e&&e.message)||"unknown reason",110)+")."+(isCreditErr(e)?" You can still use a free chat below, or write your own here.":" Write your own here.");if(isCreditErr(e))showFree()}
 }
 function thrArgs(){
   const last=lastMsg(),subj=String(tById(thr.id)&&tById(thr.id).subject||$("thrTitle").textContent||"");
@@ -829,13 +884,13 @@ function forwardBlock(){
 }
 function setMode(m){
   thr.mode=m;const fwd=m==="forward",nw=m==="new";
-  ["thrSnooze","thrGmail","thrArchive","thrVip","thrMute"].forEach(k=>$(k).hidden=nw);
+  ["thrSnooze","thrMore","thrGmail","thrArchive","thrVip","thrMute"].forEach(k=>$(k).hidden=nw);
   $("thrBody").hidden=nw;if(nw){$("thrAIbox").hidden=true;$("thrPrev").hidden=$("thrNext").hidden=true;$("thrPos").textContent=""}
   $("thrSubjWrap").hidden=!nw;$("thrBrief").hidden=!nw;if(nw)$("thrCcWrap").hidden=false;
   $("thrFwd").hidden=nw;
   $("thrFwd").textContent=fwd?"Back to reply":"Forward";
   $("thrSumWrap").hidden=!(fwd&&sample);$("thrRemWrap").hidden=fwd;$("thrAll").parentElement.hidden=fwd||nw;
-  $("thrAI").hidden=fwd;if(!fwd)$("thrSum").checked=false;
+  $("thrAI").hidden=fwd;$("thrFreeBtn").hidden=fwd;if(fwd)$("thrFree").hidden=true;if(!fwd)$("thrSum").checked=false;
 }
 $("thrFwd").onclick=()=>{
   if(thr.mode==="forward"){setMode("reply");fillTargets();return}
@@ -889,6 +944,60 @@ async function thrArchive(){
     else st.textContent="Couldn't archive it ("+clip((e&&e.message)||"unknown reason",90)+")."}
 }
 $("thrArchive").onclick=thrArchive;
+/* more mail actions: star, unread, label, unsubscribe, bin */
+function unsubTarget(){
+  for(let i=thr.msgs.length-1;i>=0;i--){
+    const m=thr.msgs[i];if(!m.unsub)continue;
+    const parts=[...String(m.unsub).matchAll(/<([^>]+)>/g)].map(x=>x[1].trim());
+    const https=parts.find(x=>/^https:\/\//i.test(x)),http=parts.find(x=>/^http:\/\//i.test(x)),mail=parts.find(x=>/^mailto:/i.test(x));
+    if(https||http||mail)return {https,http,mail,oneClick:/one-click/i.test(m.unsubPost||"")};
+  }
+  return null;
+}
+function thrErr(e,what){
+  const st=$("thrSt");st.className="status err";st.replaceChildren();
+  if(e&&e.code==="consent_required"){st.append(document.createTextNode("That needs one more Google permission. "));const l=el("button","btn small solid","Allow");l.type="button";l.onclick=()=>connectGoogle(true);st.append(l)}
+  else st.textContent="Couldn't "+what+" ("+clip((e&&e.message)||"unknown reason",90)+").";
+}
+function thrNote(t){const st=$("thrSt");st.className="status";st.textContent=t}
+function thrMore(){
+  const host=$("thrMore");host.replaceChildren();if(!thr.msgs.length||thr.mode==="new")return;
+  const d=el("details","askdd");d.append(el("summary","","More ▾"));const m=el("div","askmenu");d.append(m);
+  const starred=thr.msgs.some(x=>(x.labelIds||[]).includes("STARRED"));
+  const add=(t,fn)=>{const b=el("button","",t);b.type="button";b.onclick=async()=>{d.open=false;try{await fn()}catch(e){thrErr(e,t.toLowerCase())}};m.append(b);return b};
+  add(starred?"Remove star":"Star this email",async()=>{
+    await mcp.callTool("Gmail","modify_thread",{threadId:thr.id,add:starred?[]:["STARRED"],remove:starred?["STARRED"]:[]});
+    thr.msgs.forEach(x=>{x.labelIds=(x.labelIds||[]).filter(l=>l!=="STARRED");if(!starred)x.labelIds.push("STARRED")});
+    thrMore();thrNote(starred?"Star removed.":"Starred in Gmail.");
+  });
+  add("Mark as unread",async()=>{await mcp.callTool("Gmail","modify_thread",{threadId:thr.id,add:["UNREAD"],remove:[]});thrNote("Marked as unread in Gmail.")});
+  add("Move to a label...",async()=>{
+    m.replaceChildren(el("p","status","Loading your labels..."));d.open=true;
+    let labels=[];try{labels=((await mcp.callTool("Gmail","list_labels",{},{cache:false})).payload||{}).labels||[]}catch(e){thrMore();return thrErr(e,"load your labels")}
+    m.replaceChildren(el("p","meta",labels.length?"Pick a label. The email leaves your inbox.":"You have no labels yet. Make one below."));
+    const mv=async(id,name)=>{d.open=false;try{await mcp.callTool("Gmail","modify_thread",{threadId:thr.id,add:[id],remove:["INBOX"]});state.done[thr.id]=1;logDone(thr.item,"moved to "+name);persist();renderBoard();thrNote("Moved to "+name+".");setTimeout(thrClose,700)}catch(e){thrErr(e,"move it")}};
+    labels.slice(0,40).forEach(l=>{const b=el("button","",l.name);b.type="button";b.onclick=()=>mv(l.id,l.name);m.append(b)});
+    const row=el("div","snzrow");const inp=el("input","in");inp.placeholder="New label name";inp.setAttribute("aria-label","New label name");
+    const go=el("button","","Create and move");go.type="button";go.onclick=async()=>{const n=inp.value.trim();if(!n)return;try{const r=(await mcp.callTool("Gmail","create_label",{name:n})).payload;mv(r.id,r.name)}catch(e){d.open=false;thrErr(e,"create the label")}};
+    row.append(inp,go);m.append(row);
+  });
+  const u=unsubTarget();
+  if(u)add("Unsubscribe",async()=>{
+    const from=nameOf(lastMsg().sender)||"this sender";
+    if(!confirm("Unsubscribe from "+from+"?\nThey may take a few days to stop. This sender will also be muted on your board."))return;
+    if(u.https&&u.oneClick){await mcp.callTool("Gmail","unsubscribe_one_click",{url:u.https});thrNote("Unsubscribed. Muted on your board.")}
+    else if(u.mail&&!u.https&&!u.http){
+      const mt=u.mail.replace(/^mailto:/i,""),to=mt.split("?")[0],q=new URLSearchParams(mt.split("?")[1]||"");
+      await mcp.callTool("Gmail","send_message",{to:[to],cc:[],subject:q.get("subject")||"unsubscribe",body:q.get("body")||"unsubscribe",attachments:[]});thrNote("Unsubscribe email sent. Muted on your board.")}
+    else{window.open(u.https||u.http,"_blank","noopener");thrNote("The sender's page opened in a new tab. Confirm there. Muted on your board.")}
+    const a=thrSender();if(a)addRule("mute",a);syncRuleBtns();
+  });
+  add("Move to bin",async()=>{
+    if(!confirm("Move this whole conversation to the bin in Gmail?"))return;
+    await mcp.callTool("Gmail","trash_thread",{threadId:thr.id});state.done[thr.id]=1;logDone(thr.item,"binned");persist();renderBoard();thrNote("Moved to the bin.");setTimeout(thrClose,600);
+  });
+  host.append(d);
+}
 function thrClose(){$("thr").hidden=true}
 $("thrClose").onclick=thrClose;$("thrAI").onclick=()=>thr.mode==="new"?composeDraft():thrDraft();$("thrAll").onchange=fillTargets;
 $("thrSend").onclick=()=>thrAct("send");$("thrSave").onclick=()=>thrAct("save");
@@ -965,12 +1074,87 @@ function renderBoard(){
   if(!vis.length&&(board.items||[]).length)host.append(el("p","sub","All clear. Everything is done or snoozed."));
   applyCol();
 }
+/* select several emails and act on them together */
+let selOn=false;const sel=new Set();
+function visibleIds(){return allItems().filter(i=>showOff||!isOff(i)).filter(i=>!flt||i.st===flt).map(i=>i.id)}
+async function bulkArchive(btn){
+  const ids=[...sel];let ok=0,bad=0,first=null;btn.disabled=true;
+  for(let n=0;n<ids.length;n++){
+    btn.textContent="Archiving "+(n+1)+" of "+ids.length+"...";
+    try{await mcp.callTool("Gmail","archive_thread",{threadId:ids[n]});state.done[ids[n]]=1;logDone(allItems().find(x=>x.id===ids[n])||{id:ids[n]},"archived");ok++}catch(e){bad++;first=first||e;if(e&&e.code==="consent_required")break}
+  }
+  persist();sel.clear();renderBoard();bulkBar();
+  const b=$("bulkBar");b.hidden=false;b.replaceChildren(el("span","status"+(bad?" err":""),ok+" archived"+(bad?", "+bad+" failed ("+clip((first&&first.message)||"unknown reason",70)+")":".")));
+  if(first&&first.code==="consent_required"){const l=el("button","btn small solid","Allow");l.type="button";l.onclick=()=>connectGoogle(true);b.append(l)}
+  setTimeout(bulkBar,bad?6000:1800);
+}
+function bulkBar(){
+  const b=$("bulkBar");b.replaceChildren();
+  if(!selOn){b.hidden=true;return}
+  b.hidden=false;
+  const n=sel.size;b.append(el("b","",n?n+" selected":"Tick the emails you want"));
+  const btn=(t,fn,cls)=>{const x=el("button","btn small"+(cls?" "+cls:""),t);x.type="button";x.onclick=()=>fn(x);b.append(x);return x};
+  btn("Select all shown",()=>{visibleIds().forEach(id=>sel.add(id));renderBoard();bulkBar()},"ghost");
+  if(n){
+    btn("Done",()=>{allItems().filter(i=>sel.has(i.id)).forEach(i=>{if(state.repeat&&state.repeat[i.id]){logDone(i,"weekly");const d=new Date();d.setDate(d.getDate()+7);state.snooze[i.id]=ymd(d)}else{state.done[i.id]=1;logDone(i)}});persist();sel.clear();renderBoard();bulkBar()},"solid");
+    const d=el("details","askdd");d.append(el("summary","","Snooze ▾"));const m=el("div","askmenu");
+    [["Tomorrow",1],["In 3 days",3],["In 1 week",7]].forEach(([t,days])=>{const x=el("button","",t);x.type="button";x.onclick=()=>{const dd=new Date();dd.setDate(dd.getDate()+days);const v=ymd(dd);sel.forEach(id=>{state.snooze[id]=v});persist();sel.clear();renderBoard();bulkBar()};m.append(x)});
+    d.append(m);b.append(d);
+    btn("Archive in Gmail",x=>{if(confirm("Archive "+n+" conversation"+(n>1?"s":"")+" in Gmail? They leave your inbox but are not deleted."))bulkArchive(x)});
+    btn("Mute senders",()=>{let c=0;sel.forEach(id=>{const t=tById(id);const a=t&&addrOf(t.from);if(a&&addRule("mute",a))c++});sel.clear();renderBoard();bulkBar();const s=el("span","status","Muted "+c+" sender"+(c===1?"":"s")+".");b.append(s)},"ghost");
+    btn("Clear",()=>{sel.clear();renderBoard();bulkBar()},"ghost");
+  }
+}
+$("autoDraft").onchange=()=>{state.autoDraft=$("autoDraft").checked;persist()};
+$("selMode").onclick=()=>{selOn=!selOn;sel.clear();$("selMode").setAttribute("aria-pressed",String(selOn));$("selMode").textContent=selOn?"Stop selecting":"Select several";renderBoard();bulkBar()};
+/* draft a reply for every email that needs one, saved to Gmail drafts and never sent */
+let drafting=false;
+function targetsFor(msgs){
+  const last=msgs[msgs.length-1]||{},mine=myAddr();
+  const fromMe=addrOf(last.sender).toLowerCase()===mine;
+  return (fromMe?addrs(last.toRecipients):[addrOf(last.replyTo||last.sender)]).filter(x=>x&&x.toLowerCase()!==mine);
+}
+async function draftOne(i){
+  const full=await mcp.callTool("Gmail","get_thread",{threadId:i.id,messageFormat:"PLAIN_TEXT"},{cache:false});
+  const msgs=(full.payload&&full.payload.messages)||[];if(!msgs.length)throw new Error("empty conversation");
+  const last=msgs[msgs.length-1],to=targetsFor(msgs);if(!to.length)throw new Error("nobody to reply to");
+  const t=tById(i.id)||{},subj=String(t.subject||i.title||"");
+  const tone=await toneExamples();
+  const r=await creditFallback(prov=>sample("Write a reply email for "+(myName||"me")+" at WYZ Rent. Plain text only, ready to edit, "+(sigText()?"with no sign-off and no name, because their signature is added automatically":"signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject, no quoted text."+(tone?"\n\n"+tone:"")+"\n\nWhat it's about: "+(i.title||"")+". "+(i.summary||"")+"\n\nThread (latest last):\n"+threadBlock(msgs),{cache:false,provider:prov}));
+  let body=String(r.text||"").trim();if(!body)throw new Error("the AI sent back nothing");
+  const sg=sigText();if(sg&&!body.includes(sg))body+="\n\n"+sg;
+  await mcp.callTool("Gmail","create_draft",{to,cc:[],subject:/^re:/i.test(subj)?subj:"Re: "+subj,body:body+quoteOf(last),replyToMessageId:last.id,attachments:[]});
+  state.drafted=state.drafted||{};state.drafted[i.id]=Date.now();persist();
+}
+async function draftAll(auto){
+  const st=$("draftAllSt"),btn=$("draftAll");
+  if(drafting)return;
+  if(!sample){st.className="status err";st.textContent="Connect Claude or ChatGPT first, under Connections.";return}
+  const todo=allItems().filter(i=>i.st==="reply"&&!isOff(i)&&!(state.drafted||{})[i.id]).slice(0,8);
+  if(!todo.length){if(!auto){st.className="status";st.textContent="Nothing needs a new draft. Every reply-today email already has one or is done."}return}
+  drafting=true;btn.disabled=true;let ok=0,bad=0,stop="";
+  for(let n=0;n<todo.length;n++){
+    st.className="status";st.textContent="Writing draft "+(n+1)+" of "+todo.length+"...";
+    try{await draftOne(todo[n]);ok++}catch(e){
+      bad++;
+      if(e&&e.code==="consent_required"){stop="Google needs one more permission to save drafts. Sign out and in again and tick every box.";break}
+      if(isCreditErr(e)||(e&&e.code==="rate_limited")){stop=(e.message||"The AI is unavailable right now")+" Stopped after "+ok+".";break}
+    }
+  }
+  drafting=false;btn.disabled=false;renderBoard();
+  st.className="status"+(stop||(bad&&!ok)?" err":"");st.replaceChildren();
+  st.append(document.createTextNode(ok?ok+" draft"+(ok>1?"s":"")+" saved in your Gmail drafts. Check them there and send. ":"No drafts were saved. "));
+  if(bad&&!stop)st.append(document.createTextNode(bad+" could not be written. "));
+  if(stop)st.append(document.createTextNode(stop+" "));
+  if(ok){const a=el("a","btn small","Open Gmail drafts");a.href="https://mail.google.com/mail/?authuser="+encodeURIComponent(email||"")+"#drafts";a.target="_blank";a.rel="noopener";st.append(a)}
+}
+$("draftAll").onclick=()=>draftAll(false);
 function itemRow(i){
   const t=tById(i.id)||{};const row=el("div","item");if(isOff(i))row.style.opacity=".55";
   row.append(el("span","dot "+i.st));const m=el("div","main");
-  m.append(el("span","t",i.title||t.subject||""));
+  {const ttl=el("span","t");if(selOn){const cb=el("input","selbox");cb.type="checkbox";cb.checked=sel.has(i.id);cb.setAttribute("aria-label","Select this email");cb.onchange=()=>{cb.checked?sel.add(i.id):sel.delete(i.id);bulkBar()};ttl.append(cb)}ttl.append(document.createTextNode(i.title||t.subject||""));m.append(ttl)}
   if(i.summary)m.append(el("span","s",i.summary));
-  const meta=el("span","m");const u=el("span","urg u"+i.g,UR[i.g]||"");meta.append(u,(i.vip?" · \u2605 VIP":"")+(state.snooze[i.id]===todayKey()?" · Back today":"")+(state.repeat&&state.repeat[i.id]?" · Weekly":"")+" · "+(t.lastFromMe?"You wrote to "+(nameOf((t.lastTo||[])[0])||"them"):(nameOf(t.from)||""))+(i.when?" · "+i.when:t.date?" · "+fmtWhen(t.date):""));m.append(meta);
+  const meta=el("span","m");const u=el("span","urg u"+i.g,UR[i.g]||"");meta.append(u,(i.vip?" · \u2605 VIP":"")+(state.snooze[i.id]===todayKey()?" · Back today":"")+(state.repeat&&state.repeat[i.id]?" · Weekly":"")+(state.drafted&&state.drafted[i.id]?" · Draft ready in Gmail":"")+" · "+(t.lastFromMe?"You wrote to "+(nameOf((t.lastTo||[])[0])||"them"):(nameOf(t.from)||""))+(i.when?" · "+i.when:t.date?" · "+fmtWhen(t.date):""));m.append(meta);
   const a=el("div","acts");
   if(t.url){const o=el("a","btn small","Open in Gmail");o.href=t.url;o.target="_blank";o.rel="noopener";a.append(o)}
   {const rd=el("button","btn small","Read thread");rd.type="button";rd.onclick=()=>openThread(i.id,{item:i});a.append(rd)}
@@ -1201,7 +1385,7 @@ function askDrop(prompt,waText){
   [["Ask Claude","https://claude.ai/new?q="+q],["Ask ChatGPT","https://chatgpt.com/?q="+q]].concat(waText?[["Share on WhatsApp",waLink(waText)]]:[]).forEach(([t,u])=>{const a=el("a","",t);a.href=u;a.target="_blank";a.rel="noopener";a.onclick=()=>{d.open=false};m.append(a)});
   d.append(m);return d;
 }
-document.addEventListener("click",e=>{document.querySelectorAll("details.askdd[open]").forEach(d=>{if(!d.contains(e.target))d.open=false})});
+document.addEventListener("click",e=>{document.querySelectorAll("details.askdd[open]").forEach(d=>{if(e.target.isConnected&&!d.contains(e.target))d.open=false})});
 
 /* ---------- Google Drive: recent documents ---------- */
 const DRIVE="Google Drive";
@@ -1226,9 +1410,68 @@ function renderDocs(){
     m.append(el("span","t",f.t));m.append(el("span","m",kindOf(f)+(f.mod?" · Changed "+fmtWhen(f.mod):"")));
     const a=el("div","acts");const o=el("a","btn small","Open");o.href="https://drive.google.com/file/d/"+encodeURIComponent(f.id)+"/view";o.target="_blank";o.rel="noopener";
     const at=el("button","btn small ghost","Add to tasks");at.type="button";at.onclick=()=>{addTask("Finish: "+f.t,"Google Drive");at.textContent="Added";at.disabled=true};
-    a.append(o,askDrop("I'm working on a document called \""+f.t+"\" ("+kindOf(f)+"). Help me plan what to finish in it next and what to check before I share it.","Document: "+f.t+" https://drive.google.com/file/d/"+f.id+"/view"),at);
+    a.append(o);
+    if(fileKind(f.mime,f.t)){const rd=el("button","btn small","Ask AI about it");rd.type="button";rd.onclick=()=>openFileAI(f.t,()=>mcp.callTool("Google Drive","read_file",{fileId:f.id,mimeType:f.mime},{cache:false}).then(r=>r.payload));a.append(rd)}
+    a.append(askDrop("I'm working on a document called \""+f.t+"\" ("+kindOf(f)+"). Help me plan what to finish in it next and what to check before I share it.","Document: "+f.t+" https://drive.google.com/file/d/"+f.id+"/view"),at);
     m.append(a);r.append(m);host.append(r);
   });
+}
+
+/* ---------- ask the AI about a file: an email attachment or a Google Drive file ---------- */
+const IMG_EXT={png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg",gif:"image/gif",webp:"image/webp"};
+function fileKind(mime,name){
+  mime=String(mime||"").toLowerCase();name=String(name||"").toLowerCase();const ext=(name.match(/\.([a-z0-9]+)$/)||[])[1]||"";
+  if(mime==="application/pdf"||ext==="pdf")return "pdf";
+  if(/^image\/(png|jpe?g|gif|webp)$/.test(mime)||IMG_EXT[ext])return "image";
+  if(/^text\//.test(mime)||/^application\/(json|csv|xml)/.test(mime)||/^(txt|csv|md|json|xml)$/.test(ext)||/vnd\.google-apps\.(document|spreadsheet|presentation)$/.test(mime))return "text";
+  return "";
+}
+let fileAI={name:"",load:null,cache:null};
+function openFileAI(name,load){
+  fileAI={name,load,cache:null};
+  $("fileAITitle").textContent=name;$("fileAIQ").value="";$("fileAIOut").replaceChildren();
+  $("fileAINote").textContent=sample?"The AI reads this file when you ask. Nothing is saved.":"Connect Claude first, under Connections.";
+  const c=$("fileAIChips");c.replaceChildren();
+  [["Summarize","Summarize this in five short lines."],["Key dates and amounts","List every date, deadline and amount of money in this file."],["What must I do?","What do I need to do or decide because of this file?"],["Anything risky?","Point out anything unusual, risky or missing that I should check before agreeing."]].forEach(([l,v])=>{const b=el("button","chip",l);b.type="button";b.onclick=()=>{$("fileAIQ").value=v;runFileAI()};c.append(b)});
+  $("fileAI").hidden=false;$("fileAIQ").focus();
+}
+async function runFileAI(){
+  const q=$("fileAIQ").value.trim(),out=$("fileAIOut");if(!q){$("fileAIQ").focus();return}
+  if(!sample){out.replaceChildren(el("p","status err","No AI is connected. Connect Claude under Connections."));return}
+  const go=$("fileAIGo");go.disabled=true;
+  try{
+    if(!fileAI.cache){out.replaceChildren(el("p","status","Opening the file..."));fileAI.cache=await fileAI.load()}
+    const f=fileAI.cache,blocks=!f.text;
+    if(blocks&&!Connectors.ai.avail("claude")){
+      const p=el("p","status err","Reading PDFs and pictures needs Claude. ChatGPT here can only read text files. ");const a=el("a","btn small","Open Claude");a.href="https://claude.ai/new";a.target="_blank";a.rel="noopener";p.append(a," and attach the file there.");
+      out.replaceChildren(p);go.disabled=false;return;
+    }
+    out.replaceChildren(el("p","status","Reading..."));
+    const ask="You are the personal assistant of "+(myName||"a manager")+" at WYZ Rent, a Dubai holiday home management company. Today is "+new Date().toDateString()+".\nThe file is called \""+fileAI.name+"\".\nTheir question: "+q+"\n\nAnswer in plain, simple words. Use short lines or a short list. No em dashes. If the file doesn't say, say so. Don't guess.";
+    const content=blocks?[{type:f.mime==="application/pdf"?"document":"image",source:{type:"base64",media_type:f.mime,data:f.data}},{type:"text",text:ask}]:ask+"\n\nFile text:\n"+String(f.text).slice(0,60000);
+    const r=await sample([{role:"user",content}],{cache:false,provider:blocks?"claude":aiPickValue()});
+    const t=el("div","mailtext");t.textContent=String(r.text||"").trim()||"(The AI sent back nothing.)";
+    const cp=el("button","btn small ghost","Copy");cp.type="button";cp.onclick=()=>navigator.clipboard.writeText(t.textContent).then(()=>cp.textContent="Copied").catch(()=>cp.textContent="Select the text to copy");
+    out.replaceChildren(t,cp);
+  }catch(e){
+    const p=el("p","status err");
+    if(e&&e.code==="consent_required"){p.textContent="Reading files needs one more Google permission. ";const l=el("button","btn small solid","Allow");l.type="button";l.onclick=()=>connectGoogle(true);p.append(l)}
+    else p.textContent="Couldn't read that ("+clip((e&&e.message)||"unknown reason",120)+")."+(/credit/i.test((e&&e.message)||"")?" You can still download the file and attach it in your own Claude or ChatGPT chat.":"");
+    out.replaceChildren(p);
+  }
+  go.disabled=false;
+}
+$("fileAIGo").onclick=runFileAI;$("fileAIQ").addEventListener("keydown",e=>{if(e.key==="Enter")runFileAI()});
+const closeFileAI=()=>{$("fileAI").hidden=true};$("fileAIClose").onclick=closeFileAI;
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("fileAI").hidden)closeFileAI()});
+async function attachmentLoader(m,f){
+  const kind=fileKind(f.type,f.name);
+  const raw=await fetchFile(m,f);let b64=raw;
+  if(Math.floor(b64.length*3/4)>3000000)throw new Error("That attachment is too big to read here (over 3 MB)");
+  b64=b64.replace(/-/g,"+").replace(/_/g,"/");
+  if(kind==="text")return {text:new TextDecoder().decode(Uint8Array.from(atob(b64),c=>c.charCodeAt(0)))};
+  const ext=((f.name||"").toLowerCase().match(/\.([a-z0-9]+)$/)||[])[1]||"";
+  return {data:b64,mime:kind==="pdf"?"application/pdf":(/^image\//.test(f.type)?f.type.replace("jpg","jpeg"):IMG_EXT[ext]||"image/png")};
 }
 
 /* ---------- quick links ---------- */
@@ -1308,6 +1551,7 @@ async function refreshAll(force){
   if(!state.skipDrive||drive.state==="ok")loadDrive();
   if(!state.skipTodo||todo.state==="ok")loadTodoist();
   await loadMail(force);followups(false);
+  if(state.autoDraft&&sample&&state.autoDraftDay!==todayKey()){state.autoDraftDay=todayKey();persist();draftAll(true)}
   if(state.shareDash&&Date.now()-(state.dashAt||0)>1800000)shareSummary();
 }
 $("refresh").onclick=()=>refreshAll(false);
@@ -1587,10 +1831,10 @@ async function composeDraft(){
   st.className="status";st.textContent="Writing it...";
   try{
     const tone=await toneExamples(),first=(myName||"").split(" ")[0];
-    const r=await sample.json("Write an email for "+(myName||"me")+" at WYZ Rent, a Dubai holiday home management company.\nIt is to: "+($("thrTo").value.trim()||"someone")+".\nWhat it should say: "+brief+"\n\nPlain text, "+(sigText()?"no sign-off and no name, because the signature is added automatically":"signed with the first name"+(first?" "+first:""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return JSON only: {\"subject\": a short subject line, \"body\": the email body}."+(tone?"\n\n"+tone:""),{cache:false,provider:aiPickValue()});
+    const r=await creditFallback(prov=>sample.json("Write an email for "+(myName||"me")+" at WYZ Rent, a Dubai holiday home management company.\nIt is to: "+($("thrTo").value.trim()||"someone")+".\nWhat it should say: "+brief+"\n\nPlain text, "+(sigText()?"no sign-off and no name, because the signature is added automatically":"signed with the first name"+(first?" "+first:""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return JSON only: {\"subject\": a short subject line, \"body\": the email body}."+(tone?"\n\n"+tone:""),{cache:false,provider:prov}));
     ta.value=String(r.body||"").trim();if(!$("thrSubj").value.trim())$("thrSubj").value=String(r.subject||"").trim();
     st.textContent="Edit it, then send it or save it as a draft."
-  }catch(e){st.className="status err";st.textContent="Couldn't write it ("+clip((e&&e.message)||"unknown reason",110)+"). Write your own here."}
+  }catch(e){st.className="status err";st.textContent="Couldn't write it ("+clip((e&&e.message)||"unknown reason",110)+")."+(isCreditErr(e)?" You can still use a free chat below, or write your own here.":" Write your own here.");if(isCreditErr(e))showFree()}
 }
 $("newMailBtn").onclick=()=>{if(!G.connected()){showWelcome();return}openCompose()};
 $("newMailBtn2").onclick=()=>{if(!G.connected()){showWelcome();return}openCompose()};

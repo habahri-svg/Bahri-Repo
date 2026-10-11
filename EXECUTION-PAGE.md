@@ -31,6 +31,7 @@ Without this the page can't log anyone in. It shows "One-time setup needed" unti
    - `.../auth/calendar.readonly`
    - `.../auth/calendar.events` (create and move meetings)
    - `.../auth/drive.metadata.readonly`
+   - `.../auth/drive.readonly` (lets the AI read a Drive file or PDF only when someone asks it to)
    - `.../auth/contacts.readonly` and `.../auth/contacts.other.readonly` (address suggestions from your contacts and people you've emailed)
 5. On the **Audience** page tap **Publish app**. This lets anyone with a Google account sign in, with no test-user list and no 7-day expiry. Until Google verifies the app (see "Going beyond 100 people" below) it shows an "unverified app" warning (Advanced, Go to app) and is capped at 100 people in total.
 6. **APIs and Services, Credentials, Create credentials, OAuth client ID**:

@@ -14,9 +14,10 @@
     calEvents: "https://www.googleapis.com/auth/calendar.events",
     drive: "https://www.googleapis.com/auth/drive.metadata.readonly",
     contacts: "https://www.googleapis.com/auth/contacts.readonly",
-    otherContacts: "https://www.googleapis.com/auth/contacts.other.readonly"
+    otherContacts: "https://www.googleapis.com/auth/contacts.other.readonly",
+    driveRead: "https://www.googleapis.com/auth/drive.readonly"
   };
-  var SCOPES = ["openid", "email", "profile", SC.gmailRead, SC.gmailDraft, SC.gmailModify, SC.cal, SC.calEvents, SC.drive, SC.contacts, SC.otherContacts].join(" ");
+  var SCOPES = ["openid", "email", "profile", SC.gmailRead, SC.gmailDraft, SC.gmailModify, SC.cal, SC.calEvents, SC.drive, SC.contacts, SC.otherContacts, SC.driveRead].join(" ");
   var KEY = { flag: "wyz-google-flag", hint: "wyz-google-hint", todo: "wyz-todoist-token", ai: "wyz-claude-key", cid: "wyz-google-client-id", model: "wyz-claude-model" };
 
   var ls = {
@@ -105,7 +106,13 @@
       throw cerr("consent_required", msg || "Google refused access");
     }
     if (!r.ok) throw cerr("tool_error", "Google answered " + r.status);
+    if (opt.as === "buffer") return r.arrayBuffer();
     return r.status === 204 ? {} : r.json();
+  }
+  function b64FromBuffer(buf) {
+    var u = new Uint8Array(buf), s = "";
+    for (var i = 0; i < u.length; i += 8192) s += String.fromCharCode.apply(null, u.subarray(i, i + 8192));
+    return btoa(s);
   }
 
   async function pool(items, n, fn) {
@@ -190,6 +197,8 @@
       o.files = filesOf(m.payload);
       o.ccRecipients = splitAddrs(hdr(m, "Cc"));
       o.replyTo = hdr(m, "Reply-To");
+      o.unsub = hdr(m, "List-Unsubscribe");
+      o.unsubPost = hdr(m, "List-Unsubscribe-Post");
       o.attachments = attachmentsOf(m.payload);
     }
     return o;
@@ -269,6 +278,31 @@
         await gfetch(GM + "/threads/" + encodeURIComponent(a.threadId) + "/modify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ removeLabelIds: ["UNREAD"] }) }, SC.gmailModify);
         return {};
       },
+      modify_thread: async function (a) {
+        await profile();
+        await gfetch(GM + "/threads/" + encodeURIComponent(a.threadId) + "/modify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ addLabelIds: a.add || [], removeLabelIds: a.remove || [] }) }, SC.gmailModify);
+        return {};
+      },
+      trash_thread: async function (a) {
+        await profile();
+        await gfetch(GM + "/threads/" + encodeURIComponent(a.threadId) + "/trash", { method: "POST" }, SC.gmailModify);
+        return {};
+      },
+      list_labels: async function () {
+        await profile();
+        var j = await gfetch(GM + "/labels", null, SC.gmailRead);
+        return { labels: (j.labels || []).filter(function (l) { return l.type === "user"; }).map(function (l) { return { id: l.id, name: l.name }; }).sort(function (a, b) { return a.name.localeCompare(b.name); }) };
+      },
+      create_label: async function (a) {
+        await profile();
+        var j = await gfetch(GM + "/labels", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: String(a.name).slice(0, 100), labelListVisibility: "labelShow", messageListVisibility: "show" }) }, SC.gmailModify);
+        return { id: j.id, name: j.name };
+      },
+      unsubscribe_one_click: async function (a) {
+        if (!/^https:\/\//i.test(a.url || "")) throw cerr("tool_error", "That unsubscribe link isn't safe to use");
+        await fetch(a.url, { method: "POST", mode: "no-cors", credentials: "omit", referrerPolicy: "no-referrer", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "List-Unsubscribe=One-Click" });
+        return { sent: true };
+      },
       send_message: async function (a) {
         await profile();
         var msg = await buildMessage(a);
@@ -339,6 +373,19 @@
           "&q=" + encodeURIComponent("trashed=false and name contains '" + term + "'") + "&fields=" + encodeURIComponent("files(id,name,modifiedTime,mimeType,fileExtension)");
         var j = await gfetch("https://www.googleapis.com/drive/v3/files?" + q, null, SC.drive);
         return { files: (j.files || []).map(function (f) { return { id: f.id, title: f.name, modifiedTime: f.modifiedTime, mimeType: f.mimeType, fileExtension: f.fileExtension }; }) };
+      },
+      read_file: async function (a) {
+        var base = "https://www.googleapis.com/drive/v3/files/" + encodeURIComponent(a.fileId), mime = String(a.mimeType || ""), buf;
+        if (/^application\/vnd\.google-apps\./.test(mime)) {
+          if (!/document|presentation|spreadsheet/.test(mime)) throw cerr("tool_error", "That kind of Google file can't be read here. Open it in Drive.");
+          buf = await gfetch(base + "/export?mimeType=" + encodeURIComponent(/spreadsheet/.test(mime) ? "text/csv" : "text/plain"), { as: "buffer" }, SC.driveRead);
+          return { text: new TextDecoder().decode(buf).slice(0, 200000) };
+        }
+        var meta = await gfetch(base + "?fields=size", null, SC.driveRead);
+        if (+meta.size > 3000000) throw cerr("tool_error", "That file is too big to read here (over 3 MB). Open it in Drive.");
+        buf = await gfetch(base + "?alt=media", { as: "buffer" }, SC.driveRead);
+        if (/^text\/|json|csv/.test(mime)) return { text: new TextDecoder().decode(buf).slice(0, 200000) };
+        return { data: b64FromBuffer(buf), mime: mime };
       },
       list_recent_files: async function (a) {
         var q = "pageSize=" + (a.pageSize || 10) + "&orderBy=" + encodeURIComponent("modifiedByMeTime desc") +
