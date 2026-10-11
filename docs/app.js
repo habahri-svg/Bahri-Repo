@@ -2402,11 +2402,47 @@ const ZOOMS=[1,1.15,1.3];
 function applyZoom(){let z=1;try{z=+localStorage.getItem("wyz-zoom")||1}catch(e){}document.body.style.zoom=z;$("zoomBtn").textContent=z>1?"Text size "+Math.round(z*100)+"%":"Text size"}
 $("zoomBtn").onclick=()=>{let z=1;try{z=+localStorage.getItem("wyz-zoom")||1}catch(e){}const n=ZOOMS[(ZOOMS.indexOf(z)+1)%ZOOMS.length];try{localStorage.setItem("wyz-zoom",String(n))}catch(e){}applyZoom()};
 applyZoom();
-$("inviteBtn").onclick=async()=>{
+function inviteText(){
   const txt="Hi! This is your own Execution Page. It sorts your inbox by what needs you, and shows today's meetings, tasks and recent files, all from your own Google account. Only you see your data.\n\n"+SITE_URL+"\n\n"+(G.msConfigured()?"It works with Gmail, Google work accounts, Outlook, Hotmail and Microsoft 365, and you can add a second account.":"It works with a Gmail or Google work account. If your email is Outlook, Hotmail or Microsoft, tell me before you start.")+"\n\n1. Open the link. On iPhone use Safari, on Android or a computer use Chrome.\n2. Tap Continue with "+(G.msConfigured()?"Google or Continue with Microsoft":"Google")+" and sign in with your own account.\n3. If Google says it hasn't verified the app, tap Advanced, then Go to (unsafe). That's normal for a private app. If Google says Access blocked, send me a screenshot so I can add you.\n4. Tick every box and tap Continue.\n5. Follow the short steps on screen. The last one puts it on your home screen or computer like an app.\n6. Then open the same link on your other device (phone or computer) and sign in there too.\n\nAny problem, send me a screenshot.";
-  if(DEV.phone&&navigator.share){try{await navigator.share({title:"Your Execution Page",text:txt});return}catch(e){if(e&&e.name==="AbortError")return}}
-  window.open(waLink(txt),"_blank","noopener");
-};
+  return txt;
+}
+$("inviteBtn").onclick=()=>{if(!G.connected()){const t=inviteText();if(DEV.phone&&navigator.share){navigator.share({title:"Your Execution Page",text:t}).catch(()=>{});return}window.open(waLink(t),"_blank","noopener");return}openInvite()};
+function openInvite(){
+  const host=infoOpen("📨 Invite someone");
+  host.append(el("p","status","Send someone the link and the setup steps. They sign in with their own account and only see their own email and calendar."));
+  const nm=el("input","in");nm.placeholder="Their first name (optional)";nm.setAttribute("aria-label","Their first name");
+  const to=el("input","in");to.type="email";to.placeholder="Their email address";to.setAttribute("aria-label","Their email address");to.setAttribute("list","inviteList");to.autocomplete="off";
+  const dl=document.createElement("datalist");dl.id="inviteList";try{(contacts||[]).slice(0,300).forEach(c=>{const o=document.createElement("option");o.value=c.email||c.e||"";o.label=c.name||c.n||"";if(o.value)dl.append(o)})}catch(e){}
+  const ta=el("textarea","in");ta.rows=10;ta.style.minHeight="200px";ta.setAttribute("aria-label","Message");
+  const base=inviteText();const fill=()=>{const n=nm.value.trim();ta.value=(n?"Hi "+n+"! ":"Hi! ")+base.replace(/^Hi! /,"")};fill();
+  nm.oninput=()=>{if(!ta.dataset.edited)fill()};ta.oninput=()=>{ta.dataset.edited="1"};
+  const st=el("p","status","");
+  const row=(l,n)=>{const r=el("div","ask");const s=el("span","status",l);s.style.minWidth="54px";r.append(s,n);return r};
+  host.append(row("Name",nm),row("Email",to),dl,ta);
+  const send=el("button","btn small solid","Send by email");send.type="button";let armed=0;
+  send.onclick=async()=>{
+    const addr=to.value.trim();
+    if(!/^\S+@\S+\.\S+$/.test(addr)){st.className="status err";st.textContent="Type their email address first.";to.focus();return}
+    if(!armed){armed=1;send.textContent="Confirm: send to "+addr;st.className="status";st.textContent="Check the message, then press Confirm.";return}
+    armed=0;send.disabled=true;send.textContent="Sending...";
+    try{
+      await mcp.callTool("Gmail","send_message",{to:[addr],cc:[],subject:"Your WYZ Rent Execution Page",body:ta.value.trim()+(sigText()?"\n\n"+sigText():""),attachments:[]});
+      state.invites=state.invites||[];state.invites.unshift({to:addr,name:nm.value.trim(),at:Date.now()});state.invites=state.invites.slice(0,30);persist();
+      send.textContent="Sent";st.className="status";st.textContent="Sent to "+addr+". If you limit the AI to certain people in Vercel, add this address to ALLOWED_EMAILS so Claude and ChatGPT work for them.";drawList();
+      setTimeout(()=>{send.disabled=false;send.textContent="Send by email"},2500);
+    }catch(e){send.disabled=false;send.textContent="Send by email";st.className="status err";st.textContent="Couldn't send it ("+clip((e&&e.message)||"unknown reason",90)+")."}
+  };
+  to.oninput=()=>{if(armed){armed=0;send.textContent="Send by email"}};
+  const wa=el("a","btn small","💬 WhatsApp");wa.target="_blank";wa.rel="noopener";wa.href="#";const setWa=()=>{wa.href=waLink(ta.value)};wa.onmousedown=wa.ontouchstart=wa.onfocus=setWa;wa.onclick=setWa;
+  const cp=el("button","btn small","Copy link");cp.type="button";cp.onclick=()=>navigator.clipboard.writeText(SITE_URL).then(()=>cp.textContent="Link copied").catch(()=>cp.textContent=SITE_URL);
+  const cm=el("button","btn small ghost","Copy message");cm.type="button";cm.onclick=()=>navigator.clipboard.writeText(ta.value).then(()=>cm.textContent="Message copied").catch(()=>{ta.focus();ta.select()});
+  const a=el("div","acts");a.append(send,wa,cp,cm);
+  if(navigator.share){const sh=el("button","btn small ghost","Share...");sh.type="button";sh.onclick=()=>navigator.share({title:"Your Execution Page",text:ta.value}).catch(()=>{});a.append(sh)}
+  host.append(a,st);
+  const lst=el("div");host.append(lst);
+  function drawList(){lst.replaceChildren();const v=state.invites||[];if(!v.length)return;const s=infoSection(lst,"Already invited");v.slice(0,10).forEach(x=>s.append(el("p","status",(x.name?x.name+" · ":"")+x.to+" · "+new Date(x.at).toLocaleDateString("en-GB",{day:"numeric",month:"short"}))))}
+  drawList();(state.invites&&state.invites.length?to:nm).focus();
+}
 async function weeklyReview(){
   const host=$("mailRes");host.replaceChildren();
   const since=Date.now()-7*864e5,log=(state.log||[]).filter(x=>x.at>=since);
