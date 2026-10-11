@@ -2472,10 +2472,10 @@ function top3Candidates(){
   return out.sort((a,b)=>b.score-a.score);
 }
 let top3Busy=false,top3Fail=0;
-const topN=()=>{const n=+state.topN;return [3,5,10,15,20].includes(n)?n:10};
+const topN=()=>{const n=+state.topN;return Number.isInteger(n)&&n>=1&&n<=10?n:10};
 async function pickTop3(force){
   if(top3Busy||!sample||(!force&&Date.now()-top3Fail<600000))return;
-  const N=topN(),cand=top3Candidates().slice(0,Math.max(15,N*2));if(cand.length<=N)return;
+  const N=topN(),cand=top3Candidates().slice(0,Math.max(12,N*2));if(cand.length<=N)return;
   const c=state.top3;
   if(!force&&c&&c.day===todayKey()&&c.n===N&&Date.now()-c.at<3*3600000)return;
   top3Busy=true;
@@ -2501,7 +2501,7 @@ function renderTop3(){
   if(!G.connected()||(!board&&!(state.tasks||[]).length)){card.hidden=true;return}
   const rows=top3Rows(),open=!state.top3Col;
   card.hidden=!rows.length;host.replaceChildren();
-  $("top3Title").textContent="Top "+topN()+" for today";$("top3N").value=String(topN());
+  $("top3Title").textContent=topN()===1?"Top priority for today":"Top "+topN()+" for today";$("top3N").value=String(topN());
   $("top3Tog").setAttribute("aria-expanded",String(open));host.hidden=!open;
   $("top3Sum").hidden=open;$("top3Sum").textContent=rows.length+" item"+(rows.length>1?"s":"")+". First: "+(rows[0]?rows[0].title:"")+". Tap the heading to open.";
   rows.forEach((x,i)=>{
