@@ -93,7 +93,9 @@ function stepDefs(){
     {name:"Signed in with Google",done:!!uid,desc:uid?"You're signed in as "+email+". Your board is private to you.":"Tap Continue with Google at the top of the page.",btn:uid?null:["Continue with Google",()=>connectGoogle()]},
     Object.assign({name:"Gmail"},mailStep("Gmail","Reads your inbox and sent mail, and saves reply drafts you approve.")),
     Object.assign({name:"Google Calendar"},mailStep("Google Calendar","Shows your meetings for today and tomorrow.")),
-    {name:"Claude for smarter sorting (optional)",done:!!sample||!!state.skipAi,desc:sample?(Connectors.ai.mode()==="shared"?"Claude is on automatically with your Google sign-in. Nothing to connect.":"Claude is on. Your key is stored on this device only."):"Without a key, your inbox is sorted by simple rules. Add a Claude API key for smarter sorting, drafts and research follow-ups. It stays on this device.",btn:sample?(Connectors.ai.mode()==="key"?["Remove key",removeAiKey]:null):["Add key",setAiKey],btn2:sample||state.skipAi?null:skip("skipAi")},
+    {name:"AI assistant: Claude or ChatGPT (optional)",done:!!sample||!!state.skipAi,
+      desc:sample?(Connectors.ai.label()+(Connectors.ai.mode()==="shared"?" is on automatically with your Google sign-in.":" is on with your own key (stored on this device only).")+" Change it under Connections, Personalise."):"Without an AI, your inbox is sorted by simple rules. Connect Claude or ChatGPT for smarter sorting, drafts and Instruct AI. Each connects with an API key and stays on this device.",
+      btn:["Add Claude key",()=>askKey("claude")],btn2:sample||state.skipAi?["Add ChatGPT key",()=>askKey("chatgpt")]:null},
     Object.assign({name:"Your Claude research"},imp("claude","Claude",CLAUDE_EXPORT,"f-claude","1. Tap Open Claude export page. 2. Under Your data, tap Export data and confirm. 3. Claude emails you a download link (usually within minutes). 4. Download the .zip from that email, no need to unzip it. 5. Come back here, tap Import file and choose it.")),
     Object.assign({name:"Your ChatGPT research"},imp("chatgpt","ChatGPT",GPT_EXPORT,"f-chatgpt","1. Tap Open ChatGPT export page and sign in if asked. 2. In Data controls, tap Export data, then Confirm export. 3. OpenAI emails you a download link. 4. Download the .zip from that email, no need to unzip it. 5. Come back here, tap Import file and choose it. Repeat weekly to keep it current.")),
     optional("Google Drive (optional)",drive.state,"Connected. Your recent documents show under Documents.","skipDrive","Shows the documents you've been working on. Uses the same Google sign-in as Gmail.",["Connect Google",()=>connectGoogle(drive.state==="denied")],"Google didn't give this page access to Drive. Tap Allow and tick every box on Google's screen.",{note:drive.note,fn:loadDrive}),
@@ -149,26 +151,24 @@ function onbRender(){
   const dots=$("onbDots");dots.replaceChildren();ONB.forEach((_,i)=>dots.append(el("i",i<=onbI?"on":"")));
   const p=(t,c)=>body.append(el("p",c||"sub",t));
   if(k==="claude"){
-    $("onbTitle").textContent="Connect Claude";
-    if(sample){p("Claude is connected. Your inbox is sorted smartly and drafts are written for you.");acts.append(onbBtn("Next",()=>onbGo(onbI+1),"solid"));return}
-    p("Welcome, "+firstName()+". Google is connected. Next, connect Claude so your inbox is sorted by what needs you, replies are drafted for you and your research gets follow-ups.");
-    p("Claude has no sign-in button for other websites, so it connects with your own API key. It is stored on this device only and sent only to Anthropic.");
-    body.append(onbLink("https://console.anthropic.com/settings/keys","Get my Claude key"));
-    const inp=el("input","in");inp.id="onbKey";inp.type="password";inp.placeholder="sk-ant-...";inp.autocomplete="off";inp.setAttribute("aria-label","Claude API key");body.append(inp);
-    acts.append(onbBtn("Connect Claude",async function(){
-      const v=inp.value.trim(),b=this;
-      if(!/^sk-ant-/.test(v)){$("onbMsg").textContent="Claude keys start with sk-ant-. Copy the key again.";return}
-      b.disabled=true;b.textContent="Checking your key...";$("onbMsg").textContent="";
-      Connectors.ai.set(v);sample=Connectors.makeSample();
-      try{await sample("Reply with the single word OK.",{modelTier:"quick",cache:false});state.claudeOk=1;persist();renderSetup();
-        if(threads.length)triage(board&&board.sig||"",true);followups(true);onbGo(onbI+1)}
-      catch(e){Connectors.ai.clear();sample=null;b.disabled=false;b.textContent="Connect Claude";
-        $("onbMsg").textContent=e&&e.code==="not_granted"?"Claude rejected that key. Check it and try again.":e&&e.code==="rate_limited"?"Claude is busy. Try again in a minute.":"Couldn't reach Claude. Check your connection and try again."}
+    $("onbTitle").textContent="Connect an AI assistant";
+    if(sample){p(Connectors.ai.label()+" is connected. Your inbox is sorted smartly and drafts are written for you.");acts.append(onbBtn("Next",()=>onbGo(onbI+1),"solid"));return}
+    p("Welcome, "+firstName()+". Google is connected. Next, connect an AI so your inbox is sorted by what needs you, replies are drafted for you and your research gets follow-ups. Choose Claude or ChatGPT. You can add the other one later.");
+    p("Neither has a sign-in button for other websites, so each connects with your own API key. It is stored on this device only and sent only to that company.");
+    const sel=el("select","in");sel.id="onbProv";sel.setAttribute("aria-label","Which AI");sel.append(new Option("Claude (sk-ant-...)","claude"),new Option("ChatGPT (sk-...)","chatgpt"));body.append(sel);
+    const lk=onbLink("https://console.anthropic.com/settings/keys","Get my Claude key");body.append(lk);
+    sel.onchange=()=>{const g=sel.value==="chatgpt";lk.href=g?"https://platform.openai.com/api-keys":"https://console.anthropic.com/settings/keys";lk.textContent=g?"Get my OpenAI key":"Get my Claude key";inp.placeholder=g?"sk-...":"sk-ant-..."};
+    const inp=el("input","in");inp.id="onbKey";inp.type="password";inp.placeholder="sk-ant-...";inp.autocomplete="off";inp.setAttribute("aria-label","API key");body.append(inp);
+    acts.append(onbBtn("Connect",async function(){
+      const b=this;b.disabled=true;b.textContent="Checking your key...";$("onbMsg").textContent="";
+      const r=await connectAI(sel.value,inp.value);
+      if(r.ok){onbGo(onbI+1);return}
+      b.disabled=false;b.textContent="Connect";$("onbMsg").textContent=r.msg;
     },"solid"),onbBtn("Skip for now",()=>{state.skipAi=1;persist();onbGo(onbI+1)},"ghost"));
   }else if(k==="todoist"){
     $("onbTitle").textContent="Connect Todoist";
     if(todo.state==="ok"){p("Todoist is connected. Today's tasks show next to your email.");acts.append(onbBtn("Next",()=>onbGo(onbI+1),"solid"));return}
-    if(onbI===0)p("Welcome, "+firstName()+". Google and Claude are connected, so your inbox is already being sorted for you. Two optional connections left.");
+    if(onbI===0)p("Welcome, "+firstName()+". Google and your AI are connected, so your inbox is already being sorted for you. Two optional connections left.");
     p("Use Todoist? Connect it to see today's tasks beside your email and tick them off here. In Todoist open Settings, Integrations, Developer, copy your API token and paste it below.");
     body.append(onbLink("https://app.todoist.com/app/settings/integrations/developer","Open Todoist settings"));
     const inp=el("input","in");inp.id="onbTodo";inp.type="password";inp.placeholder="Todoist API token";inp.autocomplete="off";inp.setAttribute("aria-label","Todoist API token");body.append(inp);
@@ -263,7 +263,7 @@ function updateHero(){
   const box=$("heroStats"),sum=$("heroSum");
   if(!uid||!G.connected()){box.replaceChildren();sum.textContent="";return}
   const s=summaryPayload();
-  document.title=(s.emails_to_reply?"("+s.emails_to_reply+") ":"")+"WYZ Rent Execution Page";
+  document.title=(s.emails_to_reply?"("+s.emails_to_reply+") ":"")+baseTitle();
   const now=Date.now();
   const next=(events||[]).filter(x=>x.start&&x.start.dateTime&&Date.parse(x.start.dateTime)>now).sort((a,b)=>Date.parse(a.start.dateTime)-Date.parse(b.start.dateTime))[0];
   const parts=[];
@@ -278,6 +278,7 @@ function updateHero(){
   defs.forEach(([label,n,color,fn])=>{const b=el("button","hstat");b.type="button";b.append(el("b","",String(n)));const l=el("span");const dot=el("i");dot.style.background=color;l.append(dot,label);b.append(l);b.onclick=fn;b.setAttribute("aria-label",n+" "+label);box.append(b)});
 }
 function renderHello(){
+  try{$("pageName").value=state.pageName||"";applyPageName()}catch(e){}
   const h=new Date().getHours();
   $("hello").textContent=myName?(h<12?"Good morning, ":h<18?"Good afternoon, ":"Good evening, ")+myName.split(" ")[0]:"Your execution page";
   try{updateHero()}catch(e){}
@@ -311,13 +312,79 @@ function setTodoToken(){
   if(!t||!t.trim())return;
   Connectors.todoist.set(t);todo.state="unknown";loadTodoist();
 }
-function setAiKey(){
-  const k=prompt("Paste your Claude API key (starts with sk-ant-). It is stored on this device only.");
-  if(!k||!k.trim())return;
-  Connectors.ai.set(k);sample=Connectors.makeSample();state.claudeOk=1;persist();renderSetup();
+/* connect an AI with the person's own key: checks it with a tiny question before keeping it */
+async function connectAI(p,raw){
+  const key=String(raw||"").trim(),A=Connectors.ai,name=A.names[p];
+  if(!key)return {ok:false,msg:"Paste the key first."};
+  if(p==="claude"&&!/^sk-ant-/.test(key))return {ok:false,msg:"Claude keys start with sk-ant-. Copy the key again."};
+  if(p==="chatgpt"&&!/^sk-/.test(key))return {ok:false,msg:"OpenAI keys start with sk-. Copy the key again."};
+  const had=A.active();
+  p==="claude"?A.set(key):A.setOpenAI(key);sample=Connectors.makeSample();
+  try{await sample("Reply with the single word OK.",{provider:p,cache:false})}
+  catch(e){p==="claude"?A.clear():A.clearOpenAI();sample=Connectors.makeSample();
+    return {ok:false,msg:e&&e.code==="not_granted"?name+" rejected that key. Check it and try again.":e&&e.code==="rate_limited"?name+" is busy. Try again in a minute.":"Couldn't use "+name+" ("+clip((e&&e.message)||"unknown reason",110)+")."}}
+  if(!had)A.setChosen(p);
+  state.claudeOk=1;persist();renderSetup();renderAI();
   if(threads.length)triage(board&&board.sig||"",true);followups(true);
+  return {ok:true};
 }
-function removeAiKey(){Connectors.ai.clear();sample=Connectors.makeSample();renderSetup();if(threads.length)triage(board&&board.sig||"",true)}
+function askKey(p){
+  const k=prompt(p==="chatgpt"?"Paste your OpenAI API key (starts with sk-). It is stored on this device only.":"Paste your Claude API key (starts with sk-ant-). It is stored on this device only.");
+  if(!k||!k.trim())return;
+  connectAI(p,k).then(r=>{if(!r.ok)alert(r.msg)});
+}
+function removeAiKey(p){p==="chatgpt"?Connectors.ai.clearOpenAI():Connectors.ai.clear();sample=Connectors.makeSample();renderSetup();renderAI();if(threads.length)triage(board&&board.sig||"",true)}
+/* every AI the person can pick, and what picking it does */
+function aiOptions(){
+  const A=Connectors.ai,out=[];
+  [["claude","Claude","https://claude.ai/new?q={prompt}"],["chatgpt","ChatGPT","https://chatgpt.com/?q={prompt}"]].forEach(([id,name,url])=>{const ready=A.avail(id);out.push({id,name,kind:"builtin",ready,url,label:name+(ready?" (answers here)":" (opens in a new tab)")})});
+  A.links().forEach(l=>out.push({id:"link:"+l.id,name:l.name,kind:"link",ready:false,url:l.url,label:l.name+" (opens in a new tab)"}));
+  return out;
+}
+function openOutside(opt,text){
+  const t=String(text);
+  if(opt.url.includes("{prompt}")){window.open(opt.url.replace("{prompt}",encodeURIComponent(t.slice(0,1800))),"_blank","noopener");return "Opened "+opt.name+" in a new tab with your question filled in."}
+  try{navigator.clipboard.writeText(t)}catch(e){}
+  window.open(opt.url,"_blank","noopener");return "Opened "+opt.name+" in a new tab. Your question is copied, so paste it there."
+}
+const aiPickValue=()=>{const el_=$("thrAIpick");const v=el_&&el_.value;return v==="claude"||v==="chatgpt"?v:undefined};
+function renderThrPick(){
+  const sel=$("thrAIpick"),ready=aiOptions().filter(o=>o.kind==="builtin"&&o.ready);
+  sel.replaceChildren();ready.forEach(o=>sel.append(new Option(o.name,o.id)));
+  sel.hidden=ready.length<2;const a=Connectors.ai.active();if(a)sel.value=a;
+  $("thrAI").textContent=sample?"Write it with "+Connectors.ai.names[a||"claude"]:"Fill a template";
+}
+$("thrAIpick").onchange=()=>{Connectors.ai.setChosen($("thrAIpick").value);renderAI();$("thrAI").textContent="Write it with "+Connectors.ai.names[$("thrAIpick").value]};
+/* Connections, Personalise */
+const baseTitle=()=>state.pageName&&state.pageName.trim()?state.pageName.trim():"WYZ Rent Execution Page";
+function applyPageName(){
+  const n=state.pageName&&state.pageName.trim();
+  document.querySelector(".hero .eyebrow").textContent=n||"WYZ Rent · Execution Page";
+  document.title=baseTitle();try{updateHero()}catch(e){}
+}
+$("pageName").addEventListener("input",()=>{state.pageName=$("pageName").value;persist();applyPageName()});
+$("pageNameReset").onclick=()=>{state.pageName="";$("pageName").value="";persist();applyPageName()};
+function renderAI(){
+  const A=Connectors.ai,msg=$("aiMsg");
+  const st=(p,id,rm)=>{const m=A.mode(p),has=A.avail(p);$(id).textContent=m==="shared"?"Connected through the shared account. Nothing to paste.":m==="key"?"Connected with your own key (stored on this device only).":"Not connected.";$(rm).hidden=m!=="key"};
+  st("claude","aiClaudeSt","aiClaudeRm");st("chatgpt","aiGptSt","aiGptRm");
+  $("aiProv").value=A.chosen();
+  const act=A.active();
+  $("aiNote").textContent=!act?"No AI is connected yet. Connect one below.":act!==A.chosen()?A.names[A.chosen()]+" isn't connected, so answers come from "+A.names[act]+" for now.":"";
+  const ms=$("modelSel");if(!ms.options.length)A.models.forEach(([id,label])=>ms.append(new Option(label,id)));ms.value=A.getModel();
+  const dl=$("omodelList");if(!dl.childNodes.length)A.omodels.forEach(m=>dl.append(new Option(m)));$("omodelIn").value=A.getOModel();
+  const ll=$("linkList");ll.replaceChildren();
+  A.links().forEach(l=>{const r=el("div","tplrow");r.append(el("b","",l.name),el("span","status",l.url));const b=el("button","btn small ghost","Remove");b.type="button";b.onclick=()=>{A.removeLink(l.id);renderAI()};r.append(b);ll.append(r)});
+  const pr=$("linkPresets");if(!pr.childNodes.length)[["Perplexity","https://www.perplexity.ai/search?q={prompt}"],["Microsoft Copilot","https://copilot.microsoft.com/?q={prompt}"],["Grok","https://grok.com/?q={prompt}"],["Gemini","https://gemini.google.com/app"]].forEach(([n,u])=>{const c=el("button","chip","+ "+n);c.type="button";c.onclick=()=>{if(!A.links().some(x=>x.name===n))A.addLink(n,u);renderAI()};pr.append(c)});
+  try{renderThrPick()}catch(e){}
+}
+$("aiProv").onchange=()=>{Connectors.ai.setChosen($("aiProv").value);renderAI();if(threads.length&&sample)triage(board&&board.sig||"",true)};
+$("modelSel").onchange=()=>{Connectors.ai.setModel($("modelSel").value)};
+$("omodelIn").addEventListener("change",()=>{Connectors.ai.setOModel($("omodelIn").value)});
+$("aiClaudeKey").onclick=async()=>{const b=$("aiClaudeKey");b.disabled=true;$("aiMsg").className="status";$("aiMsg").textContent="Checking your key...";const r=await connectAI("claude",$("aiClaudeIn").value);b.disabled=false;$("aiMsg").className="status"+(r.ok?"":" err");$("aiMsg").textContent=r.ok?"Claude is connected.":r.msg;if(r.ok)$("aiClaudeIn").value=""};
+$("aiGptKey").onclick=async()=>{const b=$("aiGptKey");b.disabled=true;$("aiMsg").className="status";$("aiMsg").textContent="Checking your key...";const r=await connectAI("chatgpt",$("aiGptIn").value);b.disabled=false;$("aiMsg").className="status"+(r.ok?"":" err");$("aiMsg").textContent=r.ok?"ChatGPT is connected.":r.msg;if(r.ok)$("aiGptIn").value=""};
+$("aiClaudeRm").onclick=()=>removeAiKey("claude");$("aiGptRm").onclick=()=>removeAiKey("chatgpt");
+$("linkAdd").onclick=()=>{const n=$("linkName").value.trim(),u=$("linkUrl").value.trim();if(!n||!/^https:\/\/\S+\.\S+/.test(u)){$("aiMsg").className="status err";$("aiMsg").textContent="Give it a name and a full web address starting with https://";return}Connectors.ai.addLink(n,u);$("linkName").value="";$("linkUrl").value="";$("aiMsg").className="status";$("aiMsg").textContent=n+" added. It now shows in the Instruct AI list.";renderAI()};
 const gateUi=()=>{};
 $("wBtn").onclick=()=>connectGoogle();
 const copyBtn=(id,text,label)=>{$(id).onclick=()=>navigator.clipboard.writeText(text()).then(()=>{$(id).textContent="Copied";setTimeout(()=>$(id).textContent=label,1500)}).catch(()=>{$(id).textContent="Copy by hand"})};
@@ -481,9 +548,9 @@ function buildInstruct(i,box,getText,useReply){
   const inp=el("textarea");inp.placeholder="Tell it what to do, for example: reply yes and suggest Tuesday at 10";inp.setAttribute("aria-label","Instruction for AI");
   const out=el("div","instrout"),chips=el("div","chips");
   const go=el("button","btn small solid","Do it");go.type="button";
-  const gpt=el("a","btn small","Ask ChatGPT instead");gpt.target="_blank";gpt.rel="noopener";gpt.href="https://chatgpt.com/";
-  const setGpt=()=>{gpt.href="https://chatgpt.com/?q="+encodeURIComponent((inp.value.trim()||"Help me with this email.")+"\n\nEmail thread:\n"+cached.slice(0,3000))};
-  ["mousedown","touchstart","focus","click"].forEach(ev=>gpt.addEventListener(ev,setGpt));
+  const pick=el("select","in");pick.setAttribute("aria-label","Which AI should answer");pick.style.flex="0 1 240px";
+  aiOptions().forEach(o=>pick.append(new Option(o.label,o.id)));pick.value=Connectors.ai.active()||"claude";
+  pick.onchange=()=>{const o=aiOptions().find(x=>x.id===pick.value);if(o&&o.kind==="builtin"&&o.ready){Connectors.ai.setChosen(o.id);renderAI()}};
   const result=r=>{
     out.replaceChildren();
     out.append(el("div","ans",String(r.answer||"Done.")));
@@ -498,20 +565,23 @@ function buildInstruct(i,box,getText,useReply){
   };
   async function run(){
     const q=inp.value.trim();if(!q){inp.focus();return}
-    if(!sample){out.replaceChildren(el("p","status err","Connect Claude to get answers here (setup step 4). Meanwhile, Ask ChatGPT opens it with this email filled in."));return}
+    const opt=aiOptions().find(o=>o.id===pick.value)||aiOptions()[0];
+    if(opt.kind==="link"||!opt.ready){
+      const txt0=cached||await getText();cached=txt0||"";
+      out.replaceChildren(el("p","status",openOutside(opt,q+"\n\nEmail thread:\n"+cached.slice(0,2500))));return}
     go.disabled=true;out.replaceChildren(el("p","status","Thinking..."));
     try{
       const txt=cached||await getText();cached=txt||"";
       const first=(myName||"").split(" ")[0];
       const tone=/reply|draft|write|answer|respond/i.test(q)?await toneExamples():"";
-      const r=await sample.json("You are the personal assistant of "+(myName||"a manager")+" at WYZ Rent, a Dubai holiday home management company. Today is "+new Date().toDateString()+".\n\nEmail thread (latest last):\n"+cached+"\n\nTheir instruction: "+q+"\n\nReturn JSON only: {\"answer\": a short plain answer, max 120 words, no em dashes, \"reply\": a ready-to-send reply email body in their voice (contractions, "+(sigText()?"no sign-off or name, their signature is added automatically":"signed with the first name"+(first?" "+first:""))+") or an empty string when no reply is needed, \"tasks\": [ {\"title\": short, \"due\": \"YYYY-MM-DD\" or \"\"} ] only when they ask for a task or one is clearly needed, \"snooze_days\": a whole number of days to snooze this email, or 0, \"event\": null, or {\"title\", \"start\": \"YYYY-MM-DDTHH:MM\", \"end\": \"YYYY-MM-DDTHH:MM\", \"location\"} only when the email proposes or confirms a meeting }."+(tone?"\n\n"+tone:""),{modelTier:"default",cache:false});
+      const r=await sample.json("You are the personal assistant of "+(myName||"a manager")+" at WYZ Rent, a Dubai holiday home management company. Today is "+new Date().toDateString()+".\n\nEmail thread (latest last):\n"+cached+"\n\nTheir instruction: "+q+"\n\nReturn JSON only: {\"answer\": a short plain answer, max 120 words, no em dashes, \"reply\": a ready-to-send reply email body in their voice (contractions, "+(sigText()?"no sign-off or name, their signature is added automatically":"signed with the first name"+(first?" "+first:""))+") or an empty string when no reply is needed, \"tasks\": [ {\"title\": short, \"due\": \"YYYY-MM-DD\" or \"\"} ] only when they ask for a task or one is clearly needed, \"snooze_days\": a whole number of days to snooze this email, or 0, \"event\": null, or {\"title\", \"start\": \"YYYY-MM-DDTHH:MM\", \"end\": \"YYYY-MM-DDTHH:MM\", \"location\"} only when the email proposes or confirms a meeting }."+(tone?"\n\n"+tone:""),{provider:opt.id,cache:false});
       result(r||{});
     }catch(e){out.replaceChildren(el("p","status err","Couldn't do that ("+clip((e&&e.message)||"unknown reason",110)+")."))}
     go.disabled=false;
   }
   [["Summarize","Summarize this in three short lines."],["Draft a reply","Write a short, warm reply."],["What should I do?","Tell me the best next step and why."],["Make it a task","Turn this into a task, with a due date if one is mentioned."]].forEach(([l,v])=>{const c=el("button","chip",l);c.type="button";c.onclick=()=>{inp.value=v;run()};chips.append(c)});
   go.onclick=run;
-  const row=el("div","acts");row.append(go,gpt);
+  const row=el("div","acts");row.append(pick,go);
   box.append(inp,chips,row,out);inp.focus();
 }
 function toggleInstruct(i,box){
@@ -561,14 +631,14 @@ function renderThread(){
 async function openThread(id,o){
   o=o||{};const t=tById(id)||{};
   thr={id,msgs:[],item:o.item||{id,st:"reply",title:t.subject||"",summary:t.snippet||""},armed:0,done:false,mode:"reply",files:[]};
-  setMode("reply");renderTplSelect();syncRuleBtns();$("thrFiles").value="";$("thrFileList").textContent="";$("thrArchive").disabled=false;$("thrArchive").textContent="Archive";$("thrRemind").value="3";
+  setMode("reply");renderTplSelect();syncRuleBtns();renderThrPick();$("thrFiles").value="";$("thrFileList").textContent="";$("thrArchive").disabled=false;$("thrArchive").textContent="Archive";$("thrRemind").value="3";
   $("thr").hidden=false;$("thrTitle").textContent=t.subject||"Conversation";
   $("thrGmail").href=t.url||"https://mail.google.com/";
   $("thrSnooze").replaceChildren(snoozeDrop(id,thrClose));$("thrAIbox").hidden=true;$("thrAIbox").open=false;
   $("thrBody").replaceChildren(el("p","sub","Loading the conversation..."));
   $("thrReply").hidden=true;$("thrSt").textContent="";$("thrSt").className="status";$("thrText").value="";$("thrAll").checked=false;
   ["thrSend","thrSave","thrText","thrTo","thrCc"].forEach(k=>$(k).disabled=false);
-  $("thrSend").textContent="Send";$("thrAI").textContent=sample?"Write it with Claude":"Fill a template";
+  $("thrSend").textContent="Send";
   try{const r=await mcp.callTool("Gmail","get_thread",{threadId:id,messageFormat:"PLAIN_TEXT"},{cache:false});thr.msgs=(r.payload&&r.payload.messages)||[]}catch(e){thr.msgs=[]}
   renderThread();
   if(thr.msgs.length&&(lastMsg().labelIds||[]).includes("UNREAD"))mcp.callTool("Gmail","mark_read",{threadId:id}).catch(()=>{});
@@ -588,7 +658,7 @@ async function thrDraft(){
   const text=threadBlock(thr.msgs);
   try{
     const tone=sample?await toneExamples():"";
-    const r=!sample?{text:templateDraft(thr.item,chase)}:await sample((chase?"Write a short, polite follow-up email chasing an answer that is still owed, ":"Write a reply email ")+"for "+(myName||"me")+" at WYZ Rent. Plain text only, ready to edit, "+(sigText()?"with no sign-off and no name, because their signature is added automatically":"signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject, no quoted text."+(tone?"\n\n"+tone:"")+"\n\nWhat it's about: "+(thr.item.title||"")+". "+(thr.item.summary||"")+"\n\nThread (latest last):\n"+text,{cache:false,onText:u=>{ta.value=u.text}});
+    const r=!sample?{text:templateDraft(thr.item,chase)}:await sample((chase?"Write a short, polite follow-up email chasing an answer that is still owed, ":"Write a reply email ")+"for "+(myName||"me")+" at WYZ Rent. Plain text only, ready to edit, "+(sigText()?"with no sign-off and no name, because their signature is added automatically":"signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject, no quoted text."+(tone?"\n\n"+tone:"")+"\n\nWhat it's about: "+(thr.item.title||"")+". "+(thr.item.summary||"")+"\n\nThread (latest last):\n"+text,{cache:false,provider:aiPickValue(),onText:u=>{ta.value=u.text}});
     ta.value=r.text;st.textContent="Edit it, then send it or save it as a draft."
   }catch(e){st.className="status err";st.textContent="Couldn't write a draft ("+clip((e&&e.message)||"unknown reason",110)+"). Write your own here."}
 }
@@ -597,6 +667,7 @@ function thrArgs(){
   const split=v=>String(v||"").split(/[,;]/).map(x=>x.trim()).filter(Boolean);
   const files=thr.files.map(f=>({name:f.name,type:f.type,data:f.data}));
   const withSig=()=>{const t=$("thrText").value.trimEnd(),sg=sigText();return sg&&!t.includes(sg)?t+"\n\n"+sg:t};
+  if(thr.mode==="new")return {to:split($("thrTo").value),cc:split($("thrCc").value),subject:$("thrSubj").value.trim(),body:withSig(),attachments:files};
   if(thr.mode==="forward")return {to:split($("thrTo").value),cc:split($("thrCc").value),subject:/^fwd?:/i.test(subj)?subj:"Fwd: "+subj,body:withSig()+forwardBlock(),attachments:files};
   return {to:split($("thrTo").value),cc:split($("thrCc").value),subject:/^re:/i.test(subj)?subj:"Re: "+subj,body:withSig()+quoteOf(last),replyToMessageId:last.id,attachments:files};
 }
@@ -605,9 +676,13 @@ function forwardBlock(){
   return "\n\n---------- Forwarded message ----------\n"+thr.msgs.slice(-3).map(m=>"From: "+(m.sender||"")+"\nDate: "+(m.date?new Date(m.date).toLocaleString("en-GB",{dateStyle:"medium",timeStyle:"short"}):"")+"\nSubject: "+$("thrTitle").textContent+"\n\n"+String(m.plaintextBody||m.snippet||"").slice(0,6000)).join("\n\n---\n\n");
 }
 function setMode(m){
-  thr.mode=m;const fwd=m==="forward";
+  thr.mode=m;const fwd=m==="forward",nw=m==="new";
+  ["thrSnooze","thrGmail","thrArchive","thrVip","thrMute"].forEach(k=>$(k).hidden=nw);
+  $("thrBody").hidden=nw;if(nw)$("thrAIbox").hidden=true;
+  $("thrSubjWrap").hidden=!nw;$("thrBrief").hidden=!nw;if(nw)$("thrCcWrap").hidden=false;
+  $("thrFwd").hidden=nw;
   $("thrFwd").textContent=fwd?"Back to reply":"Forward";
-  $("thrSumWrap").hidden=!(fwd&&sample);$("thrRemWrap").hidden=fwd;$("thrAll").parentElement.hidden=fwd;
+  $("thrSumWrap").hidden=!(fwd&&sample);$("thrRemWrap").hidden=fwd;$("thrAll").parentElement.hidden=fwd||nw;
   $("thrAI").hidden=fwd;if(!fwd)$("thrSum").checked=false;
 }
 $("thrFwd").onclick=()=>{
@@ -627,7 +702,8 @@ $("thrFiles").onchange=async e=>{
 };
 async function thrAct(kind){
   const st=$("thrSt"),a=thrArgs();st.className="status";
-  if(!$("thrText").value.trim()&&!thr.files.length){st.className="status err";st.textContent=thr.mode==="forward"?"Add a short note or an attachment first.":"Write your reply first.";return}
+  if(!$("thrText").value.trim()&&!thr.files.length){st.className="status err";st.textContent=thr.mode==="forward"?"Add a short note or an attachment first.":thr.mode==="new"?"Write the email first.":"Write your reply first.";return}
+  if(thr.mode==="new"&&!a.subject){st.className="status err";st.textContent="Add a subject.";$("thrSubj").focus();return}
   if(!a.to.length||a.to.some(x=>!/^\S+@\S+\.\S+$/.test(x))){st.className="status err";st.textContent="Check the To address.";return}
   const btn=$(kind==="send"?"thrSend":"thrSave");
   if(kind==="send"&&!thr.armed){thr.armed=1;btn.textContent="Tap again to send to "+a.to[0]+(a.to.length>1?" +"+(a.to.length-1):"");setTimeout(()=>{if(thr.armed&&!thr.done){thr.armed=0;btn.textContent="Send"}},6000);return}
@@ -642,8 +718,10 @@ async function thrAct(kind){
     btn.textContent=kind==="send"?"Sent":"Saved";
     st.className="status";st.textContent=kind==="send"?"Sent to "+a.to.join(", ")+". Marked as done.":"Saved to your Gmail drafts.";
     if(kind==="send"){
-      state.done[thr.id]=1;logDone(thr.item);
-      const n=+$("thrRemind").value;if(thr.mode==="reply"&&n>0){const d=new Date();d.setDate(d.getDate()+n);state.chase=state.chase||{};state.chase[thr.id]={due:ymd(d),title:a.subject,at:Date.now(),to:a.to[0]};st.textContent+=" You'll be reminded on "+niceDay(ymd(d))+" if there's no reply."}
+      const tid=thr.mode==="new"?(r.payload&&r.payload.threadId):thr.id;
+      if(thr.mode==="new"){logDone({id:tid,title:"Sent: "+a.subject},"sent");st.textContent="Sent to "+a.to.join(", ")+"."}
+      else{state.done[thr.id]=1;logDone(thr.item)}
+      const n=+$("thrRemind").value;if((thr.mode==="reply"||thr.mode==="new")&&n>0&&tid){const d=new Date();d.setDate(d.getDate()+n);state.chase=state.chase||{};state.chase[tid]={due:ymd(d),title:a.subject,at:Date.now(),to:a.to[0]};st.textContent+=" You'll be reminded on "+niceDay(ymd(d))+" if there's no reply."}
       persist();renderBoard()}
     else if(r.payload&&r.payload.viewUrl){const l=el("a","btn small","Open draft");l.href=r.payload.viewUrl;l.target="_blank";l.rel="noopener";$("thrSt").append(" ",l)}
   }catch(e){
@@ -660,7 +738,7 @@ async function thrArchive(){
 }
 $("thrArchive").onclick=thrArchive;
 function thrClose(){$("thr").hidden=true}
-$("thrClose").onclick=thrClose;$("thrAI").onclick=thrDraft;$("thrAll").onchange=fillTargets;
+$("thrClose").onclick=thrClose;$("thrAI").onclick=()=>thr.mode==="new"?composeDraft():thrDraft();$("thrAll").onchange=fillTargets;
 $("thrSend").onclick=()=>thrAct("send");$("thrSave").onclick=()=>thrAct("save");
 $("thrWA").onclick=()=>window.open(waLink($("thrText").value),"_blank","noopener");
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("thr").hidden)thrClose()});
@@ -758,7 +836,7 @@ async function draftFor(i,host,btn){
   const box=el("div","draftbox");const ta=el("textarea");ta.id="d-"+i.id;ta.value="";const st=el("span","status","Writing a draft");
   box.append(st,ta);host.append(box);btn.textContent="Writing";
   try{
-    const chase=(i.st==="follow"||i.st==="wait");const r=!sample?{text:templateDraft(i,chase)}:await sample((chase?"Write a short, polite follow-up email chasing an answer that is still owed, ":"Write a reply email ")+"for "+(myName||"me")+" at WYZ Rent. Plain text only, ready to edit, "+(sigText()?"with no sign-off and no name, because their signature is added automatically":"signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject.\n\nWhat it's about: "+(i.title||"")+". "+(i.summary||"")+"\n\nThread (latest last):\n"+(text||tById(i.id)?.snippet||""),{cache:false,onText:u=>{ta.value=u.text}});
+    const chase=(i.st==="follow"||i.st==="wait");const r=!sample?{text:templateDraft(i,chase)}:await sample((chase?"Write a short, polite follow-up email chasing an answer that is still owed, ":"Write a reply email ")+"for "+(myName||"me")+" at WYZ Rent. Plain text only, ready to edit, "+(sigText()?"with no sign-off and no name, because their signature is added automatically":"signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject.\n\nWhat it's about: "+(i.title||"")+". "+(i.summary||"")+"\n\nThread (latest last):\n"+(text||tById(i.id)?.snippet||""),{cache:false,provider:aiPickValue(),onText:u=>{ta.value=u.text}});
     ta.value=r.text;st.textContent="Edit it, then save it to your Gmail drafts.";
   }catch(e){st.textContent="Couldn't write a draft just now ("+clip((e&&e.message)||"unknown reason",110)+"). Write your own here, then save it.";st.className="status err"}
   btn.remove();
@@ -781,7 +859,7 @@ $("showOff").onclick=()=>{showOff=!showOff;renderBoard()};
 $("askGo").onclick=ask;$("askQ").addEventListener("keydown",e=>{if(e.key==="Enter")ask()});
 async function ask(){
   const q=$("askQ").value.trim();if(!q)return;const out=$("askOut");out.hidden=false;
-  if(!sample){out.textContent="Ask needs a Claude API key. Add one in the setup steps (Claude for smarter sorting).";return}
+  if(!sample){out.textContent="Ask needs an AI connected. Connect Claude or ChatGPT in the setup steps.";return}
   out.textContent="Thinking...";
   const ctx={today:new Date().toString(),board:(board&&board.items||[]).map(i=>({status:ST[i.st],urgency:UR[i.g],title:i.title,summary:i.summary,from:nameOf((tById(i.id)||{}).from)})),calendar:(events||[]).map(e=>({when:e.start&&(e.start.dateTime||e.start.date),what:e.summary}))};
   try{const r=await sample("You help "+(myName||"a WYZ Rent team member")+" run their day. Answer briefly and plainly, no em dashes. Their board and calendar (JSON):\n"+JSON.stringify(ctx)+"\n\nQuestion: "+q,{cache:false,onText:u=>{out.textContent=u.text}});out.textContent=r.text}
@@ -1084,7 +1162,7 @@ $("refresh").onclick=()=>refreshAll(false);
 (async()=>{
   collapsed.delete("c-inbox");collapsed.delete("setupCard");ORDER.forEach(k=>collapsed.delete("g-"+k));saveCol();
   try{applyOrder();applyCol();renderLinks();renderSetup();renderTasks();renderResearch()}catch(e){}
-  mcp=Connectors.mcp;perms=Connectors.perms;await Connectors.ai.detect();sample=Connectors.makeSample();
+  mcp=Connectors.mcp;perms=Connectors.perms;await Connectors.ai.detect();sample=Connectors.makeSample();try{renderAI()}catch(e){}
   renderHello();
   if(!G.configured()){showWelcome();setFresh("err","Google sign-in isn't set up yet.");return}
   if(G.wasConnected()){
@@ -1165,10 +1243,14 @@ async function testEverything(){
     catch(e){add("Google Drive","bad","Couldn't read Drive ("+msg(e)+").")}
   }
   // 7 claude
-  const mode=Connectors.ai.mode();
-  if(!sample)add("Claude (AI)","na","Not connected. Sorting uses simple rules. Instruct AI and smart drafts are off.");
-  else{try{const r=await sample("Reply with the single word OK.",{modelTier:"quick",cache:false});add("Claude (AI)","ok",(mode==="shared"?"Working through the shared connection. ":"Working with your own key. ")+"It answered: "+clip(r.text,20)+".")}
-    catch(e){add("Claude (AI)","bad","Claude is switched on but failed ("+msg(e)+")."+(mode==="shared"?" Check ANTHROPIC_API_KEY, credit and ALLOWED_EMAILS in Vercel.":" Check your key and credit."))}}
+  {const A=Connectors.ai;
+   for(const p of ["claude","chatgpt"]){
+     const nm=A.names[p]+(p===A.active()?" (in use)":"");
+     if(!A.avail(p)){add(nm,"na","Not connected"+(p==="chatgpt"?" (optional).":".")+(!sample&&p==="claude"?" Sorting uses simple rules until an AI is connected.":""));continue}
+     const mode=A.mode(p);
+     try{const r=await sample("Reply with the single word OK.",{provider:p,cache:false});add(nm,"ok",(mode==="shared"?"Working through the shared connection":"Working with your own key")+", using "+(p==="chatgpt"?A.getOModel():A.modelLabel())+". It answered: "+clip(r.text,20)+".")}
+     catch(e){add(nm,"bad",A.names[p]+" is switched on but failed ("+msg(e)+")."+(mode==="shared"?" Check the key, credit and ALLOWED_EMAILS in Vercel.":" Check your key, the model name and credit under Connections, Personalise."))}
+   }}
   // 8 todoist
   if(!Connectors.todoist.has())add("Todoist","na","Not connected (optional).");
   else{try{await mcp.callTool("Todoist","find-tasks-by-date",{});add("Todoist","ok","Reading works.")}catch(e){add("Todoist","bad","Todoist failed ("+msg(e)+").",["Replace token",setTodoToken])}}
@@ -1325,3 +1407,36 @@ async function showReport(kind){
 $("planBtn").onclick=()=>{if(!G.connected()){showWelcome();return}showReport("plan")};
 $("wrapBtn").onclick=()=>{if(!G.connected()){showWelcome();return}showReport("wrap")};
 $("repClose").onclick=()=>{$("report").hidden=true};
+
+/* ---------- write a new email from the page ---------- */
+function fillAddrBook(){
+  const set=new Set();
+  threads.concat(found).forEach(t=>{[t.from].concat(t.lastTo||[]).forEach(x=>{const a=addrOf(x);if(a&&a.toLowerCase()!==myAddr())set.add(a)})});
+  const dl=$("thrAddrs");dl.replaceChildren();[...set].slice(0,60).forEach(a=>dl.append(new Option(a)));
+}
+function openCompose(o){
+  o=o||{};
+  thr={id:"",msgs:[],item:{id:"",st:"work",title:"New email",summary:""},armed:0,done:false,mode:"new",files:[]};
+  $("thr").hidden=false;$("thrTitle").textContent="New email";
+  setMode("new");renderTplSelect();renderThrPick();fillAddrBook();
+  $("thrReply").hidden=false;$("thrFiles").value="";$("thrFileList").textContent="";
+  ["thrSend","thrSave","thrText","thrTo","thrCc","thrSubj"].forEach(k=>$(k).disabled=false);
+  $("thrSend").textContent="Send";$("thrSt").textContent="";$("thrSt").className="status";$("thrRemind").value="3";
+  $("thrTo").value=o.to||"";$("thrCc").value="";$("thrSubj").value=o.subject||"";$("thrText").value=o.body||"";$("thrBrief").value="";
+  $("thrAI").textContent=sample?"Write it with "+Connectors.ai.names[Connectors.ai.active()||"claude"]:"Use my note";
+  $("thr").querySelector(".pad").scrollTop=0;$("thrTo").focus();
+}
+async function composeDraft(){
+  const brief=$("thrBrief").value.trim(),st=$("thrSt"),ta=$("thrText");
+  if(!brief){st.className="status err";st.textContent="Tell the AI what the email should say first.";$("thrBrief").focus();return}
+  if(!sample){ta.value=brief;st.className="status";st.textContent="No AI is connected, so your note was copied into the email. Edit it and add a subject.";return}
+  st.className="status";st.textContent="Writing it...";
+  try{
+    const tone=await toneExamples(),first=(myName||"").split(" ")[0];
+    const r=await sample.json("Write an email for "+(myName||"me")+" at WYZ Rent, a Dubai holiday home management company.\nIt is to: "+($("thrTo").value.trim()||"someone")+".\nWhat it should say: "+brief+"\n\nPlain text, "+(sigText()?"no sign-off and no name, because the signature is added automatically":"signed with the first name"+(first?" "+first:""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return JSON only: {\"subject\": a short subject line, \"body\": the email body}."+(tone?"\n\n"+tone:""),{cache:false,provider:aiPickValue()});
+    ta.value=String(r.body||"").trim();if(!$("thrSubj").value.trim())$("thrSubj").value=String(r.subject||"").trim();
+    st.textContent="Edit it, then send it or save it as a draft."
+  }catch(e){st.className="status err";st.textContent="Couldn't write it ("+clip((e&&e.message)||"unknown reason",110)+"). Write your own here."}
+}
+$("newMailBtn").onclick=()=>{if(!G.connected()){showWelcome();return}openCompose()};
+$("newMailBtn2").onclick=()=>{if(!G.connected()){showWelcome();return}openCompose()};

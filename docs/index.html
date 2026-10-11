@@ -220,6 +220,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
     <div class="herostats" id="heroStats"></div>
     <div class="herorefresh">
       <button class="btn" type="button" id="refresh">Refresh now</button>
+      <button class="btn" type="button" id="newMailBtn" title="Write a new email">New email</button>
       <button class="btn" type="button" id="planBtn" title="A plan for today from your meetings, emails and tasks">Plan my day</button>
       <button class="btn" type="button" id="wrapBtn" title="What got done today and what is next">End-of-day wrap</button>
       <button class="btn" type="button" id="zoomBtn" title="Make the text bigger or smaller">Text size</button>
@@ -297,6 +298,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
           <input class="in" id="mailQ" placeholder="Search your mail, for example from:ali or subject:invoice" aria-label="Search your mail">
           <button class="btn" type="button" id="mailGo">Search</button>
           <button class="btn ghost" type="button" id="weekGo">Weekly review</button>
+          <button class="btn solid" type="button" id="newMailBtn2">New email</button>
         </div>
         <div id="mailRes" class="found"></div>
       </div>
@@ -397,6 +399,28 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       </div>
     </div>
     <div class="card note"><div class="pad">
+      <h2>Personalise</h2>
+      <span class="status">Page name. It shows at the top of the page and on the browser tab.</span>
+      <div class="ask"><input class="in" id="pageName" placeholder="WYZ Rent · Execution Page" maxlength="40" aria-label="Page name" autocomplete="off"><button class="btn ghost" type="button" id="pageNameReset">Reset</button></div>
+      <h2 style="font-size:15px;margin-top:8px">AI assistants</h2>
+      <span class="status">Answers on this page come from</span>
+      <select class="in" id="aiProv" aria-label="Which AI writes the answers"><option value="claude">Claude</option><option value="chatgpt">ChatGPT</option></select>
+      <p class="status" id="aiNote"></p>
+      <div class="onbrow"><b>Claude</b><span class="status" id="aiClaudeSt"></span>
+        <div class="ask"><input class="in" id="aiClaudeIn" type="password" placeholder="Claude API key (sk-ant-...)" aria-label="Claude API key" autocomplete="off"><button class="btn" type="button" id="aiClaudeKey">Connect</button><button class="btn ghost" type="button" id="aiClaudeRm" hidden>Remove key</button></div>
+        <a class="status" href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Get a Claude key</a>
+        <span class="status">Claude model. The standard is Sonnet 5.5.</span><select class="in" id="modelSel" aria-label="Claude model"></select></div>
+      <div class="onbrow"><b>ChatGPT</b><span class="status" id="aiGptSt"></span>
+        <div class="ask"><input class="in" id="aiGptIn" type="password" placeholder="OpenAI API key (sk-...)" aria-label="OpenAI API key" autocomplete="off"><button class="btn" type="button" id="aiGptKey">Connect</button><button class="btn ghost" type="button" id="aiGptRm" hidden>Remove key</button></div>
+        <a class="status" href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">Get an OpenAI key</a>
+        <span class="status">ChatGPT model. Type the name your OpenAI account offers, or pick a suggestion.</span><input class="in" id="omodelIn" list="omodelList" aria-label="ChatGPT model" autocomplete="off"><datalist id="omodelList"></datalist></div>
+      <div class="onbrow"><b>Other AIs, opened by link</b>
+        <span class="status">Add any AI that has a web address, such as Perplexity or Gemini. It then appears in the Instruct AI list and opens in a new tab with your question filled in. Put {prompt} in the address where the question should go. Without it, your question is copied for you to paste.</span>
+        <div id="linkList"></div><div class="chips" id="linkPresets"></div>
+        <div class="ask"><input class="in" id="linkName" placeholder="Name, for example Perplexity" aria-label="AI name" style="flex:1 1 150px"><input class="in" id="linkUrl" placeholder="https://www.perplexity.ai/search?q={prompt}" aria-label="AI web address" style="flex:3 1 260px"><button class="btn" type="button" id="linkAdd">Add</button></div></div>
+      <p class="status" id="aiMsg"></p>
+    </div></div>
+    <div class="card note"><div class="pad">
       <h2>Replies and rules</h2>
       <span class="status">Your signature. It is added to the end of every reply you send from the page.</span>
       <textarea id="sigText" aria-label="Signature" style="min-height:90px" placeholder="Houssam Bahri&#10;WYZ Rent"></textarea>
@@ -475,7 +499,9 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
     <details class="msg" id="thrAIbox" hidden><summary>Instruct AI about this email</summary><div id="thrInstruct" class="instr"></div></details>
     <div id="thrReply" hidden>
       <h2>Reply</h2>
-      <span class="status">To</span><input class="in" id="thrTo" aria-label="To" autocomplete="off">
+      <span class="status">To</span><input class="in" id="thrTo" aria-label="To" autocomplete="off" list="thrAddrs"><datalist id="thrAddrs"></datalist>
+      <div id="thrSubjWrap" hidden><span class="status">Subject</span><input class="in" id="thrSubj" aria-label="Subject" autocomplete="off"></div>
+      <textarea id="thrBrief" aria-label="What should the email say" placeholder="Tell the AI what the email should say, for example: ask Sara for the revised pool quote by Thursday" style="min-height:70px" hidden></textarea>
       <label class="status chk"><input type="checkbox" id="thrAll"> Reply all</label>
       <div id="thrCcWrap" hidden><span class="status">Cc</span><input class="in" id="thrCc" aria-label="Cc" autocomplete="off"></div>
       <textarea id="thrText" aria-label="Your reply"></textarea>
@@ -484,7 +510,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       <label class="status chk" id="thrSumWrap" hidden><input type="checkbox" id="thrSum"> Send a short AI summary instead of the full email</label>
       <label class="status chk" id="thrRemWrap">Remind me if no reply in <select id="thrRemind"><option value="0">never</option><option value="2">2 days</option><option value="3" selected>3 days</option><option value="7">1 week</option></select></label>
       <p class="status" id="thrSt"></p>
-      <div class="headrow"><button class="btn small" type="button" id="thrAI">Write it for me</button><button class="btn solid" type="button" id="thrSend">Send</button><button class="btn" type="button" id="thrSave">Save to Gmail drafts</button><button class="btn ghost" type="button" id="thrFwd">Forward</button><button class="btn ghost" type="button" id="thrWA">Send on WhatsApp</button></div>
+      <div class="headrow"><select class="in" id="thrAIpick" aria-label="Which AI writes it" style="flex:0 1 130px;padding:5px 8px" hidden></select><button class="btn small" type="button" id="thrAI">Write it for me</button><button class="btn solid" type="button" id="thrSend">Send</button><button class="btn" type="button" id="thrSave">Save to Gmail drafts</button><button class="btn ghost" type="button" id="thrFwd">Forward</button><button class="btn ghost" type="button" id="thrWA">Send on WhatsApp</button></div>
     </div>
   </div></div>
 </div>

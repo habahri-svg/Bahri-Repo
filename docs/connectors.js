@@ -15,7 +15,7 @@
     drive: "https://www.googleapis.com/auth/drive.metadata.readonly"
   };
   var SCOPES = ["openid", "email", "profile", SC.gmailRead, SC.gmailDraft, SC.gmailModify, SC.cal, SC.calEvents, SC.drive].join(" ");
-  var KEY = { flag: "wyz-google-flag", hint: "wyz-google-hint", todo: "wyz-todoist-token", ai: "wyz-claude-key", cid: "wyz-google-client-id" };
+  var KEY = { flag: "wyz-google-flag", hint: "wyz-google-hint", todo: "wyz-todoist-token", ai: "wyz-claude-key", cid: "wyz-google-client-id", model: "wyz-claude-model" };
 
   var ls = {
     get: function (k) { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } },
@@ -385,51 +385,74 @@
     manage: async function () { await google_.signOut(); }
   };
 
-  /* ---------- Claude (optional, the person's own API key) ---------- */
-  var MODELS = { quick: "claude-haiku-5-5", "default": "claude-sonnet-5-5", complex: "claude-opus-5-5" };
+  /* ---------- AI assistants: Claude and ChatGPT (each with the owner's shared key or the person's own), plus any AI added by link ---------- */
+  KEY.provider = "wyz-ai-provider"; KEY.openai = "wyz-openai-key"; KEY.omodel = "wyz-openai-model"; KEY.links = "wyz-ai-links";
+  var MODEL_LIST = [["claude-sonnet-5-5", "Sonnet 5.5 (standard)"], ["claude-haiku-5-5", "Haiku 5.5 (fastest, lowest cost)"], ["claude-opus-5-5", "Opus 5.5 (strongest, costs the most)"]];
+  var OMODELS = ["gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.6-luna", "gpt-6-astra"];   /* suggestions only: the person can type any model their OpenAI account offers */
+  function getModel() { var m = ls.get(KEY.model); return MODEL_LIST.some(function (x) { return x[0] === m; }) ? m : MODEL_LIST[0][0]; }
+  function getOModel() { return ls.get(KEY.omodel) || OMODELS[0]; }
+  function modelLabel() { return MODEL_LIST.filter(function (x) { return x[0] === getModel(); })[0][1].replace(/ \(.*/, ""); }
+  var NAMES = { claude: "Claude", chatgpt: "ChatGPT" };
+  function niceError(p, status, d) {
+    if (/credit balance|insufficient_quota|exceeded your current quota|billing/i.test(d)) return p === "chatgpt" ? "The OpenAI account has no credit left. Add credit at platform.openai.com, under Billing." : "The Anthropic account has no credit left. Add credit under Billing at console.anthropic.com.";
+    if (/model/i.test(d) && /not.?found|invalid|unknown|does not exist|access/i.test(d)) return "That " + NAMES[p] + " model isn't available on this account. Pick another one in Connections.";
+    return d ? String(d).slice(0, 160) : NAMES[p] + " answered " + status;
+  }
   function parseJson(txt) {
     var s = String(txt || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
     try { return JSON.parse(s); } catch (e) {}
     var a = s.indexOf("{"), b = s.lastIndexOf("}");
     if (a >= 0 && b > a) return JSON.parse(s.slice(a, b + 1));
-    throw cerr("tool_error", "Claude's answer wasn't readable");
+    throw cerr("tool_error", "The AI's answer wasn't readable");
   }
-  /* Shared Claude: the site owner's key sits on the server (api/claude.js). Signed-in people use it with no key of their own. */
-  var shared = false;
+  /* Shared AI: the site owner's key sits on the server (api/claude.js and api/chatgpt.js). Signed-in people use it with no key of their own. */
+  var shared = { claude: false, chatgpt: false };
   function detectShared() {
-    return fetch("/api/claude", { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : { ok: false }; }).then(function (j) { shared = !!(j && j.ok); return shared; }, function () { shared = false; return false; });
+    var probe = function (p, url) { return fetch(url, { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : { ok: false }; }).then(function (j) { shared[p] = !!(j && j.ok); }, function () { shared[p] = false; }); };
+    return Promise.all([probe("claude", "/api/claude"), probe("chatgpt", "/api/chatgpt")]).then(function () { return shared.claude || shared.chatgpt; });
   }
-  async function callShared(messages, opts) {
+  var keyOf = function (p) { return ls.get(p === "chatgpt" ? KEY.openai : KEY.ai); };
+  var avail = function (p) { return !!(keyOf(p) || shared[p]); };
+  function chosen() { return ls.get(KEY.provider) === "chatgpt" ? "chatgpt" : "claude"; }
+  function active() { var p = chosen(); if (avail(p)) return p; var o = p === "claude" ? "chatgpt" : "claude"; return avail(o) ? o : ""; }
+  function modeOf(p) { p = p || active(); return !p ? "" : keyOf(p) ? "key" : shared[p] ? "shared" : ""; }
+  function textOf(j) { return (j.content || []).filter(function (b) { return b.type === "text"; }).map(function (b) { return b.text; }).join(""); }
+
+  async function callShared(p, messages) {
     var t = await ensure();
-    var r = await fetch("/api/claude", {
+    var r = await fetch(p === "chatgpt" ? "/api/chatgpt" : "/api/claude", {
       method: "POST",
       headers: { "content-type": "application/json", Authorization: "Bearer " + t },
-      body: JSON.stringify({ tier: (opts && opts.modelTier) || "default", messages: messages, max_tokens: 8000 })
+      body: JSON.stringify({ model: p === "chatgpt" ? getOModel() : getModel(), messages: messages, max_tokens: 8000 })
     });
     var detail = "";
     if (!r.ok) { try { detail = (await r.json()).error || ""; } catch (e) {} }
-    if (r.status === 429) throw cerr("rate_limited", detail || "Claude is busy or the daily limit was reached");
-    if (r.status === 401 || r.status === 403) throw cerr("tool_error", detail || "Claude isn't available for this account");
-    if (!r.ok) throw cerr("tool_error", detail || "Claude answered " + r.status);
+    if (r.status === 429) throw cerr("rate_limited", detail || NAMES[p] + " is busy or the daily limit was reached");
+    if (!r.ok) throw cerr("tool_error", detail || NAMES[p] + " answered " + r.status);
+    return { text: textOf(await r.json()) };
+  }
+  async function callDirect(p, messages) {
+    var r, key = keyOf(p);
+    if (p === "chatgpt") {
+      r = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", headers: { "content-type": "application/json", Authorization: "Bearer " + key }, body: JSON.stringify({ model: getOModel(), messages: messages }) });
+    } else {
+      r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }, body: JSON.stringify({ model: getModel(), max_tokens: 8000, messages: messages }) });
+    }
+    var d = "";
+    if (!r.ok) { try { var e = (await r.json()).error || {}; d = (e.message || "") + " " + (e.code || ""); } catch (x) {} }
+    if (r.status === 401) throw cerr("not_granted", NAMES[p] + " rejected the API key");
+    if (r.status === 429 && !/quota|credit|billing/i.test(d)) throw cerr("rate_limited", NAMES[p] + " is busy");
+    if (!r.ok) throw cerr("tool_error", niceError(p, r.status, d));
     var j = await r.json();
-    return { text: (j.content || []).filter(function (b) { return b.type === "text"; }).map(function (b) { return b.text; }).join("") };
+    return { text: p === "chatgpt" ? String((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "") : textOf(j) };
   }
   function makeSample() {
-    var key = ls.get(KEY.ai);
-    if (!key && !shared) return null;
+    if (!active()) return null;
     async function call(input, opts) {
+      var p = (opts && opts.provider) || active();
+      if (!avail(p)) { p = active(); if (!p) throw cerr("not_granted", "No AI is connected"); }
       var messages = typeof input === "string" ? [{ role: "user", content: input }] : input;
-      if (!key) return callShared(messages, opts);
-      var r = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-        body: JSON.stringify({ model: MODELS[(opts && opts.modelTier) || "default"] || MODELS["default"], max_tokens: 8000, messages: messages })
-      });
-      if (r.status === 401 || r.status === 403) throw cerr("not_granted", "Claude rejected the API key");
-      if (r.status === 429 || r.status === 529) throw cerr("rate_limited", "Claude is busy");
-      if (!r.ok) throw cerr("tool_error", "Claude answered " + r.status);
-      var j = await r.json();
-      return { text: (j.content || []).filter(function (b) { return b.type === "text"; }).map(function (b) { return b.text; }).join("") };
+      return keyOf(p) ? callDirect(p, messages) : callShared(p, messages);
     }
     var sample = async function (input, opts) {
       var r = await call(input, opts);
@@ -442,6 +465,9 @@
     };
     return sample;
   }
+  /* AIs added by link: they open in a new tab with the question filled in (or copied) */
+  function links() { try { var a = JSON.parse(ls.get(KEY.links) || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function saveLinks(a) { ls.set(KEY.links, JSON.stringify(a)); }
 
   window.Connectors = {
     mcp: mcp,
@@ -449,6 +475,21 @@
     google: google_,
     makeSample: makeSample,
     todoist: { has: function () { return !!ls.get(KEY.todo); }, set: function (t) { ls.set(KEY.todo, String(t || "").trim()); }, clear: function () { ls.del(KEY.todo); } },
-    ai: { detect: detectShared, mode: function () { return ls.get(KEY.ai) ? "key" : shared ? "shared" : ""; }, has: function () { return !!ls.get(KEY.ai); }, set: function (k) { ls.set(KEY.ai, String(k || "").trim()); }, clear: function () { ls.del(KEY.ai); } }
+    ai: {
+      detect: detectShared, names: NAMES,
+      chosen: chosen, setChosen: function (p) { ls.set(KEY.provider, p === "chatgpt" ? "chatgpt" : "claude"); },
+      active: active, avail: avail, mode: modeOf,
+      /* Claude */
+      models: MODEL_LIST, getModel: getModel, setModel: function (m) { ls.set(KEY.model, m); }, modelLabel: modelLabel,
+      set: function (k) { ls.set(KEY.ai, String(k || "").trim()); }, clear: function () { ls.del(KEY.ai); }, has: function () { return !!ls.get(KEY.ai); },
+      /* ChatGPT */
+      omodels: OMODELS, getOModel: getOModel, setOModel: function (m) { ls.set(KEY.omodel, String(m || "").trim()); },
+      setOpenAI: function (k) { ls.set(KEY.openai, String(k || "").trim()); }, clearOpenAI: function () { ls.del(KEY.openai); }, hasOpenAI: function () { return !!ls.get(KEY.openai); },
+      label: function (p) { p = p || active(); return !p ? "" : p === "chatgpt" ? "ChatGPT " + getOModel() : "Claude " + modelLabel(); },
+      /* other AIs, opened by link */
+      links: links,
+      addLink: function (name, url) { var a = links(); a.push({ id: Math.random().toString(36).slice(2, 9), name: String(name).trim().slice(0, 30), url: String(url).trim() }); saveLinks(a); },
+      removeLink: function (id) { saveLinks(links().filter(function (x) { return x.id !== id; })); }
+    }
   };
 })();

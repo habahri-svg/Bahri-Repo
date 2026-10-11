@@ -63,6 +63,15 @@ Anthropic doesn't offer a "Sign in with Claude" for other websites, and using so
    | `DAILY_LIMIT` | optional, calls per person per day (default 50) |
 
    Then redeploy. You pay for the usage, so set a spending limit in the Anthropic console and use `ALLOWED_EMAILS` or `ALLOWED_DOMAINS` so only your team can use it. The function (`api/claude.js`) checks every request against the person's Google sign-in and refuses tokens issued to any other app.
+   **ChatGPT works the same way.** Add these in Vercel to let everyone use your ChatGPT too:
+
+   | Name | Value |
+   | --- | --- |
+   | `OPENAI_API_KEY` | your key from https://platform.openai.com/api-keys |
+   | `OPENAI_MODEL` | optional, the standard ChatGPT model (defaults to `gpt-5.6-terra`, change it if OpenAI renames it) |
+   | `ALLOWED_OPENAI_MODELS` | optional, the models people may choose, comma-separated |
+
+   The same `GOOGLE_CLIENT_ID`, `ALLOWED_EMAILS`, `ALLOWED_DOMAINS` and `DAILY_LIMIT` apply to both. The standard Claude model is Sonnet 5.5. People can switch model, or switch between Claude and ChatGPT, under Connections, Personalise. Other AIs (Perplexity, Gemini and so on) can be added there by web address and open in a new tab with the question filled in.
 2. **Their own key (fallback).** On GitHub Pages there is no server, and on Vercel the function stays off until you add the variables. In both cases the guided screen asks each person for their own key instead.
 
 ## What happens when someone opens it
