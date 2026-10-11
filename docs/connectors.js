@@ -503,7 +503,7 @@
 
   /* ---------- AI assistants: Claude and ChatGPT (each with the owner's shared key or the person's own), plus any AI added by link ---------- */
   KEY.provider = "wyz-ai-provider"; KEY.auto = "wyz-ai-auto-switched"; KEY.openai = "wyz-openai-key"; KEY.omodel = "wyz-openai-model"; KEY.links = "wyz-ai-links";
-  var MODEL_LIST = [["claude-sonnet-5-5", "Sonnet 5.5 (standard)"], ["claude-haiku-4-5-20251001", "Haiku 4.5 (fastest, lowest cost)"], ["claude-opus-5-5", "Opus 5.5 (strongest, costs the most)"]];
+  var MODEL_LIST = [["claude-sonnet-5-5", "Sonnet 5.5 (standard)"], ["claude-haiku-5-5", "Haiku 5.5 (fastest, lowest cost)"], ["claude-opus-5-5", "Opus 5.5 (strongest, costs the most)"]];
   var OMODELS = ["gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.6-luna", "gpt-6-astra"];   /* suggestions only: the person can type any model their OpenAI account offers */
   function getModel() { var m = ls.get(KEY.model); return MODEL_LIST.some(function (x) { return x[0] === m; }) ? m : MODEL_LIST[0][0]; }
   function getOModel() { return ls.get(KEY.omodel) || OMODELS[0]; }
