@@ -77,7 +77,12 @@
     });
   }
 
-  function requestToken(prompt) {
+  /* Extra Google accounts (for example a personal Gmail plus a wyzrent.com work account). The first account
+     keeps plain ids. Ids from extra account n get the prefix "a<n>~", so every later call goes to the right account. */
+  var XKEY = "wyz-google-extra";
+  var xs = (function () { try { var a = JSON.parse(ls.get(XKEY) || "[]"); return Array.isArray(a) ? a.filter(function (e) { return e && e.email; }).map(function (e) { return { email: e.email, tok: { access: "", exp: 0, scope: "" }, prof: null, inflight: null, err: "" }; }) : []; } catch (e) { return []; } })();
+  function saveXs() { ls.set(XKEY, JSON.stringify(xs.map(function (x) { return { email: x.email }; }))); }
+  function requestToken(prompt, who) {
     return gisReady().then(function () {
       return new Promise(function (resolve, reject) {
         var settled = false;
@@ -93,6 +98,7 @@
               no(cerr(r.error === "access_denied" ? "consent_required" : prompt === "none" ? "needs_reauth" : r.error, r.error_description || r.error));
               return;
             }
+            if (who) { who.tok = { access: r.access_token, exp: Date.now() + Math.max(60, (+r.expires_in || 3600) - 90) * 1000, scope: r.scope || "" }; who.err = ""; ok(who.tok.access); return; }
             tok = { access: r.access_token, exp: Date.now() + Math.max(60, (+r.expires_in || 3600) - 90) * 1000, scope: r.scope || "" };
             ls.set(KEY.flag, "1");
             ok(tok.access);
@@ -103,7 +109,7 @@
           }
         });
         var o = { prompt: prompt };
-        var h = ls.get(KEY.hint);
+        var h = who ? who.email : ls.get(KEY.hint);
         if (h) o.hint = h;
         c.requestAccessToken(o);
       });
@@ -118,13 +124,23 @@
     return inflight;
   }
 
-  async function gfetch(url, opt, scope, tries) {
-    opt = opt || {}; tries = tries || 0;
-    var t = await ensure();
-    if (scope && tok.scope.split(" ").indexOf(scope) < 0) throw cerr("consent_required", "Google didn't give permission for this.");
+  function ensureK(K) {
+    if (!K) return ensure();
+    var x = xs[K - 1];
+    if (!x) return Promise.reject(cerr("server_not_connected", "That account isn't connected"));
+    if (x.tok.access && Date.now() < x.tok.exp) return Promise.resolve(x.tok.access);
+    if (!x.inflight) x.inflight = requestToken("none", x).then(function (t) { x.inflight = null; return t; }, function (e) { x.inflight = null; x.err = "reauth"; throw e; });
+    return x.inflight;
+  }
+  var tokOf = function (K) { return K ? (xs[K - 1] || {}).tok || { scope: "" } : tok; };
+  async function gfetchK(url, opt, scope, tries, K) {
+    opt = opt || {}; tries = tries || 0; K = K || 0;
+    var t = await ensureK(K);
+    if (scope && tokOf(K).scope.split(" ").indexOf(scope) < 0) throw cerr("consent_required", "Google didn't give permission for this.");
+    var gfetch = function (u, o, s, n) { return gfetchK(u, o, s, n, K); };
     var headers = Object.assign({ Authorization: "Bearer " + t }, opt.headers || {});
     var r = await fetch(url, Object.assign({}, opt, { headers: headers }));
-    if (r.status === 401 && tries < 1) { tok.exp = 0; return gfetch(url, opt, scope, tries + 1); }
+    if (r.status === 401 && tries < 1) { tokOf(K).exp = 0; return gfetch(url, opt, scope, tries + 1); }
     if ((r.status === 429 || r.status === 503) && tries < 3) { await sleep(700 * (tries + 1)); return gfetch(url, opt, scope, tries + 1); }
     if (r.status === 403) {
       var msg = "", reason = "";
@@ -158,7 +174,7 @@
   var profileCache = null;
   async function profile() {
     if (profileCache) return profileCache;
-    var p = await gfetch("https://www.googleapis.com/oauth2/v3/userinfo");
+    var p = await gfetchK("https://www.googleapis.com/oauth2/v3/userinfo", null, null, 0, 0);
     profileCache = p;
     if (p.email) ls.set(KEY.hint, p.email);
     return p;
@@ -233,6 +249,16 @@
   }
   var META = "format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date";
 
+  function profileK(K) {
+    if (!K) return profile();
+    var x = xs[K - 1];
+    if (x && x.prof) return Promise.resolve(x.prof);
+    return gfetchK("https://www.googleapis.com/oauth2/v3/userinfo", null, null, 0, K).then(function (p) { if (x) x.prof = p; return p; });
+  }
+  function makeTools(K) {
+  var gfetch = function (u, o, s, n) { return gfetchK(u, o, s, n, K); };
+  var profile = function () { return profileK(K); };
+  var mailTo = function () { var p = K ? (xs[K - 1] || {}).prof : profileCache; return p && p.email ? p.email : (K ? (xs[K - 1] || {}).email || "" : ""); };
   async function buildMessage(a) {
     var threadId = "", inReply = "", refs = "";
     if (a.replyToMessageId) {
@@ -463,6 +489,60 @@
       }
     }
   };
+  return TOOLS;
+  }
+
+  /* ---------- routing calls to the right Google account ---------- */
+  var T0 = makeTools(0), TX = {};
+  var toolsFor = function (K) { return K ? (TX[K] || (TX[K] = makeTools(K))) : T0; };
+  var PFX = /^a(\d+)~/;
+  var ID_ARGS = ["threadId", "replyToMessageId", "messageId", "eventId", "fileId", "id"];
+  function route(a) {
+    var K = 0, b = Object.assign({}, a || {});
+    ID_ARGS.forEach(function (k) { if (typeof b[k] === "string") { var m = b[k].match(PFX); if (m) { K = +m[1]; b[k] = b[k].slice(m[0].length); } } });
+    if (typeof b.account === "number") { K = b.account; }
+    delete b.account;
+    return { K: K, b: b };
+  }
+  /* Marks results from extra account K: ids get the prefix, links open the right mailbox, items say which account. */
+  function tag(o, K) {
+    if (!K || !o || typeof o !== "object") return o;
+    var em = (xs[K - 1] || {}).email || "";
+    if (Array.isArray(o)) return o.map(function (v) { return tag(v, K); });
+    var out = {};
+    Object.keys(o).forEach(function (k) {
+      var v = o[k];
+      if ((k === "id" || k === "threadId") && typeof v === "string" && v && !PFX.test(v)) out[k] = "a" + K + "~" + v;
+      else if (k === "viewUrl" && typeof v === "string") out[k] = v.replace(/authuser=[^#&]*/, "authuser=" + encodeURIComponent(em));
+      else if (k === "files" || k === "attachments" || k === "labelIds") out[k] = v;
+      else out[k] = tag(v, K);
+    });
+    if (o.id && (o.messages || o.start || o.mimeType || o.subject)) out.account = em;
+    return out;
+  }
+  var XOFF = "wyz-google-extra-off";
+  var offSet = function () { try { return JSON.parse(ls.get(XOFF) || "[]"); } catch (e) { return []; } };
+  var live = function () { var off = offSet(); return xs.map(function (x, i) { return i + 1; }).filter(function (K) { var x = xs[K - 1]; return x.email && x.err !== "reauth" && off.indexOf(x.email) < 0; }); };
+  var dateOf = function (t) { var m = t.messages || []; var d = m.length ? m[m.length - 1].date : ""; return Date.parse(d) || 0; };
+  var FAN = {
+    "Gmail.search_threads": function (rs) { var all = [].concat.apply([], rs.map(function (r) { return r.threads || []; })); all.sort(function (a, b) { return dateOf(b) - dateOf(a); }); return { threads: all }; },
+    "Google Calendar.list_events": function (rs) { var all = [].concat.apply([], rs.map(function (r) { return r.events || []; })); all.sort(function (a, b) { return Date.parse((a.start || {}).dateTime || (a.start || {}).date || 0) - Date.parse((b.start || {}).dateTime || (b.start || {}).date || 0); }); return { events: all }; },
+    "Google Drive.list_recent_files": function (rs) { var all = [].concat.apply([], rs.map(function (r) { return r.files || []; })); all.sort(function (a, b) { return Date.parse(b.modifiedTime || 0) - Date.parse(a.modifiedTime || 0); }); return { files: all }; },
+    "Google Drive.search_files": function (rs) { return { files: [].concat.apply([], rs.map(function (r) { return r.files || []; })) }; },
+    "Google Contacts.list_contacts": function (rs) { return { people: [].concat.apply([], rs.map(function (r) { return r.people || []; })) }; }
+  };
+  async function callRouted(server, tool, args) {
+    var f0 = T0[server] && T0[server][tool];
+    if (!f0) throw cerr("tool_error", "Unknown tool " + server + "." + tool);
+    var r = route(args), merge = FAN[server + "." + tool];
+    if (r.K || !merge || !xs.length || server === "Todoist") { var f = toolsFor(r.K)[server][tool]; return tag(await f(r.b), r.K); }
+    var ks = [0].concat(live());
+    var outs = await Promise.all(ks.map(function (K) {
+      return toolsFor(K)[server][tool](r.b).then(function (v) { return tag(v, K); }, function (e) { if (!K) throw e; if (e && (e.code === "needs_reauth" || e.code === "popup_failed_to_open")) xs[K - 1].err = "reauth"; announceX(); return null; });
+    }));
+    return merge(outs.filter(Boolean));
+  }
+  function announceX() { try { window.dispatchEvent(new CustomEvent("wyz-accounts")); } catch (e) {} }
 
   /* ---------- Todoist (personal API token, optional) ---------- */
   async function tdfetch(path, opt) {
@@ -480,18 +560,16 @@
 
   /* ---------- the interface app.js uses ---------- */
   var mcp = {
-    listTools: async function () { return { servers: Object.keys(TOOLS).map(function (s) { return { server: s }; }) }; },
+    listTools: async function () { return { servers: Object.keys(T0).map(function (s) { return { server: s }; }) }; },
     describeTool: async function () { throw cerr("unavailable", "No schema here"); },
     callTool: async function (server, tool, args) {
-      var f = TOOLS[server] && TOOLS[server][tool];
-      if (!f) throw cerr("tool_error", "Unknown tool " + server + "." + tool);
-      return { payload: await f(args || {}) };
+      return { payload: await callRouted(server, tool, args || {}) };
     },
     server: async function (name) {
-      var t = TOOLS[name];
+      var t = T0[name];
       if (!t) throw cerr("server_not_connected", "Unknown connector");
       var o = {};
-      Object.keys(t).forEach(function (k) { o[k] = function (a) { return t[k](a || {}); }; });
+      Object.keys(t).forEach(function (k) { o[k] = function (a) { return callRouted(name, k, a || {}); }; });
       return o;
     }
   };
@@ -515,6 +593,29 @@
     },
     profile: profile,
     token: ensure,
+    /* every connected Google account: the main one first */
+    accounts: function () {
+      var main = { email: (profileCache && profileCache.email) || ls.get(KEY.hint) || "", main: true, ok: connected(), n: 0 };
+      return [main].concat(xs.map(function (x, i) { return { email: x.email, main: false, ok: !!(x.tok.access && Date.now() < x.tok.exp), needsTap: x.err === "reauth" || !(x.tok.access && Date.now() < x.tok.exp), n: i + 1 }; }));
+    },
+    /* add another Google account: needs a tap, Google asks which account */
+    addAccount: async function () {
+      if (!configured()) throw cerr("not_configured", "Google sign-in isn't set up yet.");
+      var x = { email: "", tok: { access: "", exp: 0, scope: "" }, prof: null, inflight: null, err: "" };
+      await requestToken("select_account", x);
+      xs.push(x); var K = xs.length;
+      try { var p = await profileK(K); x.email = String(p.email || "").toLowerCase(); }
+      catch (e) { xs.pop(); throw e; }
+      var main = String((profileCache && profileCache.email) || ls.get(KEY.hint) || "").toLowerCase();
+      if (!x.email || x.email === main || xs.slice(0, -1).some(function (y) { return y.email === x.email; })) { xs.pop(); throw cerr("same_account", "That account is already connected. Pick your other account on Google's screen."); }
+      saveXs(); TX = {}; announceX();
+      return x.email;
+    },
+    /* an extra account whose sign-in ran out: one tap renews it */
+    reconnectAccount: async function (n) { var x = xs[n - 1]; if (!x) return; await requestToken("", x); x.err = ""; announceX(); },
+    accountOn: function (email) { return offSet().indexOf(email) < 0; },
+    setAccountOn: function (email, on) { var s = offSet().filter(function (e) { return e !== email; }); if (!on) s.push(email); ls.set(XOFF, JSON.stringify(s)); announceX(); },
+    removeAccount: function (n) { var x = xs[n - 1]; if (!x) return; try { if (x.tok.access && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(x.tok.access, function () {}); } catch (e) {} xs.splice(n - 1, 1); saveXs(); TX = {}; announceX(); },
     hasScope: function (name) { return tok.scope.split(" ").indexOf(SC[name]) >= 0; },
     scopeNames: function () { return Object.keys(SC); },
     scopeUrls: function () { return Object.keys(SC).map(function (k) { return SC[k]; }); },
@@ -523,6 +624,8 @@
       try { if (tok.access && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(tok.access, function () {}); } catch (e) {}
       tok = { access: "", exp: 0, scope: "" }; profileCache = null;
       ls.del(KEY.flag); ls.del(KEY.hint);
+      xs.forEach(function (x) { try { if (x.tok.access && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(x.tok.access, function () {}); } catch (e) {} });
+      xs = []; saveXs(); TX = {};
     }
   };
 

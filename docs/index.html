@@ -218,6 +218,8 @@ label.chk{display:flex;gap:6px;align-items:center}
 .t3tog h2{margin:0}.t3tog span{color:var(--soft);transition:transform .15s}.t3tog[aria-expanded="false"] span{transform:rotate(-90deg)}
 .demobar{position:sticky;top:0;z-index:40;background:var(--gold);color:#0e2238;font-size:13.5px;padding:8px 16px;text-align:center}
 .demobar a{color:#0e2238;font-weight:700}
+.srcrow{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line);cursor:pointer}
+.srcrow:first-child{border-top:0}.srcrow input{width:22px;height:22px;flex:none;margin-top:1px;accent-color:var(--navy)}
 .updbar{position:fixed;left:16px;right:16px;margin-inline:auto;width:fit-content;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:30;display:flex;gap:10px;align-items:center;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-left:4px solid var(--gold);border-radius:12px;padding:10px 14px;box-shadow:0 8px 24px rgba(0,0,0,.18);max-width:calc(100% - 32px)}
 .onbrow{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-top:1px solid var(--line)}
 .onbrow:first-child{border-top:0}
@@ -461,6 +463,11 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
 
   <!-- CONNECTIONS -->
   <section id="p-conn" role="tabpanel" aria-labelledby="t-conn" hidden class="wrap" style="gap:16px">
+    <div class="card"><div class="pad">
+      <h2>What your page reads</h2>
+      <p class="sub">Switch any source on or off. It's saved for you only and you can change it any time.</p>
+      <div id="srcList"></div>
+    </div></div>
     <div class="card note"><div class="pad">
       <h2>Your data sources</h2>
       <p class="sub">Work through the list from the top. Gmail, Calendar and Drive all connect with one Google sign-in. Everything uses your own accounts and stays in your browser. Nothing is sent to anyone else.</p>
@@ -612,6 +619,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
     <details class="msg" id="thrAIbox" hidden><summary>Instruct AI about this email</summary><div id="thrInstruct" class="instr"></div></details>
     <div id="thrReply" hidden>
       <h2>Reply</h2>
+      <div id="thrFromWrap" hidden><span class="status">From</span><select class="in" id="thrFrom" aria-label="Send from"></select></div>
       <span class="status">To</span><input class="in" id="thrTo" aria-label="To" autocomplete="off">
       <div id="thrSubjWrap" hidden><span class="status">Subject</span><input class="in" id="thrSubj" aria-label="Subject" autocomplete="off"></div>
       <textarea id="thrBrief" aria-label="What should the email say" placeholder="Tell the AI what the email should say, for example: ask Sara for the revised pool quote by Thursday" style="min-height:70px" hidden></textarea>

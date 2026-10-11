@@ -49,7 +49,7 @@
   function inRange(e, a) { var s = Date.parse(e.start.dateTime); return s >= Date.parse(new Date(a.startTime).toISOString()) && s < Date.parse(new Date(a.endTime).toISOString()); }
   function search(a) {
     var q = String(a.query || "");
-    var list = threads.filter(function (t) { var m = t.messages[0], sent = m.labelIds.indexOf("SENT") >= 0; return /in:sent/.test(q) ? sent : !sent; });
+    var list = threads.filter(function (t) { var m = t.messages[0], sent = m.labelIds.indexOf("SENT") >= 0; return (!t.account || offX.indexOf(t.account) < 0) && (/in:sent/.test(q) ? sent : !sent); });
     if (!/in:(sent|inbox)/.test(q) && q) { var w = q.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(function (x) { return x.length > 2; }); list = threads.filter(function (t) { var s = (t.messages[0].subject + " " + t.messages[0].snippet + " " + t.messages[0].sender).toLowerCase(); return w.some(function (x) { return s.indexOf(x) >= 0; }); }); }
     if (/older_than:3d/.test(q)) list = list.filter(function (t) { return Date.parse(t.messages[0].date) < now - 3 * D; });
     else if (/newer_than:3d/.test(q)) list = list.filter(function (t) { return Date.parse(t.messages[0].date) >= now - 3 * D; });
@@ -93,6 +93,20 @@
   G.hasScope = function () { return true; };
   G.hasAllScopes = function () { return true; };
   G.signOut = async function () { signed = false; };
+  /* a second account in the demo: a sample work inbox */
+  var extra = [], offX = [];
+  var WORK = [
+    ["w1", who("Mhyar Kronful", "mhyar@wyzrent.com"), "Keyless lock offline at Marina unit", "Guest arrives at 4pm and the lock shows offline.", 2, false, "Hi Karim,\n\nThe keyless lock at the Marina unit shows offline and the guest arrives at 4pm. Can you call the lock company?\n\nMhyar"],
+    ["w2", who("Jethelmay Olaran", "jethelmay@wyzrent.com"), "Owner statements to approve", "Three statements are ready for your approval.", 7, false, "Hi Karim,\n\nThree owner statements are ready. Please approve today so payouts go out tomorrow.\n\nJeth"]
+  ];
+  G.accounts = function () { return [{ email: ME, main: true, ok: signed, n: 0 }].concat(extra.map(function (e, i) { return { email: e, main: false, ok: true, needsTap: false, n: i + 1 }; })); };
+  G.accountOn = function (e) { return offX.indexOf(e) < 0; };
+  G.setAccountOn = function (e, on) { offX = offX.filter(function (x) { return x !== e; }); if (!on) offX.push(e); window.dispatchEvent(new CustomEvent("wyz-accounts")); };
+  G.addAccount = function () { return wait(700).then(function () { var em = "karim@wyzrent.com"; if (extra.indexOf(em) >= 0) { var e = new Error("That account is already connected."); e.code = "same_account"; throw e; } extra.push(em);
+    WORK.forEach(function (r) { var t = { id: "a1~" + r[0], messageCount: 1, account: em, messages: [Object.assign(msg(r), { id: "a1~" + r[0] + "m", threadId: "a1~" + r[0], toRecipients: [em] })], viewUrl: "#" }; threads.push(t); });
+    window.dispatchEvent(new CustomEvent("wyz-accounts")); return em; }); };
+  G.reconnectAccount = async function () {};
+  G.removeAccount = function () { extra = []; threads = threads.filter(function (t) { return !t.account; }); window.dispatchEvent(new CustomEvent("wyz-accounts")); };
 
   /* the demo ribbon */
   function note(t) { var n = document.getElementById("demoNote"); if (n) { n.textContent = t; clearTimeout(note.t); note.t = setTimeout(function () { n.textContent = ""; }, 4000); } }
