@@ -523,11 +523,11 @@
   var PFX = /^a(\d+)~/;
   var ID_ARGS = ["threadId", "replyToMessageId", "messageId", "eventId", "fileId", "id"];
   function route(a) {
-    var K = 0, b = Object.assign({}, a || {});
+    var K = 0, ex = false, b = Object.assign({}, a || {});
     ID_ARGS.forEach(function (k) { if (typeof b[k] === "string") { var m = b[k].match(PFX); if (m) { K = +m[1]; b[k] = b[k].slice(m[0].length); } } });
-    if (typeof b.account === "number") { K = b.account; }
+    if (typeof b.account === "number") { K = b.account; ex = true; }
     delete b.account;
-    return { K: K, b: b };
+    return { K: K, b: b, explicit: ex };
   }
   /* Marks results from extra account K: ids get the prefix, links open the right mailbox, items say which account. */
   function tag(o, K) {
@@ -560,7 +560,7 @@
     var f0 = T0[server] && T0[server][tool];
     if (!f0) throw cerr("tool_error", "Unknown tool " + server + "." + tool);
     var r = route(args), merge = FAN[server + "." + tool];
-    if (r.K || !merge || !xs.length || server === "Todoist") { var f = toolsFor(r.K)[server][tool]; return tag(await f(r.b), r.K); }
+    if (r.K || r.explicit || !merge || !xs.length || server === "Todoist") { var f = toolsFor(r.K)[server][tool]; return tag(await f(r.b), r.K); }
     var ks = [0].concat(live());
     var outs = await Promise.all(ks.map(function (K) {
       return toolsFor(K)[server][tool](r.b).then(function (v) { return tag(v, K); }, function (e) { if (!K) throw e; if (e && (e.code === "needs_reauth" || e.code === "popup_failed_to_open")) xs[K - 1].err = "reauth"; announceX(); return null; });
