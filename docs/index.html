@@ -165,6 +165,8 @@ ol.steps li::marker{color:var(--gold);font-weight:700}
 .msg pre{white-space:pre-wrap;font:inherit;overflow-wrap:anywhere;margin:8px 0 4px}
 .msg .meta{font-size:13px;color:var(--soft);font-weight:400}
 .found{display:flex;flex-direction:column}
+.verbar{display:flex;gap:6px;flex-wrap:wrap;align-items:baseline;font-size:12.5px;color:var(--soft);margin:0 0 8px}
+.verbar b{color:var(--navy);font-weight:700}
 .selbox{width:18px;height:18px;margin:0 8px 0 0;vertical-align:-3px;accent-color:var(--navy);cursor:pointer}
 .bulkbar{position:fixed;left:50%;transform:translateX(-50%);bottom:max(12px,env(safe-area-inset-bottom,0px));z-index:12;display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:calc(100vw - 24px);background:var(--panel);border:1px solid var(--navy);border-radius:14px;padding:8px 10px;box-shadow:0 8px 28px color-mix(in srgb,var(--navy) 30%,transparent)}
 .bulkbar .askmenu{top:auto;bottom:calc(100% + 4px)}
@@ -250,6 +252,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
 </head>
 <body>
 <div class="wrap">
+  <div class="verbar" id="verBar" role="note"></div>
   <header class="hero">
     <div class="herotop">
       <span class="brand"><svg class="logo" viewBox="0 0 64 64" width="26" height="26" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#d8a23c"/><path d="M18 34l10 10 18-22" fill="none" stroke="#0b3350" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="eyebrow">WYZ Rent · Execution Page</span></span>
@@ -596,6 +599,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
 <noscript><p style="padding:16px">This page needs JavaScript.</p></noscript>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="config.js"></script>
+<script src="version.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="connectors.js"></script>
 <script src="app.js"></script>

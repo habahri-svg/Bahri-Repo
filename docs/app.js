@@ -363,6 +363,14 @@ function applyPageName(){
   document.querySelector(".hero .eyebrow").textContent=n||"WYZ Rent · Execution Page";
   document.title=baseTitle();try{updateHero()}catch(e){}
 }
+/* version and last update, shown at the very top (set in version.js) */
+(function(){
+  const v=window.WYZ_VERSION||{},bar=$("verBar");if(!bar||!v.version)return;
+  let when="";
+  try{const d=new Date(v.updated);if(!isNaN(d))when=d.toLocaleString("en-GB",{weekday:"short",day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit",timeZone:"Asia/Dubai"})+" (Dubai time)"}catch(e){}
+  bar.append(el("b","","Version "+v.version),document.createTextNode(v.name?" · "+v.name:""),document.createTextNode(when?" · Updated "+when:""));
+  bar.title="You are using version "+v.version+(when?", updated "+when:"")+". If it looks old, refresh the page.";
+})();
 /* colour palette and light/dark look, saved per device and applied before first paint by a tiny script in index.html */
 const PAL_META={ocean:"#104b70",emerald:"#0f6b52",indigo:"#3b3fa8",sunset:"#b4492b",plum:"#7a2e8e"};
 function lookNow(){try{return JSON.parse(localStorage.getItem("wyz-look")||"{}")}catch(e){return {}}}
