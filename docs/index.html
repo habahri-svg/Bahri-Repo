@@ -306,7 +306,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       <div id="repBody"></div>
       <div class="headrow" id="repActs"></div>
     </div></div>
-    <div class="toolbar" id="toolbar" role="toolbar" aria-label="Sections"><button class="btn ghost small" type="button" id="expAll" title="Open every part">Expand all</button><button class="btn ghost small" type="button" id="colAll">Collapse all</button><span class="tsep" aria-hidden="true"></span><span id="secNav" class="secnav"></span></div>
+    <div class="toolbar" id="toolbar" role="toolbar" aria-label="Sections"><button class="btn ghost small" type="button" id="expAll" title="Open every part">Expand all</button><button class="btn ghost small" type="button" id="colAll">Collapse all</button><span class="tsep" aria-hidden="true"></span><span id="secNav" class="secnav"></span><span class="tsep" aria-hidden="true"></span><button class="navchip" type="button" id="goCheck" title="Jump to the System check at the bottom of Today">System check</button></div>
     <div class="card note" id="welcome" hidden><div class="pad">
       <h2 id="wTitle">Connect your accounts to start</h2>
       <p class="sub" id="wText">Sign in with Google once. Your inbox, meetings and recent documents load straight away, and the page is then set up just for you. Nobody else can see your data.</p>
@@ -501,6 +501,8 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
         <span class="status">Add any AI that has a web address, such as Perplexity or Gemini. It then appears in the Instruct AI list and opens in a new tab with your question filled in. Put {prompt} in the address where the question should go. Without it, your question is copied for you to paste.</span>
         <div id="linkList"></div><div class="chips" id="linkPresets"></div>
         <div class="ask"><input class="in" id="linkName" placeholder="Name, for example Perplexity" aria-label="AI name" style="flex:1 1 150px"><input class="in" id="linkUrl" placeholder="https://www.perplexity.ai/search?q={prompt}" aria-label="AI web address" style="flex:3 1 260px"><button class="btn" type="button" id="linkAdd">Add</button></div></div>
+      <div class="headrow"><button class="btn small solid" type="button" id="aiTest">Test Claude and ChatGPT now</button></div>
+      <div id="aiTestOut" role="status"></div>
       <p class="status" id="aiMsg"></p>
     </div></div>
     <div class="card note"><div class="pad">

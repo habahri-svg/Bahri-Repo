@@ -1920,6 +1920,32 @@ $("lockBioSet").onclick=async()=>{
   }catch(e){m.className="status err";m.textContent="Couldn't set that up on this device ("+clip((e&&e.name)||"cancelled",40)+"). The PIN still works."}
 };
 renderLockCard();
+
+/* ---------- quick test of the AI connections ---------- */
+$("goCheck").onclick=()=>{
+  const t=$("t-today");if(t&&t.getAttribute("aria-selected")!=="true")t.click();
+  const c=$("c-test");c.scrollIntoView({behavior:"smooth",block:"start"});
+};
+$("aiTest").onclick=async()=>{
+  const out=$("aiTestOut"),btn=$("aiTest");out.replaceChildren();btn.disabled=true;btn.textContent="Testing...";
+  const A=Connectors.ai;
+  const rows=[["claude","Claude"],["chatgpt","ChatGPT"]];
+  for(const [id,name] of rows){
+    const line=el("p","status");out.append(line);
+    if(!A.avail(id)){line.className="status err";line.textContent=name+": not connected. "+(id==="claude"?"The owner has not added ANTHROPIC_API_KEY in Vercel, or you have not pasted your own key above.":"The owner has not added OPENAI_API_KEY in Vercel, or you have not pasted your own key above.");continue}
+    const mode=A.mode(id)==="key"?"your own key":"the shared key";
+    const model=id==="claude"?A.modelLabel():A.getOModel();
+    line.textContent=name+" ("+model+", "+mode+"): testing...";
+    try{
+      const s=Connectors.makeSample();
+      const t0=Date.now(),r=await s("Reply with exactly: OK",{cache:false,provider:id});
+      line.className="status";line.textContent="✅ "+name+" ("+model+", "+mode+"): working. Answered in "+((Date.now()-t0)/1000).toFixed(1)+" seconds.";
+    }catch(e){
+      line.className="status err";line.textContent="❌ "+name+" ("+model+", "+mode+"): "+((e&&e.message)||"failed");
+    }
+  }
+  btn.disabled=false;btn.textContent="Test Claude and ChatGPT now";
+};
 /* ---------- quick links ---------- */
 const LINKS=[
   ["WYZ Dashboard","https://dashboard.wyzrent.com"],
