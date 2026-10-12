@@ -391,6 +391,7 @@
       tools.append(all_, none);
       if (!F.trash) {
         var del = B("Delete selected (" + sel.length + ")", function () { toTrash(sel); }, "solid"); del.disabled = !sel.length; tools.append(del);
+        var fwd = B("Forward selected (" + sel.length + ")", function () { if (window.WYZ_FORWARD) window.WYZ_FORWARD(sel.map(function (f) { return { title: f.title, link: f.url, text: f.text }; })); }, "ghost"); fwd.disabled = !sel.length; tools.append(fwd);
       } else {
         var rs = B("Restore selected (" + sel.length + ")", function () { restore(sel); }, "solid"); rs.disabled = !sel.length;
         var fv = B("Delete selected forever (" + sel.length + ")", function () { forever(sel); }, "ghost"); fv.disabled = !sel.length;
@@ -418,6 +419,7 @@
         var a = el("div", "acts"); a.append(B(f.text ? "Read" : "Details", function () { openFile(f); }, "solid"));
         var o = el("a", "btn small", f.src === "lovable" ? "Open in Lovable ↗" : "Open chat ↗"); o.href = f.url; o.target = "_blank"; o.rel = "noopener"; a.append(o);
         a.append(F.trash ? B("Restore", function () { restore([f]); }, "ghost") : B("Delete", function () { toTrash([f]); }, "ghost"));
+        if (!F.trash) a.append(B("Forward", function () { if (window.WYZ_FORWARD) window.WYZ_FORWARD([{ title: f.title, link: f.url, text: f.text }]); }, "ghost"));
         m.append(a); r.append(m); list.append(r);
       });
       if (rows.length > F.shown) list.append(B("Show more (" + (rows.length - F.shown) + " left)", function () { F.shown += 200; draw(); }, "ghost"));

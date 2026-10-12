@@ -9,7 +9,7 @@
 (function () {
   "use strict";
   if (typeof state === "undefined" || typeof persist !== "function") return;
-  var KEYS = ["tasks", "snooze", "pin", "links", "rules", "team", "tpls", "sig", "repeat", "meetNotes", "coRules", "quick", "driveFolder", "styleNote", "order", "setOrder", "connOrder", "off"];
+  var KEYS = ["tasks", "snooze", "pin", "links", "rules", "team", "tpls", "sig", "repeat", "meetNotes", "coRules", "quick", "driveFolder", "styleNote", "order", "setOrder", "connOrder", "off", "docHidden"];
   var MAX = 100;
   var U = { undo: [], redo: [], last: null, replay: false, ready: false };
   var groups = [];
@@ -50,6 +50,7 @@
     if (ch.indexOf("pin") >= 0) { var pa = a.pin || {}, pb = b.pin || {}, pn = Object.keys(pb).filter(function (k) { return !(k in pa); }), pr = Object.keys(pa).filter(function (k) { return !(k in pb); }); L.push(pn.length ? "Pinned: " + short(titleOf(pn[0]), 50) : "Unpinned: " + short(titleOf((pr[0]) || ""), 50)); }
     if (ch.indexOf("handoffs") >= 0) { var ha = a.handoffs || {}, hb = b.handoffs || {}, hn = Object.keys(hb).filter(function (k) { return !(k in ha); }), hr = Object.keys(ha).filter(function (k) { return !(k in hb); }); L.push(hn.length ? "Handed to " + (hb[hn[0]].name || "the team") + ": " + short(hb[hn[0]].subject || "", 50) : "Took back: " + short((ha[hr[0]] || {}).subject || "an email", 50)); }
     if (ch.indexOf("links") >= 0) { var la = (a.links || []).length, lb = (b.links || []).length; L.push(lb > la ? "Added a link: " + short((b.links[lb - 1] || {}).n, 40) : lb < la ? "Removed a link" : "Changed a link"); }
+    if (ch.indexOf("docHidden") >= 0) { var da = Object.keys(a.docHidden || {}), db = Object.keys(b.docHidden || {}), dn = db.filter(function (k) { return da.indexOf(k) < 0; }), dr = da.filter(function (k) { return db.indexOf(k) < 0; }); L.push(dn.length ? "Removed from Documents: " + short((b.docHidden[dn[0]] || {}).t, 50) + (dn.length > 1 ? " and " + (dn.length - 1) + " more" : "") : "Restored to Documents: " + short((a.docHidden[dr[0]] || {}).t, 50) + (dr.length > 1 ? " and " + (dr.length - 1) + " more" : "")); }
     var plain = { rules: "Changed VIP and muted senders", team: "Changed the team list", tpls: "Changed reply templates", sig: "Changed your signature", repeat: "Changed weekly repeats", meetNotes: "Saved meeting notes", coRules: "Changed company tabs", quick: "Changed one-tap replies", driveFolder: "Changed the Drive folder", styleNote: "Changed your writing style", order: "Moved sections", setOrder: "Moved settings", connOrder: "Moved setup steps", off: "Changed what the page reads" };
     Object.keys(plain).forEach(function (k) { if (ch.indexOf(k) >= 0) L.push(plain[k]); });
     return L.length ? L[0] + (L.length > 1 ? " (+" + (L.length - 1) + ")" : "") : "Changed something";
@@ -95,7 +96,7 @@
 
   /* ---------- replaying ---------- */
   function rerender() {
-    ["renderBoard", "renderTasks", "renderLinks", "renderTeam", "renderRules", "renderTplList", "renderTplSelect", "renderTop3", "renderHandoffs", "renderOwed", "applyOrder", "applySetOrder", "renderSetup", "renderSources", "renderHello", "renderCal"].forEach(function (f) { try { if (typeof window[f] === "function") window[f](); } catch (e) {} });
+    ["renderBoard", "renderTasks", "renderLinks", "renderTeam", "renderRules", "renderTplList", "renderTplSelect", "renderDocs", "renderTop3", "renderHandoffs", "renderOwed", "applyOrder", "applySetOrder", "renderSetup", "renderSources", "renderHello", "renderCal"].forEach(function (f) { try { if (typeof window[f] === "function") window[f](); } catch (e) {} });
   }
   async function applyEntry(e, dir) {   /* dir -1 = undo, +1 = redo */
     U.replay = true;

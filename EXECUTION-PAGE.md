@@ -224,3 +224,9 @@ Today, Settings, Install and My Life are separate pages, each with its own addre
 
 ## Undo and Redo (3.55)
 ↶ Undo, ↷ Redo and 🕘 History buttons in the header of every page, and Ctrl or Cmd + Z (undo), Ctrl or Cmd + Shift + Z or Ctrl + Y (redo). A small bar at the bottom left offers Undo for 8 seconds after each change. It covers what the page stores for you: Done and Reopen (it also adds or removes the Gmail "WYZ-Done" label), Snooze, Pin, tasks, handing an email to the team, links, VIP and muted senders, team, templates, signature, section order, and moving Library files to Trash. History keeps the last 100 changes on this device and survives a reload. A new change clears Redo. It cannot take back things that already left the page: a sent email (use the Undo send countdown), a WhatsApp message, a calendar change, an email archived or deleted in Gmail, a draft saved to Gmail, or Delete forever in the Library. Code: `docs/undo.js`.
+
+## Documents: select, forward, remove (3.56)
+Every document in the Documents list has a checkbox, **Forward**, **Remove** and **Delete in Drive ↗**, and the toolbar has Select all, Forward selected, Remove selected and a **Removed** view.
+- **Forward** opens the usual email window with the links and your note filled in. You check it and press Send, nothing is sent from the page. It can also share on WhatsApp or copy the links. Library files can be forwarded the same way.
+- **Remove** takes a document off the list after a confirmation. It does not delete anything in Google Drive: the page only has permission to read your Drive files (changing arbitrary files would need full access to the whole Drive, which is not recommended). Removed documents are in **Removed**, where you can restore them, and ↶ Undo brings them back too. **Delete in Drive ↗** opens the real file so you can delete it there.
+Code: `docs/docman.js`.
