@@ -194,3 +194,10 @@ Locked on purpose: api/_shared.js, api/fix.js, api/admin.js, api/seen.js, docs/c
 ## WhatsApp Business inbox (3.42)
 
 Needs a Meta WhatsApp Business app (Cloud API) and Upstash Redis. In Vercel add WHATSAPP_TOKEN, WHATSAPP_PHONE_ID, WHATSAPP_VERIFY_TOKEN and WHATSAPP_APP_SECRET, optional WHATSAPP_VIEWERS. In Meta, set the webhook to https://YOUR-SITE/api/whatsapp with the same verify word and subscribe to messages. Replies are free only within 24 hours of the customer's last message.
+
+## Going back to an earlier version (always there)
+A slim bar at the very top of the page has **Back** and **Forward** between published versions. Each version is a full, working copy of the page, kept in `docs/previous/v<version>/`, and the bar reads the list in `docs/versions.json`. Going back never loses anything: the sign-in and your saved board are shared between versions.
+
+It is automatic. Every time `docs/version.js` changes on the live branch (a Fix box publish, a merge, anything), the workflow `.github/workflows/archive-version.yml` saves the version that was just replaced, using `tools/archive-version.js`, and adds it to the list. To save a version by hand, for example an older one: `node tools/archive-version.js <commit-or-tag>`, or run the workflow from the Actions tab with that commit.
+
+If the live site ever needs to go back for everyone, not just you: in Vercel, Deployments, pick an earlier one and choose Instant Rollback. Then in GitHub revert the change that caused it (`git revert <commit>`), so the next publish does not bring it back. Never reset the branch, so nothing is lost.

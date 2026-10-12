@@ -22,7 +22,7 @@ g.__wyzTree = g.__wyzTree || new Map();
 const MODEL = process.env.FIX_MODEL || "claude-sonnet-5-5";
 const PREVIEW_BRANCH = "fixbox-preview";
 const EDITABLE = /^(docs|api)\/[A-Za-z0-9_.\-\/]+\.(js|html|css|json|webmanifest|md)$/;
-const HIDDEN = /(^|\/)msal-browser\.min\.js$|\.\./;
+const HIDDEN = /(^|\/)msal-browser\.min\.js$|\.\.|^docs\/previous\//;   /* the saved earlier versions stay frozen */
 /* Readable, but never changeable from the Fix box: sign-in checks, who may use the AI, and the Fix box's own guard rails. */
 const LOCKED = /^(api\/(_shared|fix|admin|seen)\.js|docs\/(config|version)\.js)$/;
 const MAX_READ = 40000, MAX_STEP_MS = 24000, CLAUDE_TIMEOUT = 50000;

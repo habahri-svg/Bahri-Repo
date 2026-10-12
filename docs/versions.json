@@ -1,0 +1,19 @@
+{
+  "versions": [
+    {
+      "version": "3.42",
+      "path": "previous/v3.42/",
+      "label": "WhatsApp Business inbox next to your email"
+    },
+    {
+      "version": "3.43",
+      "path": "previous/v3.43/",
+      "label": "Leave right after Send, Send now, download the app code as a zip"
+    },
+    {
+      "version": "3.43.1",
+      "path": "",
+      "label": "Current"
+    }
+  ]
+}
