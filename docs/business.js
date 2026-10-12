@@ -178,6 +178,8 @@
       r.append(m); pad.append(r);
     });
   }
+  window.openWAChat = function (c) { openWA(c); };
+  window.waChats = function () { return waData; };
   function openWA(c) {
     var host = infoOpen("💬 " + (c.name || "+" + c.wa));
     var list = el("div"); list.style.cssText = "display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow:auto";

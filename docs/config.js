@@ -24,6 +24,10 @@ window.WYZ_CONFIG = {
   COLOR_ACCENT: "",      /* empty = WYZ gold. Or a colour like #b8923c */
   /* Command Center: where "Send to Command Center" posts an action item. Empty = the button explains what's needed. */
   COMMAND_CENTER_URL: "",
+  /* Command Center, reading: a GET address that returns the signed-in person's actions as
+     {"actions":[{id,title,owner,status,due,priority,url,summary}]}. Empty = the cockpit says "setup needed" for this one.
+     The exact request to hand to whoever builds it is under Follow-Up Cockpit, Setup & Admin. */
+  COMMAND_CENTER_READ_URL: "",
   /* Where "Report a problem" sends people's reports. */
   OWNER_EMAIL: "habahri@gmail.com"
 };

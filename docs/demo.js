@@ -109,6 +109,28 @@
   G.reconnectAccount = async function () {};
   G.removeAccount = function () { extra = []; threads = threads.filter(function (t) { return !t.account; }); window.dispatchEvent(new CustomEvent("wyz-accounts")); };
 
+  /* sample WyzRent systems for the Follow-Up Cockpit. Hostaway, WhatsApp and Wafeq look connected, PriceLabs and the Command Center show "setup needed". */
+  var ymdOf = function (off) { var d = new Date(); d.setDate(d.getDate() + off); return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); };
+  var realFetch = window.fetch ? window.fetch.bind(window) : null;
+  var reply = function (o, code) { return Promise.resolve(new Response(JSON.stringify(o), { status: code || 200, headers: { "content-type": "application/json" } })); };
+  window.fetch = function (u, o) {
+    var url = typeof u === "string" ? u : (u && u.url) || "", p = url.replace(location.origin, "").split("?")[0];
+    if (p === "/api/hostaway") return reply({ viewer: true, owner: true, ready: true, date: ymdOf(0), listings: 12, city: "Dubai", month: ymdOf(0).slice(0, 7), inHouse: 5, occupancy: 78, revenue: 184000, currency: "AED", at: Date.now(),
+      checkIns: [{ guest: "Anna Keller", place: "Marina Gate 2BR", from: ymdOf(0), to: ymdOf(4), nights: 4 }, { guest: "Tariq Aziz", place: "JVC 1BR", from: ymdOf(0), to: ymdOf(2), nights: 2 }],
+      checkOuts: [{ guest: "Lena Ford", place: "Downtown 1BR", from: ymdOf(-3), to: ymdOf(0), nights: 3 }],
+      tomorrowIns: [{ guest: "Sam Weber", place: "Business Bay Studio", from: ymdOf(1), to: ymdOf(3), nights: 2 }],
+      attention: [{ guest: "Omar Haddad", place: "JVC 1BR", from: ymdOf(1), to: ymdOf(4), nights: 3, status: "pending" }] });
+    if (p === "/api/whatsapp" && (!o || !o.method || o.method === "GET")) return reply({ viewer: true, owner: true, ready: true, missing: [], chats: [
+      { wa: "971501112222", name: "Anna Keller", canReply: true, lastIn: now - 5 * H, msgs: [{ text: "Hi, can we check in two hours early today? The flight lands at 9.", at: now - 5 * H, dir: "in", wa: "971501112222" }], last: { text: "Hi, can we check in two hours early today? The flight lands at 9.", at: now - 5 * H, dir: "in" } },
+      { wa: "971503334444", name: "Cleaning team lead", canReply: false, lastIn: now - 4 * D, msgs: [{ text: "Please confirm the schedule for the Marina unit, thank you.", at: now - 3 * D, dir: "out", wa: "971503334444" }], last: { text: "Please confirm the schedule for the Marina unit, thank you.", at: now - 3 * D, dir: "out" } }] });
+    if (p === "/api/whatsapp") return reply({ ok: true });
+    if (p === "/api/wafeq") return reply({ viewer: true, owner: true, ready: true, at: Date.now(),
+      invoices: [{ id: "i1", number: "INV-1042", contact: "Marina Gate Owner LLC", due: ymdOf(-12), amount: 8400, currency: "AED", status: "sent", daysLate: 12, kind: "invoice" }],
+      bills: [{ id: "b1", number: "BILL-77", contact: "Cool Air Technical Services", due: ymdOf(1), amount: 14500, currency: "AED", status: "approved", daysLate: -1, kind: "bill" }, { id: "b2", number: "BILL-81", contact: "Fresh Linen Co", due: ymdOf(2), amount: 2300, currency: "AED", status: "approved", daysLate: -2, kind: "bill" }] });
+    if (p === "/api/pricelabs") return reply({ viewer: true, owner: true, ready: false, missing: ["PRICELABS_API_KEY"] });
+    return realFetch ? realFetch(u, o) : Promise.reject(new Error("offline"));
+  };
+
   /* the demo ribbon */
   function note(t) { var n = document.getElementById("demoNote"); if (n) { n.textContent = t; clearTimeout(note.t); note.t = setTimeout(function () { n.textContent = ""; }, 4000); } }
   document.addEventListener("DOMContentLoaded", function () {

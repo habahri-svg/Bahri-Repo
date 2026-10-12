@@ -194,3 +194,25 @@ Locked on purpose: api/_shared.js, api/fix.js, api/admin.js, api/seen.js, docs/c
 ## WhatsApp Business inbox (3.42)
 
 Needs a Meta WhatsApp Business app (Cloud API) and Upstash Redis. In Vercel add WHATSAPP_TOKEN, WHATSAPP_PHONE_ID, WHATSAPP_VERIFY_TOKEN and WHATSAPP_APP_SECRET, optional WHATSAPP_VIEWERS. In Meta, set the webhook to https://YOUR-SITE/api/whatsapp with the same verify word and subscribe to messages. Replies are free only within 24 hours of the customer's last message.
+
+## Daily Follow-Up Cockpit (3.44)
+The first tab. It scans your connected sources and shows what to answer, chase, delegate and do today. Full list of what it does, stage by stage, is in `CHANGELOG-FOLLOW-UP-COCKPIT.md`.
+
+New optional connections (each hidden or "Setup needed" until switched on, and only the owner and listed viewers can see them):
+
+| Source | Vercel variables | Notes |
+| --- | --- | --- |
+| Wafeq | `WAFEQ_API_KEY`, optional `WAFEQ_VIEWERS` | `api/wafeq.js`. Unpaid invoices and bills. Not tested against a live account. |
+| PriceLabs | `PRICELABS_API_KEY`, optional `PRICELABS_VIEWERS` | `api/pricelabs.js`. Units that need a pricing look. Not tested against a live account. |
+| Command Center (read) | none, set `COMMAND_CENTER_READ_URL` in `docs/config.js` | A GET address returning `{"actions":[{id,title,owner,status,due,priority,url,summary}]}`. The cockpit shows the exact request under Setup & Admin. |
+
+Hostaway and WhatsApp use the variables already described above. Hostaway now also reports tomorrow's arrivals and bookings still pending.
+
+## Going back to an earlier version
+A bar at the very top of the page has **Back** and **Forward** between published versions. Each version is a complete copy of the page: the live one in `docs/`, older ones in `docs/previous/<version>/`. They share your sign-in and your saved board.
+
+To archive a version before you publish the next one:
+1. Copy the page files into `docs/previous/v<version>/` (`index.html`, `app.js`, `connectors.js`, `business.js`, `cockpit.js`, `cockpit.css`, `fixbox.js`, `demo.js`, `microsoft.js`, `version.js`). In the copy, point the shared files at the parent folder: `config.js`, `versionswitch.js`, `manifest.webmanifest`, the icons and `msal-browser.min.js` become `../../<name>`. Leave the copy's own `version.js`.
+2. Add the copy's `<script src="../../versionswitch.js"></script>` after its `version.js`.
+3. Add an entry to `docs/versions.json`, before the live entry (the one with an empty `path`), for example `{ "version": "3.44", "path": "previous/v3.44/", "label": "..." }`.
+Then raise the number in `docs/version.js` and publish. The Fix box (owner) raises the number automatically but does not archive, so archive first if you want a way back.

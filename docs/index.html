@@ -15,6 +15,7 @@
 <script>/* demo (?demo): brand-new in-memory storage, so it never touches your real setup */
 if(/[?&]demo\b/.test(location.search)){try{var M={},S={getItem:function(k){return k in M?M[k]:null},setItem:function(k,v){M[k]=String(v)},removeItem:function(k){delete M[k]},clear:function(){M={}},key:function(i){return Object.keys(M)[i]||null},get length(){return Object.keys(M).length}};Object.defineProperty(window,"localStorage",{value:S,configurable:true})}catch(e){}}</script>
 <script>try{var L=JSON.parse(localStorage.getItem("wyz-look")||"{}");window.ownColCss=function(L){var n=(L.c1?"--navy:"+L.c1+";":"")+(L.cB?"--bg:"+L.cB+";--sky:color-mix(in srgb,"+L.cB+" 80%,"+(L.c1||"#104b70")+" 6%);":"")+(L.cP?"--panel:"+L.cP+";":"")+(L.cT?"--fg:"+L.cT+";--soft:color-mix(in srgb,"+L.cT+" 70%,#888);":""),hc=L.cH||L.c1,x=(hc?"--hero1:"+hc+";--hero2:color-mix(in srgb,"+hc+" 70%,#000);":"")+(L.c2?"--gold:"+L.c2+";":"");return ":root,:root[data-palette]{"+x+"}@media (prefers-color-scheme: light){:root:not([data-theme=dark]){"+n+"}}:root[data-theme=light]{"+n+"}"};if(L.c1||L.c2||L.cH||L.cB||L.cP||L.cT){var st=document.createElement("style");st.id="ownCol";st.textContent=window.ownColCss(L);document.head.appendChild(st)}if(L.p)document.documentElement.setAttribute("data-palette",L.p);if(L.m==="light"||L.m==="dark")document.documentElement.setAttribute("data-theme",L.m)}catch(e){}</script>
+<link rel="stylesheet" href="cockpit.css">
 <style>
 /* Layout: one column run sheet. Header, three tabs (Today, Settings, Install). Colour lives in status dots only. WYZ navy, gold, sky. */
 :root{
@@ -309,13 +310,19 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
   </header>
 
   <nav class="tabs" role="tablist" aria-label="Sections">
-    <button class="tab" role="tab" id="t-today" aria-selected="true" aria-controls="p-today" type="button">Today</button>
+    <button class="tab" role="tab" id="t-cockpit" aria-selected="true" aria-controls="p-cockpit" type="button">Follow-Up Cockpit</button>
+    <button class="tab" role="tab" id="t-today" aria-selected="false" aria-controls="p-today" type="button">Today</button>
     <button class="tab" role="tab" id="t-conn" aria-selected="false" aria-controls="p-conn" type="button">Settings</button>
     <button class="tab" role="tab" id="t-inst" aria-selected="false" aria-controls="p-inst" type="button">Install on phone or computer</button>
   </nav>
 
+  <!-- DAILY FOLLOW-UP COCKPIT (the first screen) -->
+  <section id="p-cockpit" role="tabpanel" aria-labelledby="t-cockpit" class="wrap" style="gap:16px">
+    <div id="cpRoot"><p class="sub">Loading your follow-up cockpit...</p></div>
+  </section>
+
   <!-- TODAY -->
-  <section id="p-today" role="tabpanel" aria-labelledby="t-today" class="wrap" style="gap:16px">
+  <section id="p-today" role="tabpanel" aria-labelledby="t-today" hidden class="wrap" style="gap:16px">
     <div class="card note" id="report" hidden><div class="pad">
       <div class="headrow"><h2 id="repTitle" style="flex:1 1 200px"></h2><button class="btn small ghost" type="button" id="repClose">Close</button></div>
       <div id="repBody"></div>
@@ -731,6 +738,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="config.js"></script>
 <script src="version.js"></script>
+<script src="versionswitch.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="microsoft.js"></script>
 <script src="connectors.js"></script>
@@ -738,5 +746,6 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
 <script src="app.js"></script>
 <script src="fixbox.js"></script>
 <script src="business.js"></script>
+<script src="cockpit.js"></script>
 </body>
 </html>

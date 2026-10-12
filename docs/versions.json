@@ -1,0 +1,6 @@
+{
+  "versions": [
+    { "version": "3.43", "path": "previous/v3.43/", "label": "Before the Follow-Up Cockpit" },
+    { "version": "3.44", "path": "", "label": "Daily Follow-Up Cockpit" }
+  ]
+}

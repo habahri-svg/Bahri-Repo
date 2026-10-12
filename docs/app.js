@@ -34,7 +34,7 @@ function persist(){
 function restore(snap){if(!snap)return;if(snap.board)board=snap.board;if(snap.state)state=Object.assign({done:{},snooze:{},tasks:[]},snap.state);try{renderBoard();renderLinks();renderTasks();applyOrder()}catch(e){}}
 
 /* ---------- tabs ---------- */
-const tabs=[["t-today","p-today"],["t-conn","p-conn"],["t-inst","p-inst"]];
+const tabs=[["t-cockpit","p-cockpit"],["t-today","p-today"],["t-conn","p-conn"],["t-inst","p-inst"]];
 function show(tid){tabs.forEach(([t,p])=>{const on=t===tid;$(t).setAttribute("aria-selected",String(on));$(p).hidden=!on})}
 tabs.forEach(([t])=>$(t).onclick=()=>show(t));
 
@@ -663,7 +663,7 @@ function slimThread(t){const ms=t.messages||[];const last=ms[ms.length-1]||{};co
   const mine=(last.labelIds||[]).includes("SENT");const lastOther=[...ms].reverse().find(m=>!(m.labelIds||[]).includes("SENT"))||{};
   const days=last.date?Math.floor((Date.now()-Date.parse(last.date))/86400000):null;
   const myLast=[...ms].reverse().find(m=>(m.labelIds||[]).includes("SENT"));
-  return {account:t.account||"",mineAt:myLast&&myLast.date||"",id:t.id,from:mine?(lastOther.sender||first.sender||""):(last.sender||first.sender||""),subject:first.subject||last.subject||"(No subject)",snippet:(last.snippet||"").replace(/&#39;/g,"'").replace(/&quot;/g,'"').replace(/&amp;/g,"&").slice(0,280),date:last.date||first.date||"",count:t.messageCount||ms.length,unread:(last.labelIds||[]).includes("UNREAD"),important:(last.labelIds||[]).includes("IMPORTANT"),url:t.viewUrl||last.viewUrl||"",lastId:last.id||t.id,lastFromMe:mine,lastTo:mine?(last.toRecipients||[]).slice(0,3):[],daysSinceLast:days,auto:(last.labelIds||[]).some(l=>/^CATEGORY_(PROMOTIONS|SOCIAL|UPDATES|FORUMS)$/.test(l))}}
+  return {account:t.account||"",mineAt:myLast&&myLast.date||"",id:t.id,from:mine?(lastOther.sender||first.sender||""):(last.sender||first.sender||""),subject:first.subject||last.subject||"(No subject)",snippet:(last.snippet||"").replace(/&#39;/g,"'").replace(/&quot;/g,'"').replace(/&amp;/g,"&").slice(0,280),date:last.date||first.date||"",count:t.messageCount||ms.length,unread:(last.labelIds||[]).includes("UNREAD"),important:(last.labelIds||[]).includes("IMPORTANT"),url:t.viewUrl||last.viewUrl||"",lastId:last.id||t.id,lastFromMe:mine,lastTo:mine?(last.toRecipients||[]).slice(0,3):[],daysSinceLast:days,auto:(last.labelIds||[]).some(l=>/^CATEGORY_(PROMOTIONS|SOCIAL|UPDATES|FORUMS)$/.test(l)),att:Math.max((last.files||[]).filter(f=>f&&f.name&&!(f.cid&&/^image\//.test(f.type||"")&&(!f.size||f.size<60000))).length,(last.attachments||[]).length)}}
 async function loadMail(force){
   if(!mcp||busy)return;busy=true;setFresh("load","Reading your inbox and sent mail");
   try{

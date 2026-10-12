@@ -56,8 +56,9 @@ async function numbers() {
   const city = String(process.env.HOSTAWAY_CITY || "").trim().toLowerCase();
   const listings = (await all("/listings")).filter(function (l) { return !city || String(l.city || "").toLowerCase().indexOf(city) >= 0; });
   const ids = new Set(listings.map(function (l) { return l.id; }));
-  const res = (await all("/reservations?arrivalEndDate=" + end + "&departureStartDate=" + m0 + "&sortOrder=arrivalDate"))
-    .filter(function (r) { return !SKIP.test(String(r.status || "")) && (!city || ids.has(r.listingMapId)); });
+  const raw = (await all("/reservations?arrivalEndDate=" + end + "&departureStartDate=" + m0 + "&sortOrder=arrivalDate"))
+    .filter(function (r) { return !city || ids.has(r.listingMapId); });
+  const res = raw.filter(function (r) { return !SKIP.test(String(r.status || "")); });
   const pick = function (r) { return { guest: String(r.guestName || r.guestFirstName || "Guest").slice(0, 40), place: String(r.listingName || r.listingMapId || "").slice(0, 60), from: r.arrivalDate, to: r.departureDate, nights: r.nights || nightsIn(r.arrivalDate, r.departureDate, r.arrivalDate, r.departureDate) }; };
   const paid = res.filter(function (r) { return !/owner/i.test(String(r.status || "")); });
   const ins = res.filter(function (r) { return r.arrivalDate === today; }), outs = res.filter(function (r) { return r.departureDate === today; });
@@ -71,7 +72,12 @@ async function numbers() {
   });
   const cur = Object.keys(byCur).sort(function (a, b) { return byCur[b] - byCur[a]; })[0] || "AED", revenue = byCur[cur] || 0;
   const occ = listings.length ? Math.round(100 * booked / (listings.length * days)) : 0;
-  return { ready: true, date: today, listings: listings.length, checkIns: ins.map(pick), checkOuts: outs.map(pick), inHouse: house.length, occupancy: occ, revenue: Math.round(revenue), currency: cur || "AED", month: today.slice(0, 7), city: city || "", at: Date.now() };
+  /* for the Follow-Up Cockpit: arrivals tomorrow, and bookings still pending or unconfirmed that arrive within a week */
+  const tomorrow = dubaiDay(1), week = dubaiDay(7);
+  const tomorrowIns = res.filter(function (r) { return r.arrivalDate === tomorrow; });
+  const attention = raw.filter(function (r) { return /pending|inquir|awaiting|hold|unconfirmed/i.test(String(r.status || "")) && r.arrivalDate >= today && r.arrivalDate <= week; })
+    .map(function (r) { const o = pick(r); o.status = String(r.status || ""); return o; }).slice(0, 15);
+  return { ready: true, date: today, listings: listings.length, checkIns: ins.map(pick), checkOuts: outs.map(pick), tomorrowIns: tomorrowIns.map(pick), attention: attention, inHouse: house.length, occupancy: occ, revenue: Math.round(revenue), currency: cur || "AED", month: today.slice(0, 7), city: city || "", at: Date.now() };
 }
 
 module.exports = async function handler(req, res) {
