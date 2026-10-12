@@ -28,7 +28,7 @@
     var back = el("button", "btn", "← Back to Today"); back.type = "button"; back.id = "pageBack"; back.onclick = function () { show("t-today"); };
     var rf = el("button", "btn", "↻ Refresh"); rf.type = "button"; rf.id = "pageRefresh"; rf.title = "Reload your email, calendar and tasks";
     rf.onclick = function () { var b = $("refresh"); if (b) b.click(); rf.textContent = "Refreshing..."; setTimeout(function () { rf.textContent = "↻ Refresh"; }, 2500); };
-    head.append(h, rf, back); hello.parentNode.insertBefore(head, hello);
+    head.append(h, rf); if (window.WYZ_UNDO) head.append(window.WYZ_UNDO.mkButtons()); head.append(back); hello.parentNode.insertBefore(head, hello);
     return head;
   }
   function setPage(tid) {

@@ -2,8 +2,8 @@
    shows up straight away. The saved copy is only a fallback when there is no internet. Email, Google and AI
    calls are never saved. */
 "use strict";
-const CACHE = "wyz-shell-v10";
-const SHELL = ["./", "app.js", "connectors.js", "library.js", "pages.js", "revenue.js", "tidy.js", "config.js", "versionswitch.js", "version.js", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
+const CACHE = "wyz-shell-v11";
+const SHELL = ["./", "app.js", "connectors.js", "library.js", "pages.js", "undo.js", "revenue.js", "tidy.js", "config.js", "versionswitch.js", "version.js", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(SHELL); }).then(function () { return self.skipWaiting(); }));
 });

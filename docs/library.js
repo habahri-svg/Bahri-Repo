@@ -364,6 +364,7 @@
       await delMany("files", rows.filter(function (r) { return r.src !== "lovable"; }).map(function (r) { return r.key; }));
       var gone = {}; rows.forEach(function (r) { gone[r.key] = 1; delete SEL[r.key]; r.trashedAt = now; });
       all = all.filter(function (f) { return !gone[f.key]; }); trashRows = rows.concat(trashRows);
+      try { window.WYZ_UNDO && window.WYZ_UNDO.record({ kind: "lib", act: "trash", keys: rows.map(function (r) { return r.key; }), lov: rows.filter(function (r) { return r.src === "lovable"; }).map(function (r) { var c = Object.assign({}, r); delete c.trashedAt; return c; }), label: "Moved " + rows.length + " file" + (rows.length > 1 ? "s" : "") + " to Trash" }); } catch (e) {}
       note.textContent = rows.length + " file" + (rows.length > 1 ? "s" : "") + " moved to Trash. Open Trash to restore them."; draw();
     }
     async function restore(rows) {
@@ -371,6 +372,7 @@
       await delMany("trash", rows.map(function (r) { return r.key; }));
       var back = {}; rows.forEach(function (r) { back[r.key] = 1; delete SEL[r.key]; var c = Object.assign({}, r); delete c.trashedAt; all.push(c); });
       trashRows = trashRows.filter(function (f) { return !back[f.key]; });
+      try { window.WYZ_UNDO && window.WYZ_UNDO.record({ kind: "lib", act: "restore", keys: rows.map(function (r) { return r.key; }), lov: rows.filter(function (r) { return r.src === "lovable"; }).map(function (r) { var c = Object.assign({}, r); delete c.trashedAt; return c; }), label: "Restored " + rows.length + " file" + (rows.length > 1 ? "s" : "") }); } catch (e) {}
       note.textContent = rows.length + " file" + (rows.length > 1 ? "s" : "") + " restored."; draw();
     }
     async function forever(rows) {
@@ -422,6 +424,27 @@
     }
     draw();
   }
+
+  /* Trash moves by key, so Undo and Redo (undo.js) can replay them */
+  function getMany(store, keys) {
+    return openDb().then(function (d) { return new Promise(function (ok, no) {
+      var t = d.transaction(store, "readonly"), st = t.objectStore(store), out = [];
+      keys.forEach(function (k) { var r = st.get(k); r.onsuccess = function () { if (r.result) out.push(r.result); }; });
+      t.oncomplete = function () { ok(out); }; t.onerror = function () { no(t.error); };
+    }); });
+  }
+  async function dbTrash(keys, lov) {
+    var byKey = {}; (await getMany("files", keys)).forEach(function (f) { byKey[f.key] = f; }); (lov || []).forEach(function (r) { byKey[r.key] = r; });
+    var recs = keys.map(function (k) { return byKey[k]; }).filter(Boolean), now = Date.now();
+    await putMany("trash", recs.map(function (r) { return { key: r.key, rec: r, trashedAt: now, perm: 0 }; }));
+    await delMany("files", recs.filter(function (r) { return r.src !== "lovable"; }).map(function (r) { return r.key; }));
+  }
+  async function dbRestore(keys) {
+    var back = (await getMany("trash", keys)).filter(function (t) { return !t.perm && t.rec; });
+    await putMany("files", back.filter(function (t) { return t.rec.src !== "lovable"; }).map(function (t) { var c = Object.assign({}, t.rec); delete c.trashedAt; return c; }));
+    await delMany("trash", back.map(function (t) { return t.key; }));
+  }
+  window.WYZ_LIB = { trashKeys: async function (keys, lov) { await dbTrash(keys, lov); await render(); }, restoreKeys: async function (keys) { await dbRestore(keys); await render(); } };
 
   /* ---------- the card ---------- */
   var card = null, busy = false;
