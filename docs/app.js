@@ -34,19 +34,9 @@ function persist(){
 function restore(snap){if(!snap)return;if(snap.board)board=snap.board;if(snap.state)state=Object.assign({done:{},snooze:{},tasks:[]},snap.state);try{renderBoard();renderLinks();renderTasks();applyOrder()}catch(e){}}
 
 /* ---------- tabs ---------- */
-const tabs=[["t-today","p-today"],["t-ops","p-ops"],["t-conn","p-conn"],["t-inst","p-inst"]];
-/* 3.44: each tab is its own page with its own link (#/work, #/operations, #/setup, #/install). Back and Forward work. */
-const ROUTES={"t-today":["work","Daily Work"],"t-ops":["operations","WYZ Rent Operations"],"t-conn":["setup","Setup & Admin"],"t-inst":["install","Install"]};
-const routeTab=()=>{const m=location.hash.match(/^#\/([a-z]+)/);if(!m)return null;const k=Object.keys(ROUTES).find(t=>ROUTES[t][0]===m[1]);return k||null};
-function show(tid,noPush){
-  if(!$(tid))tid="t-today";
-  tabs.forEach(([t,p])=>{const on=t===tid;$(t).setAttribute("aria-selected",String(on));$(p).hidden=!on});
-  const r=ROUTES[tid];try{document.title=r[1]+" · "+((window.WYZ_CONFIG&&window.WYZ_CONFIG.APP_NAME)||"Execution Page")}catch(e){}
-  if(!noPush&&r&&location.hash!=="#/"+r[0]){try{history.pushState({tab:tid},"",location.pathname+location.search+"#/"+r[0])}catch(e){}window.scrollTo(0,0)}
-}
+const tabs=[["t-today","p-today"],["t-conn","p-conn"],["t-inst","p-inst"]];
+function show(tid){tabs.forEach(([t,p])=>{const on=t===tid;$(t).setAttribute("aria-selected",String(on));$(p).hidden=!on})}
 tabs.forEach(([t])=>$(t).onclick=()=>show(t));
-window.addEventListener("popstate",()=>{show(routeTab()||"t-today",true)});
-{const rt=routeTab();if(rt)show(rt,true)}
 
 /* ---------- install tab ---------- */
 $("link").value=PAGE_URL;
@@ -215,7 +205,7 @@ function stepDefs(){
     })(),
     {name:"AI assistant: Claude or ChatGPT",done:!!sample||!!chatAI()||!!state.skipAi,
       more:sample?null:[["Use my ChatGPT account (no key)",()=>useChat("chatgpt")],["Use my Claude account (no key)",()=>useChat("claude")]],
-      desc:sample?(Connectors.ai.label()+(Connectors.ai.mode()==="shared"?" is on automatically with your Google sign-in.":" is on with your own key (stored on this device only).")+" Change it under Setup & Admin, Personalise."):chatAI()?"Using your own "+CHAT[chatAI()].name+" account, no key needed. Write it for me and Ask open "+CHAT[chatAI()].name+" with the request filled in, then you paste the answer back. A key (below) makes it fully automatic.":"Without an AI, your inbox is sorted by simple rules. Connect Claude or ChatGPT for smarter sorting, drafts and Instruct AI. Each connects with an API key and stays on this device.",
+      desc:sample?(Connectors.ai.label()+(Connectors.ai.mode()==="shared"?" is on automatically with your Google sign-in.":" is on with your own key (stored on this device only).")+" Change it under Settings, Personalise."):chatAI()?"Using your own "+CHAT[chatAI()].name+" account, no key needed. Write it for me and Ask open "+CHAT[chatAI()].name+" with the request filled in, then you paste the answer back. A key (below) makes it fully automatic.":"Without an AI, your inbox is sorted by simple rules. Connect Claude or ChatGPT for smarter sorting, drafts and Instruct AI. Each connects with an API key and stays on this device.",
       btn:["Add Claude key",()=>askKey("claude")],btn2:sample||state.skipAi?["Add ChatGPT key",()=>askKey("chatgpt")]:null},
     Object.assign({name:"Your Claude research"},imp("claude","Claude",CLAUDE_EXPORT,"f-claude","1. Tap Open Claude export page. 2. Under Your data, tap Export data and confirm. 3. Claude emails you a download link (usually within minutes). 4. Download the .zip from that email, no need to unzip it. 5. Come back here, tap Import file and choose it.")),
     Object.assign({name:"Your ChatGPT research"},imp("chatgpt","ChatGPT",GPT_EXPORT,"f-chatgpt","1. Tap Open ChatGPT export page and sign in if asked. 2. In Data controls, tap Export data, then Confirm export. 3. OpenAI emails you a download link. 4. Download the .zip from that email, no need to unzip it. 5. Come back here, tap Import file and choose it. Repeat weekly to keep it current.")),
@@ -290,7 +280,7 @@ function onbRender(){
     p("Both inboxes, calendars and files show together. Every reply goes out from the account the email came to, and new emails let you pick which one to send from.");
     if(ex.length)p("✓ Added: "+ex.map(x=>x.email).join(", "),"status");
     acts.append(onbBtn("Add Google account",async function(){this.disabled=true;await addAccount("google");onbRender()},"solid"),onbBtn("Add Microsoft account",async function(){this.disabled=true;await addAccount("ms");onbRender()},"solid"),onbBtn(ex.length?"Next":"Later",()=>{if(!ex.length){state.skipAcct=1;persist()}onbGo(onbI+1)},ex.length?"":"ghost"));
-    p("Later is fine. It stays under Setup & Admin.","status");
+    p("Later is fine. It stays under Settings.","status");
   }else if(k==="apps"){
     $("onbTitle").textContent="Your dashboard and everyday apps";
     p("Put the "+BR.co+" dashboard and the apps you use every day one tap away. Each one opens so you can sign in, then stays on your Quick links. Choose any, or tap Later.");
@@ -372,7 +362,7 @@ function onbRender(){
     const n=((research.chatgpt&&research.chatgpt.convs)||[]).length+((research.claude&&research.claude.convs)||[]).length;
     line(n>0,n?"Research: "+n+" conversations imported":"Research: not imported yet");
     if(DASH)line(!!state.shareDash,state.shareDash?"Company dashboard: sharing a daily summary":"Company dashboard: not sharing");
-    p("When you want more, everything else is in Setup & Admin, Your data sources: a second email account, your to-do list, research, the "+BR.co+" dashboard and your everyday apps.");
+    p("When you want more, everything else is in Settings, Your data sources: a second email account, your to-do list, research, the "+BR.co+" dashboard and your everyday apps.");
     acts.append(onbBtn("Open my page",()=>onbClose(true),"solid"));
   }
   const f=body.querySelector("input")||acts.querySelector("button");if(f)setTimeout(()=>f.focus(),30);
@@ -525,7 +515,7 @@ function aiOptions(){
 /* Everything stays on this page. Another site opens only when the person taps a button that says so. */
 function outsideOffer(opt,text){
   const box=el("div","");
-  box.append(el("p","status",opt.kind==="link"?opt.name+" opens on its own site.":"No AI is connected yet, so it can't answer here. Setup needed: open Setup & Admin, then AI assistant."));
+  box.append(el("p","status",opt.kind==="link"?opt.name+" opens on its own site.":"No AI is connected on this page yet, so it can't answer here. Connect one in Settings (an API key, or the company AI) and answers appear right here."));
   const b=el("button","btn small","Open in "+opt.name+" instead");b.type="button";b.onclick=()=>{box.replaceChildren(el("p","status",openOutside(opt,text)))};box.append(b);
   return box;
 }
@@ -715,7 +705,7 @@ async function triage(sig,force){
     state.claudeOk=1;board={sig,v2:1,items,headline:String(r&&r.headline||""),at:Date.now()};persist();renderSetup();renderBoard();setFresh("ok");
   }catch(err){
     const c=err&&err.code;
-    {const hb=heuristicBoard(sig,false);hb.headline=(c==="not_granted"?"The AI needs attention (Setup & Admin), so your inbox is sorted by simple rules for now. ":c==="rate_limited"?"Claude is busy, so your inbox is sorted by simple rules for now. ":"Couldn't use Claude just now ("+clip((err&&err.message)||"unknown reason",110)+"), so your inbox is sorted by simple rules. ")+hb.headline;board=hb}
+    {const hb=heuristicBoard(sig,false);hb.headline=(c==="not_granted"?"Your Claude API key was rejected, so your inbox is sorted by simple rules. ":c==="rate_limited"?"Claude is busy, so your inbox is sorted by simple rules for now. ":"Couldn't use Claude just now ("+clip((err&&err.message)||"unknown reason",110)+"), so your inbox is sorted by simple rules. ")+hb.headline;board=hb}
     renderBoard();setFresh("ok");
   }
 }
@@ -740,7 +730,7 @@ function heuristicBoard(sig,final){
     if(t.unread||t.important){nReply++;items.push({id:t.id,st:"reply",g:t.important&&t.unread?3:2,title:"Reply to "+who+": "+t.subject,summary:t.snippet});return}
     items.push({id:t.id,st:"work",g:1,title:t.subject,summary:t.snippet||"Check whether this needs action."});
   });
-  const hl=(nReply?nReply+" email"+(nReply>1?"s":"")+" to reply to":"Nothing waiting for a reply")+(nFollow?" and "+nFollow+" to chase":"")+". Connect an AI in Setup & Admin for smarter sorting.";
+  const hl=(nReply?nReply+" email"+(nReply>1?"s":"")+" to reply to":"Nothing waiting for a reply")+(nFollow?" and "+nFollow+" to chase":"")+". Add a Claude API key in the setup steps for smarter sorting.";
   const b={sig,items,headline:hl,at:Date.now()};if(final)b.v2=1;return b;
 }
 function templateDraft(i,chase){
@@ -1079,6 +1069,7 @@ document.addEventListener("keydown",e=>{
   if(e.key==="ArrowRight"&&!$("thrNext").disabled)thrStep(1);
 });
 async function openThread(id,o){
+  if(thr.counting){thrNote("Your email is about to be sent. Press Undo to stop it, or wait a few seconds.");return}
   o=o||{};const t=tById(id)||{};
   if(thr.counting&&!thr.bg){thr.bg=true;sendBar(thr,"tick")}
   thr={id,msgs:[],item:o.item||{id,st:"reply",title:t.subject||"",summary:t.snippet||""},armed:0,done:false,mode:"reply",files:[],autoCc:[]};$("thrCc").value="";
@@ -1130,7 +1121,7 @@ function drawSuggest(){
     a.append(use,cp);c.append(a);
   }else if(S.state==="loading"){c.append(el("p","status","One moment..."))}
   else if(S.state==="error"){c.append(el("p","status err",S.error))}
-  else{c.append(el("p","status",sample?"Pick an AI and it writes an answer here, ready for you to edit.":"No AI is connected yet. Use a free chat, or connect Claude or ChatGPT under Setup & Admin."))}
+  else{c.append(el("p","status",sample?"Pick an AI and it writes an answer here, ready for you to edit.":"No AI is connected yet. Use a free chat, or connect Claude or ChatGPT under Settings."))}
   const row=el("div","acts");row.append(el("span","status","Write it with:"));
   aiOptions().filter(o=>o.kind==="builtin"&&o.ready).forEach(o=>{
     const b=el("button","chip",o.name);b.type="button";b.setAttribute("aria-pressed",String(S.state==="ready"&&S.prov===o.id));
@@ -1413,7 +1404,7 @@ async function thrDeliver(kind,a,T){
       persist();renderBoard()}
     else if(r.payload&&r.payload.viewUrl){const l=el("a","btn small","Open draft");l.href=r.payload.viewUrl;l.target="_blank";l.rel="noopener";$("thrSt").append(" ",l)}
   }catch(e){
-    setSendButtons(false);btn.disabled=false;btn.textContent=old==="Sending..."?"Send":"Save to Gmail drafts (not sent)";st.className="status err";
+    setSendButtons(false);btn.disabled=false;btn.textContent=old==="Sending..."?"Send":"Save to Gmail drafts";st.className="status err";
     st.textContent=e&&e.code==="consent_required"?"Google didn't allow sending. Sign out and back in, and tick every box.":"Couldn't "+(kind==="send"?"send":"save")+" it ("+clip((e&&e.message)||"unknown reason",100)+"). Check Gmail before trying again."
   }
 }
@@ -1435,7 +1426,7 @@ async function thrCheck(){
   out.hidden=false;
   if(!$("thrText").value.trim()){out.replaceChildren(el("p","","Write the email first, then check it."));return}
   const local=sendChecks(a);
-  if(!sample){out.replaceChildren(el("p","",local.length?local.join(" "):"No obvious problems found. Connect Claude or ChatGPT under Setup & Admin for a deeper check."));return}
+  if(!sample){out.replaceChildren(el("p","",local.length?local.join(" "):"No obvious problems found. Connect Claude or ChatGPT under Settings for a deeper check."));return}
   btn.disabled=true;out.replaceChildren(el("p","status","Reading your email..."));
   try{
     const r=await creditFallback(prov=>sample.json("Check this email before "+(myName||"the sender")+" sends it. Look for: wrong or missing facts compared with the conversation, a tone that is too blunt or too soft for the situation, unclear asks, promises that were not meant, typos, a missing attachment, and anything that should be left out. Be strict but brief.\n\n"+(thr.mode==="new"?"To: "+a.to.join(", ")+"\nSubject: "+a.subject+"\n":"The conversation so far (latest last):\n"+threadBlock(thr.msgs).slice(-3500)+"\n\n")+"The email they are about to send:\n"+$("thrText").value.slice(0,4000)+"\n\nReturn JSON only: {\"ok\": true or false, \"issues\": [ short plain sentences, max 5 ], \"better\": a corrected version of the email only if you found real problems, else an empty string}. No em dashes.",{cache:false,provider:prov}));
@@ -1733,9 +1724,7 @@ function renderBoard(){
   $("headline").textContent=board.headline||"";
   const itemsAll=allItems().slice().sort((a,b)=>ORDER.indexOf(a.st)-ORDER.indexOf(b.st)||backFirst(b)-backFirst(a)||b.g-a.g);
   try{drawCoChips(itemsAll)}catch(e){}
-  const items0=coFlt?itemsAll.filter(i=>coOf(i)===coFlt):itemsAll;
-  const items=window.wyzCatFlt&&window.wyzCatOf?items0.filter(i=>window.wyzCatOf(i)===window.wyzCatFlt):items0;
-  try{if(window.wyzFilterNote)window.wyzFilterNote(host)}catch(e){}
+  const items=coFlt?itemsAll.filter(i=>coOf(i)===coFlt):itemsAll;
   const vis=items.filter(i=>showOff||!isOff(i));
   // filters
   const f=$("filters");f.replaceChildren();
@@ -1751,11 +1740,10 @@ function renderBoard(){
   if(!vis.length&&(board.items||[]).length)host.append(el("p","sub","All clear. Everything is done or snoozed."));
   applyCol();updateBadge();
   try{renderTop3();renderHandoffs();renderOwed()}catch(e){}
-  try{if(window.wyzCockpit)window.wyzCockpit()}catch(e){}
 }
 /* select several emails and act on them together */
 let selOn=false;const sel=new Set();
-function visibleIds(){return allItems().filter(i=>showOff||!isOff(i)).filter(i=>!flt||i.st===flt).filter(i=>!coFlt||coOf(i)===coFlt).filter(i=>!(window.wyzCatFlt&&window.wyzCatOf)||window.wyzCatOf(i)===window.wyzCatFlt).map(i=>i.id)}
+function visibleIds(){return allItems().filter(i=>showOff||!isOff(i)).filter(i=>!flt||i.st===flt).filter(i=>!coFlt||coOf(i)===coFlt).map(i=>i.id)}
 async function bulkArchive(btn){
   const ids=[...sel];let ok=0,bad=0,first=null;btn.disabled=true;
   for(let n=0;n<ids.length;n++){
@@ -1808,7 +1796,7 @@ async function draftOne(i){
 async function draftAll(auto){
   const st=$("draftAllSt"),btn=$("draftAll");
   if(drafting)return;
-  if(!sample){st.className="status err";st.textContent="Connect Claude or ChatGPT first, under Setup & Admin.";return}
+  if(!sample){st.className="status err";st.textContent="Connect Claude or ChatGPT first, under Settings.";return}
   const todo=allItems().filter(i=>i.st==="reply"&&!isOff(i)&&!(state.drafted||{})[i.id]).slice(0,8);
   if(!todo.length){if(!auto){st.className="status";st.textContent="Nothing needs a new draft. Every reply-today email already has one or is done."}return}
   drafting=true;btn.disabled=true;let ok=0,bad=0,stop="";
@@ -1837,7 +1825,6 @@ function itemRow(i){
   const a=el("div","acts");
   if(t.url){const o=el("a","btn small","Open in Gmail");o.href=t.url;o.target="_blank";o.rel="noopener";a.append(o)}
   {const rd=el("button","btn small","Read thread");rd.type="button";rd.onclick=()=>openThread(i.id,{item:i});a.append(rd)}
-  try{if(window.wyzRowExtras)window.wyzRowExtras("mail",i,m,a)}catch(e){}
   if(i.st==="reply"||i.st==="follow"||i.st==="work"||i.st==="wait"){const chase=i.st==="follow"||i.st==="wait";
     const q=el("button","btn small solid",chase?"Chase here":"Reply here");q.type="button";q.title="Write and send the answer right here";q.onclick=()=>draftFor(i,m,q);a.append(q);
     const d=el("button","btn small",chase?"Open to chase":"Open to reply");d.type="button";d.onclick=()=>openThread(i.id,{item:i,draft:true});a.append(d)}
@@ -1873,7 +1860,7 @@ async function draftFor(i,host,btn){
     const lastSent=(last.labelIds||[]).includes("SENT");const to=lastSent?addrOf((last.toRecipients||[])[0]||t.from):addrOf(last.sender||t.from);const subj=(t.subject||"").match(/^re:/i)?t.subject:"Re: "+(t.subject||"");
     try{const r=await mcp.callTool("Gmail","create_draft",{to:[to],subject:subj,body:ta.value,replyToMessageId:last.id||t.lastId});
       const p=r.payload||{};sv.textContent="Saved to drafts";if(p.viewUrl){const o=el("a","btn small","Open draft");o.href=p.viewUrl;o.target="_blank";o.rel="noopener";acts.append(o)}}
-    catch(e){sv.disabled=false;sv.textContent="Save to Gmail drafts (not sent)";st.textContent=e&&e.code==="not_in_manifest"?"Saving drafts is turned off for this page. Copy the text instead.":"Couldn't confirm the save. Check your Gmail drafts before trying again.";st.className="status err"}
+    catch(e){sv.disabled=false;sv.textContent="Save to Gmail drafts";st.textContent=e&&e.code==="not_in_manifest"?"Saving drafts is turned off for this page. Copy the text instead.":"Couldn't confirm the save. Check your Gmail drafts before trying again.";st.className="status err"}
   };
   const cp=el("button","btn small","Copy text");cp.type="button";cp.onclick=()=>navigator.clipboard.writeText(ta.value).then(()=>cp.textContent="Copied").catch(()=>{ta.focus();ta.select()});
   const wa=el("a","btn small","Send on WhatsApp");wa.target="_blank";wa.rel="noopener";wa.href="#";wa.onclick=()=>{wa.href=waLink(ta.value)};wa.onmousedown=wa.ontouchstart=()=>{wa.href=waLink(ta.value)};
@@ -2103,7 +2090,6 @@ function renderTasks(){
     const dd=dueOf({t});const over=dd!=="9999-99-99"&&dd<todayKey();const meta=[k==="td"?"Todoist":"My list",priOf({k,t})>1?"High priority":"",t.src||"",dd!=="9999-99-99"?(over?"Overdue, was due ":"Due ")+niceDay(dd):""].filter(Boolean).join(" · ");const mm=el("span","m",meta);if(over)mm.style.color="var(--d-reply)";m.append(mm);
     const a=el("div","acts");const b=el("button","btn small ghost","Mark done");b.type="button";
     b.onclick=k==="td"?()=>completeTodoist(t,b):()=>{t.done=1;persist();renderTasks()};
-    try{if(window.wyzRowExtras)window.wyzRowExtras("task",t,m,a)}catch(e){}
     a.append(askDrop("Help me get this task done: "+t.t+(t.due?" (due "+t.due+")":"")+". Break it into concrete steps and tell me what to do first.","Task: "+t.t+(t.due?" (due "+t.due+")":"")),b);m.append(a);r.append(m);host.append(r);
   });
   const done=(state.tasks||[]).filter(t=>t.done).length;$("taskNote").textContent=done?done+" done on your list.":"";
@@ -2188,14 +2174,14 @@ let fileAI={name:"",load:null,cache:null,hist:[]};
 function openFileAI(name,load){
   fileAI={name,load,cache:null,hist:[]};
   $("fileAITitle").textContent=name;$("fileAIQ").value="";$("fileAIOut").replaceChildren();
-  $("fileAINote").textContent=sample?"The AI reads this file when you ask. Nothing is saved.":"Connect Claude first, under Setup & Admin.";
+  $("fileAINote").textContent=sample?"The AI reads this file when you ask. Nothing is saved.":"Connect Claude first, under Settings.";
   const c=$("fileAIChips");c.replaceChildren();
   [["Summarize","Summarize this in five short lines."],["Key dates and amounts","List every date, deadline and amount of money in this file."],["What must I do?","What do I need to do or decide because of this file?"],["Anything risky?","Point out anything unusual, risky or missing that I should check before agreeing."],["Contract check","If this is a contract or offer: who the parties are, the term, fees and payment dates, how to end it, penalties, and anything one-sided against me. If it isn't one, say what kind of document it is."],["Draft my reply","Write a short email reply about this file that I can edit, covering what needs answering or confirming."]].forEach(([l,v])=>{const b=el("button","chip",l);b.type="button";b.onclick=()=>{$("fileAIQ").value=v;runFileAI()};c.append(b)});
   $("fileAI").hidden=false;$("fileAIQ").focus();
 }
 async function runFileAI(){
   const q=$("fileAIQ").value.trim(),out=$("fileAIOut");if(!q){$("fileAIQ").focus();return}
-  if(!sample){out.replaceChildren(el("p","status err","No AI is connected. Connect Claude under Setup & Admin."));return}
+  if(!sample){out.replaceChildren(el("p","status err","No AI is connected. Connect Claude under Settings."));return}
   const go=$("fileAIGo");go.disabled=true;
   try{
     if(!fileAI.cache){out.replaceChildren(el("p","status","Opening the file..."));fileAI.cache=await fileAI.load()}
@@ -2501,7 +2487,7 @@ $("aiTest").onclick=async()=>{
   const rows=[["claude","Claude"],["chatgpt","ChatGPT"]],res={};
   for(const [id,name] of rows){
     const line=el("p","status");out.append(line);
-    if(!A.avail(id)){line.className="status err";const ms=A.missing(id);line.textContent=name+": not connected. "+(ms.length?"Vercel is missing "+ms.join(" and ")+". Add "+(ms.length>1?"them":"it")+" in Vercel under Setup & Admin, Environment Variables (tick Production), then open Deployments and press Redeploy. A new setting only works after a redeploy. Or paste your own key above.":(id==="claude"?"The owner has not added ANTHROPIC_API_KEY in Vercel, or you have not pasted your own key above.":"The owner has not added OPENAI_API_KEY in Vercel, or you have not pasted your own key above."));continue}
+    if(!A.avail(id)){line.className="status err";const ms=A.missing(id);line.textContent=name+": not connected. "+(ms.length?"Vercel is missing "+ms.join(" and ")+". Add "+(ms.length>1?"them":"it")+" in Vercel under Settings, Environment Variables (tick Production), then open Deployments and press Redeploy. A new setting only works after a redeploy. Or paste your own key above.":(id==="claude"?"The owner has not added ANTHROPIC_API_KEY in Vercel, or you have not pasted your own key above.":"The owner has not added OPENAI_API_KEY in Vercel, or you have not pasted your own key above."));continue}
     const mode=A.mode(id)==="key"?"your own key":"the shared key";
     const model=id==="claude"?A.modelLabel():A.getOModel();
     line.textContent=name+" ("+model+", "+mode+"): testing...";
@@ -2527,7 +2513,7 @@ function renderAIStat(){
   const one=(p,name)=>{
     const d=A.down(p),has=A.avail(p);
     const s=el("span","",(has?(d?"⚠ ":"✅ "):"⛔ ")+name+(has?(d?(d.credit?" no credit":" problem"):" ready"):" not connected"));
-    s.title=has?(d?d.why:"Connected ("+(A.mode(p)==="key"?"your own key":"shared account")+"). Press Test under Setup & Admin to be sure."):"Not connected. See Settings.";return s;
+    s.title=has?(d?d.why:"Connected ("+(A.mode(p)==="key"?"your own key":"shared account")+"). Press Test under Settings to be sure."):"Not connected. See Settings.";return s;
   };
   bar.append(el("b","","AI"),document.createTextNode(" "),one("claude","Claude"),document.createTextNode(" · "),one("chatgpt","ChatGPT"));
   const c=A.down("claude"),g=A.down("chatgpt");
@@ -2596,8 +2582,9 @@ document.querySelectorAll(".card").forEach(c=>{
 /* ---------- move sections up and down ---------- */
 const SEC_DEFAULT=["setup","inbox","cal","tasks","research","docs","links"];
 let setupComplete=false;   /* once every setup step is done or skipped, the setup card drops to the last row */
-function secOrder(){let o=((state&&state.order)||[]).filter(k=>SEC_DEFAULT.includes(k)&&k!=="setup");SEC_DEFAULT.forEach(k=>{if(!o.includes(k)&&k!=="setup")o.push(k)});return o}
-const movableKeys=()=>secOrder();
+function secOrder(){let o=((state&&state.order)||[]).filter(k=>SEC_DEFAULT.includes(k));if(!setupComplete&&!o.includes("setup"))o.unshift("setup");SEC_DEFAULT.forEach(k=>{if(!o.includes(k))o.push(k)});
+  if(setupComplete)o=o.filter(k=>k!=="setup").concat("setup");return o}
+const movableKeys=()=>secOrder().filter(k=>!(setupComplete&&k==="setup"));
 function updMoveBtns(){const o=secOrder(),m=movableKeys();o.forEach(k=>{const ix=m.indexOf(k);const e=document.querySelector('[data-sec="'+k+'"]');if(!e)return;e.querySelectorAll(".mv button").forEach(b=>{b.disabled=ix<0||(b.dataset.d==="-1"&&ix===0)||(b.dataset.d==="1"&&ix===m.length-1)})})}
 const SEC_LABEL={setup:"Setup",inbox:"Inbox",cal:"Your week",tasks:"My tasks",research:"Research",docs:"Documents",links:"Quick links"};
 const SEC_CARD={setup:"setupCard",inbox:"c-inbox",cal:"c-cal",tasks:"c-tasks",research:"c-res",docs:"c-docs",links:"c-links"};
@@ -2822,10 +2809,10 @@ async function testEverything(){
   {const A=Connectors.ai,res={};
    for(const p of ["claude","chatgpt"]){
      const nm=A.names[p]+(p===A.active()?" (in use)":"");
-     if(!A.avail(p)){const ms=A.missing(p);add(nm,ms.length?"warn":"na","Not connected"+(ms.length?". Vercel is missing "+ms.join(" and ")+". Add it under Setup & Admin, Environment Variables, then Redeploy.":(p==="chatgpt"?" (optional).":"."))+(!sample&&p==="claude"?" Sorting uses simple rules until an AI is connected.":""));continue}
+     if(!A.avail(p)){const ms=A.missing(p);add(nm,ms.length?"warn":"na","Not connected"+(ms.length?". Vercel is missing "+ms.join(" and ")+". Add it under Settings, Environment Variables, then Redeploy.":(p==="chatgpt"?" (optional).":"."))+(!sample&&p==="claude"?" Sorting uses simple rules until an AI is connected.":""));continue}
      const mode=A.mode(p);
      try{const r=await sample("Reply with the single word OK.",{provider:p,cache:false,noFallback:true});Connectors.ai.clearDown(p);res[p]="ok";add(nm,"ok",(mode==="shared"?"Working through the shared connection":"Working with your own key")+", using "+(p==="chatgpt"?A.getOModel():A.modelLabel())+". It answered: "+clip(r.text,20)+".")}
-     catch(e){res[p]=/credit|billing|quota|insufficient/i.test(msg(e))?"credit":"bad";add(nm,"bad",A.names[p]+" is switched on but failed ("+msg(e)+")."+(mode==="shared"?" Check the key, credit and ALLOWED_EMAILS in Vercel.":" Check your key, the model name and credit under Setup & Admin, Personalise."))}
+     catch(e){res[p]=/credit|billing|quota|insufficient/i.test(msg(e))?"credit":"bad";add(nm,"bad",A.names[p]+" is switched on but failed ("+msg(e)+")."+(mode==="shared"?" Check the key, credit and ALLOWED_EMAILS in Vercel.":" Check your key, the model name and credit under Settings, Personalise."))}
    }
    for(const [p,o] of [["claude","chatgpt"],["chatgpt","claude"]]){
      if(res[p]==="credit"&&res[o]==="ok"&&A.chosen()===p){A.autoSwitch(p,o);add("AI in use","ok",A.names[p]+" has no credit, so "+A.names[o]+" is now your main AI. "+A.names[p]+" takes over again by itself once its credit is fixed.")}
@@ -2894,7 +2881,7 @@ function syncRuleBtns(){
   $("thrVip").textContent=ruleHit(r.vip,a)?"★ VIP on":"VIP";$("thrMute").textContent=ruleHit(r.mute,a)?"Muted":"Mute";
 }
 $("thrVip").onclick=()=>{const a=thrSender();if(!a)return;const r=state.rules||{};if(ruleHit(r.vip,a)){state.rules.vip=state.rules.vip.filter(x=>x!==a);persist();renderRules();renderBoard()}else addRule("vip",a);syncRuleBtns()};
-$("thrMute").onclick=()=>{const a=thrSender();if(!a)return;const r=state.rules||{};if(ruleHit(r.mute,a)){state.rules.mute=state.rules.mute.filter(x=>x!==a);persist();renderRules();renderBoard();syncRuleBtns()}else{addRule("mute",a);syncRuleBtns();$("thrSt").className="status";$("thrSt").textContent="Muted. This sender is now hidden from your board. Undo it under Setup & Admin, Replies and rules."}};
+$("thrMute").onclick=()=>{const a=thrSender();if(!a)return;const r=state.rules||{};if(ruleHit(r.mute,a)){state.rules.mute=state.rules.mute.filter(x=>x!==a);persist();renderRules();renderBoard();syncRuleBtns()}else{addRule("mute",a);syncRuleBtns();$("thrSt").className="status";$("thrSt").textContent="Muted. This sender is now hidden from your board. Undo it under Settings, Replies and rules."}};
 renderTplSelect();renderTplList();renderRules();$("sigText").value=sigText();
 
 /* ---------- create and move calendar events ---------- */
@@ -3226,7 +3213,7 @@ async function openBrief(ev){
     }catch(e){out.replaceChildren(el("p","status err","Couldn't write the brief ("+clip((e&&e.message)||"unknown reason",100)+"). The related emails and files are below."))}
   }
   if(text){out.replaceChildren();const t=el("div","mailtext");t.textContent=text;const cp=el("button","btn small ghost","Copy");cp.type="button";cp.onclick=()=>navigator.clipboard.writeText(text).then(()=>cp.textContent="Copied").catch(()=>cp.textContent="Select the text to copy");out.append(t,cp)}
-  else if(!out.childNodes.length)out.append(el("p","status",sample?"Not enough to write a brief. Here is what I found.":"Connect Claude or ChatGPT under Setup & Admin for a written brief. Here is what I found."));
+  else if(!out.childNodes.length)out.append(el("p","status",sample?"Not enough to write a brief. Here is what I found.":"Connect Claude or ChatGPT under Settings for a written brief. Here is what I found."));
   const es=infoSection(host,"Related emails");
   if(!threadsF.length)es.append(el("p","status","No recent emails with these people."));
   threadsF.forEach(t=>es.append(threadRow(t,infoClose)));
@@ -3328,7 +3315,7 @@ attachAutocomplete($("teamEmail"),true);
 function openHandoff(){
   const team=teamList();
   const host=infoOpen("Hand off: "+($("thrTitle").textContent||"this email"));
-  if(!team.length){host.append(el("p","status","Add a team member first, under Setup & Admin, Replies and rules, Team."));return}
+  if(!team.length){host.append(el("p","status","Add a team member first, under Settings, Replies and rules, Team."));return}
   host.append(el("p","status","They get this email with your note. It leaves your board until they answer, and you can nudge them from Waiting on the team."));
   host.append(el("span","status","Hand it to"));
   const sel=el("select","in");sel.setAttribute("aria-label","Team member");team.forEach(p=>sel.append(new Option(p.name+" ("+p.email+")",p.email)));host.append(sel);
@@ -3339,9 +3326,6 @@ function openHandoff(){
   go.onclick=async()=>{
     if(!note.value.trim()){st.className="status err";st.textContent="Write a short note first.";note.focus();return}
     const to=sel.value,person=team.find(p=>p.email===to),subj=$("thrTitle").textContent||"";
-    /* 3.44: nothing leaves without a second tap */
-    if(!go.dataset.armed){go.dataset.armed="1";go.textContent="Confirm: send to "+((person&&person.name)||to);st.className="status";st.textContent="Check the note, then press Confirm.";return}
-    delete go.dataset.armed;
     go.disabled=true;st.className="status";st.textContent="Sending...";
     try{
       const sg=sigText(),body=note.value.trim()+(sg?"\n\n"+sg:"")+(cb.checked?forwardBlock():"");
@@ -3366,7 +3350,6 @@ function renderHandoffs(){
     a.append(onbBtn("Open the email",()=>openThread(id),"small"));
     if(h.status==="replied"&&h.watch)a.append(onbBtn("Read the reply",()=>openThread(h.watch),"small solid"));
     if(h.status==="waiting"){const n=el("button","btn small","Nudge");n.type="button";n.onclick=async()=>{
-      if(!n.dataset.armed){n.dataset.armed="1";n.textContent="Confirm: send a reminder to "+h.name;return}
       n.disabled=true;n.textContent="Sending...";
       try{await mcp.callTool("Gmail","send_message",{to:[h.to],cc:[],subject:/^re:/i.test(h.subject)?h.subject:"Re: Please handle: "+h.subject,body:"Hi "+h.name+", a quick reminder about this one. Can you let me know where it stands?"+(sigText()?"\n\n"+sigText():""),replyToMessageId:h.msgId||undefined,attachments:[]});h.nudged=Date.now();persist();n.textContent="Nudged"}
       catch(e){n.disabled=false;n.textContent="Couldn't nudge"}};a.append(n)}
