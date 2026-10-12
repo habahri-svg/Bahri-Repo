@@ -42,6 +42,11 @@
     },
     {
       "version": "3.48",
+      "path": "previous/v3.48/",
+      "label": "Always on: ask my life, follow-up radar, 8am and 6pm brief, phone notifications, guitar"
+    },
+    {
+      "version": "3.48.1",
       "path": "",
       "label": "Current"
     }
