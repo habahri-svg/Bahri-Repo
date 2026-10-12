@@ -2531,6 +2531,8 @@ const LINKS=[
   ["WYZ Dashboard","https://dashboard.wyzrent.com"],
   ["Hostaway","https://dashboard.hostaway.com"],
   ["Command Center build (Lovable)","https://lovable.dev/projects/1cc94a7d-8c35-4257-be82-df4aaf0d6def"],
+  ["Operations Dashboard (Lovable)","https://id-preview--bcb09d21-8c59-455c-819b-237cae292506.lovable.app"],
+  ["Operations Dashboard build (Lovable)","https://lovable.dev/projects/bcb09d21-8c59-455c-819b-237cae292506"],
   ["Wafeq","https://app.wafeq.com"],
   ["PriceLabs","https://app.pricelabs.co"],
   ["Gmail","https://mail.google.com"],
