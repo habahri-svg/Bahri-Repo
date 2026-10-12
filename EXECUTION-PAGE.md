@@ -218,3 +218,6 @@ One **📊 Graphs** button in the page header (shown only to owners and REVENUE_
 - Months after the current one show bookings made so far, and their change is greyed and marked * so it is not read as a drop.
 - Tests: `node tests/revenue.test.js` (15 checks on the allocation, the access rules, the cache and the fail-closed behaviour, with Google and Hostaway mocked).
 - Not yet checked against a live Hostaway account. Before relying on it, compare the two year totals with the Revenue Hub chart. They should match closely. If a field name differs in your report, adjust `allocate` in `api/revenue.js`.
+
+## Separate pages (3.54)
+Today, Settings, Install and My Life are separate pages, each with its own address (`#/today`, `#/settings`, `#/install`, `#/my-life`). The browser Back and Forward buttons move between them, a page can be bookmarked or sent as a link, and every page opens at the top. Settings and Install have their own header with a Refresh button, a Back to Today button and Sign out; the Today tools stay on Today. Nothing was removed. Code: `docs/pages.js`.
