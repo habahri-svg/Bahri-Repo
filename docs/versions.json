@@ -62,6 +62,11 @@
     },
     {
       "version": "3.51",
+      "path": "previous/v3.51/",
+      "label": "Quick links: WyzRent Operations Dashboard (Lovable)"
+    },
+    {
+      "version": "3.52",
       "path": "",
       "label": "Current"
     }
