@@ -190,3 +190,7 @@ Locked on purpose: api/_shared.js, api/fix.js, api/admin.js, api/seen.js, docs/c
 - Team pulse: needs Upstash Redis on the Vercel project (same storage as /admin). Each page sends counts only, and people can switch sharing off in Settings.
 - Send to Command Center: set COMMAND_CENTER_URL in docs/config.js once the Command Center has an intake endpoint. The button shows the request to send Abbas until then.
 - Brand for another company: open /brand, fill it in, and paste the settings into docs/config.js of that company's copy.
+
+## WhatsApp Business inbox (3.42)
+
+Needs a Meta WhatsApp Business app (Cloud API) and Upstash Redis. In Vercel add WHATSAPP_TOKEN, WHATSAPP_PHONE_ID, WHATSAPP_VERIFY_TOKEN and WHATSAPP_APP_SECRET, optional WHATSAPP_VIEWERS. In Meta, set the webhook to https://YOUR-SITE/api/whatsapp with the same verify word and subscribe to messages. Replies are free only within 24 hours of the customer's last message.
