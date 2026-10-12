@@ -52,6 +52,11 @@
     },
     {
       "version": "3.49",
+      "path": "previous/v3.49/",
+      "label": "Library: all ChatGPT and Claude chats and files by date, Lovable projects, ask my memory, document manager with Trash"
+    },
+    {
+      "version": "3.50",
       "path": "",
       "label": "Current"
     }
