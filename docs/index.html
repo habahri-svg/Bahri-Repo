@@ -327,6 +327,8 @@ body,.card,.btn,.chip,.tab,.hero{transition-property:background-color,border-col
 @media (max-width:600px){.litem{grid-template-columns:1fr}.litem .la{justify-content:flex-start}}
 .litem .main{min-width:0;overflow-wrap:anywhere}
 #thrGroups{margin:2px 0 4px}#thrGroups:empty{display:none}
+/* Life view: a quieter header, only the personal tools */
+html[data-mode="life"] #heroStats,html[data-mode="life"] #heroSum,html[data-mode="life"] .herorefresh > :not(#newMailBtn):not(#lookBtn):not(#micBtn):not(#refresh):not(#fresh){display:none!important}
 </style>
 </head>
 <body>
@@ -800,6 +802,7 @@ body,.card,.btn,.chip,.tab,.hero{transition-property:background-color,border-col
 <script src="app.js"></script>
 <script src="looks.js"></script>
 <script src="life.js"></script>
+<script src="lifeadmin.js"></script>
 <script src="fixbox.js"></script>
 <script src="business.js"></script>
 </body>

@@ -43,7 +43,13 @@
     if (!rep) return x.d;
     var t = today(), y = +t.slice(0, 4), md = x.d.slice(4);
     if (rep === "yearly") { var n = y + md; return n >= t ? n : (y + 1) + md; }
-    if (rep === "monthly") { var m = new Date(), dd = x.d.slice(8); var c = ymdL(m).slice(0, 8) + dd; if (c >= t) return c; m.setMonth(m.getMonth() + 1); return ymdL(m).slice(0, 8) + dd; }
+    /* monthly and quarterly: the next date on or after today, counted from the date you set */
+    if (rep === "monthly" || rep === "quarterly") {
+      if (x.d >= t) return x.d;
+      var step = rep === "monthly" ? 1 : 3, base = new Date(x.d + "T00:00:00"), day = base.getDate(), k = 0, nd = x.d;
+      while (nd < t && k < 600) { k += step; var dt = new Date(base.getFullYear(), base.getMonth() + k, 1); dt.setDate(Math.min(day, new Date(dt.getFullYear(), dt.getMonth() + 1, 0).getDate())); nd = ymdL(dt); }
+      return nd;
+    }
     return x.d;
   }
   var daysTo = function (d) { if (!d) return 9999; return Math.round((Date.parse(d + "T00:00:00") - Date.parse(today() + "T00:00:00")) / 86400000); };
@@ -54,7 +60,8 @@
     return s;
   }
   window.wyzLifeDue = function (days) {
-    return live().map(function (x) { return { x: x, d: nextDate(x) }; }).filter(function (o) { return o.d && daysTo(o.d) <= (days || 14) && !(o.x.done); }).sort(function (a, b) { return a.d < b.d ? -1 : 1; });
+    var closed = ["Won", "Lost", "On hold", "Signed"];
+    return live().map(function (x) { return { x: x, d: nextDate(x) }; }).filter(function (o) { var n = daysTo(o.d); return o.d && n <= (days || 14) && n >= -60 && !o.x.done && o.x.c !== "docs" || (o.x.c === "docs" && o.d && n <= 30 && n >= -7); }).filter(function (o) { return closed.indexOf((o.x.f || {}).stage) < 0; }).sort(function (a, b) { return a.d < b.d ? -1 : 1; });
   };
 
   /* ---------- saving: this device right away, your Drive a moment later ---------- */
@@ -147,7 +154,7 @@
       inputs[fd[0]] = inp; lab.append(inp); f.append(lab);
     });
     if (!C.repeat && C.allowRepeat) {
-      var lr = el("label"); lr.append(el("span", "", "Repeats")); var rp = el("select"); [["", "No"], ["monthly", "Every month"], ["yearly", "Every year"]].forEach(function (o) { rp.append(new Option(o[1], o[0])); }); rp.value = (x && x.r) || ""; lr.append(rp); f.append(lr); inputs.__r = rp;
+      var lr = el("label"); lr.append(el("span", "", "Repeats")); var rp = el("select"); rp.setAttribute("aria-label", "Repeats"); [["", "No"], ["monthly", "Every month"], ["quarterly", "Every 3 months"], ["yearly", "Every year"]].forEach(function (o) { rp.append(new Option(o[1], o[0])); }); rp.value = (x && x.r) || ""; lr.append(rp); f.append(lr); inputs.__r = rp;
     }
     var msg = el("p", "status err full", "");
     var acts = el("div", "acts full");
@@ -167,10 +174,10 @@
     var r = el("div", "litem"), m = el("div", "main"), a = el("div", "la");
     m.append(el("div", "lt", x.t || "(No name)"));
     var C = COLL[x.c] || { fields: [] };
-    var bits = C.fields.filter(function (fd) { return fd[0] !== "t" && fd[0] !== "n" && fd[0] !== "d" && fd[2] !== "textarea"; }).map(function (fd) { var v = (x.f || {})[fd[0]]; return v ? (fd[2] === "money" ? fd[1] + " " + Number(v).toLocaleString("en-GB") : v) : ""; }).filter(Boolean);
+    var bits = C.fields.filter(function (fd) { return fd[0] !== "t" && fd[0] !== "n" && fd[0] !== "d" && fd[2] !== "textarea" && fd[2] !== "url" && fd[0] !== "pay"; }).map(function (fd) { var v = (x.f || {})[fd[0]]; return v ? (fd[2] === "money" ? fd[1] + " " + Number(v).toLocaleString("en-GB") : v) : ""; }).filter(Boolean);
     if (bits.length) m.append(el("div", "lm", bits.join(" · ")));
     if (x.n) m.append(el("div", "lm", x.n));
-    var d = dueLabel(x); if (d) a.append(d);
+    var d = x.done ? el("span", "due", "✓ Done") : dueLabel(x); if (d) a.append(d);
     if (extra) extra(x, a);
     a.append(btn("Edit", "btn small ghost", function () { openForm = { c: x.c, id: x.id }; render(); }), btn("Delete", "btn small ghost", function () { del(x); }));
     r.append(m, a); return r;
@@ -178,7 +185,7 @@
   function section(c, opts) {
     opts = opts || {};
     var C = COLL[c], card = el("div", "card lifesec"), pad = el("div", "pad"); card.append(pad); card.id = "life-" + c;
-    var list = live(c).sort(function (a, b) { var da = nextDate(a) || "9999", db = nextDate(b) || "9999"; return da < db ? -1 : da > db ? 1 : String(a.t).localeCompare(String(b.t)); });
+    var list = live(c).filter(opts.filter || function () { return true; }).sort(function (a, b) { var da = nextDate(a) || "9999", db = nextDate(b) || "9999"; return da < db ? -1 : da > db ? 1 : String(a.t).localeCompare(String(b.t)); });
     var h = el("h2"); h.append(el("span", "", C.icon + " " + C.name), el("span", "lcount", list.length ? String(list.length) : "")); pad.append(h);
     if (opts.intro) pad.append(el("p", "status", opts.intro));
     var top = el("div", "acts"); top.append(btn("＋ Add", "btn small solid", function () { openForm = { c: c, id: "" }; render(); }));
@@ -216,6 +223,8 @@
     drawSync(); drawGroupChips();
   }
   window.wyzLifeRender = render;
+  window.wyzLifeRow = row;
+  window.wyzLifeOpenForm = function (c, id) { openForm = { c: c, id: id || "" }; render(); var n = $("life-" + c); if (n) n.scrollIntoView({ block: "start" }); };
   window.wyzLifeSection = section;
 
   function groupsCard() {
