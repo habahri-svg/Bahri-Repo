@@ -24,6 +24,39 @@
     return j;
   }
 
+  /* ---------- Back to previous version (owner only, at the very top) ---------- */
+  function backBar() {
+    var bar = $("verBar"); if (!bar || $("backVer")) return;
+    var b = el("button", "btn small", "↩ Back to previous version"); b.type = "button"; b.id = "backVer";
+    b.title = "Put the app back to the version before this one. You can go forward again.";
+    b.style.marginLeft = "10px"; b.onclick = askBack; bar.append(b);
+  }
+  async function askBack() {
+    var h = infoOpen("↩ Back to previous version"), st = p("status", "Checking the versions...");
+    h.append(st);
+    var t; try { t = await G.token(); } catch (e) { st.textContent = "Sign in first."; return; }
+    var get = async function (dir) { var r = await fetch("/api/fix?rollback=" + dir, { headers: { Authorization: "Bearer " + t } }); var j = {}; try { j = await r.json(); } catch (e) {} if (!r.ok) throw new Error(j.error || ("The server answered " + r.status + ".")); return j; };
+    var info2; try { info2 = await get("back"); } catch (e) { st.className = "status err"; st.textContent = e.message; if (/GITHUB_TOKEN/.test(e.message)) h.append(p("status", "Add GITHUB_TOKEN in Vercel (see 🛠 Fix the app, Shortcuts), redeploy, then try again.")); return; }
+    st.textContent = "Live now: version " + info2.from + (info2.fromName ? " (" + info2.fromName + ")" : "") + ".";
+    h.append(p("", "Go back to version " + info2.to + (info2.toName ? ": " + info2.toName : "") + "?"));
+    h.append(p("status", "All the code goes back to that version. Nothing is deleted, and you can come forward again. The page updates itself about a minute after you confirm."));
+    var msg = p("status", "");
+    var go = el("button", "btn small solid", "Yes, go back to " + info2.to); go.type = "button";
+    var run = async function (dir, b) {
+      b.disabled = true; b.textContent = "Working...";
+      try {
+        var r = await fetch("/api/fix", { method: "POST", headers: { Authorization: "Bearer " + t, "content-type": "application/json" }, body: JSON.stringify({ action: "rollback", dir: dir }) });
+        var j = {}; try { j = await r.json(); } catch (e) {} if (!r.ok) throw new Error(j.error || ("The server answered " + r.status + "."));
+        b.textContent = "Done"; msg.className = "status"; msg.textContent = "Version " + j.to + " is going live now (" + dubai(new Date().toISOString()) + "). The page reloads by itself in about a minute.";
+      } catch (e) { b.disabled = false; b.textContent = "Try again"; msg.className = "status err"; msg.textContent = e.message; }
+    };
+    go.onclick = function () { run("back", go); };
+    var a = el("div", "acts"); a.append(go);
+    if (info2.canForward) { var fw = el("button", "btn small", "Undo going back"); fw.type = "button"; fw.onclick = function () { run("forward", fw); }; a.append(fw); }
+    var no = el("button", "btn small ghost", "Cancel"); no.type = "button"; no.onclick = infoClose; a.append(no);
+    h.append(a, msg);
+  }
+
   /* ---------- the button ---------- */
   var tries = 0;
   function look() {
@@ -32,7 +65,7 @@
     if (!on) { if (++tries < 400) setTimeout(look, 3000); return; }
     api("GET").then(function (j) {
       if (!j || !j.owner || $("fixBtn")) return;
-      info = j;
+      info = j; backBar(); setInterval(backBar, 4000);
       var b = el("button", "btn", "🛠 Fix the app"); b.type = "button"; b.id = "fixBtn"; b.title = "Tell Claude what to change in this app";
       b.onclick = open;
       var after = $("inviteBtn");

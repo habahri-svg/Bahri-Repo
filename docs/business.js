@@ -4,6 +4,11 @@
   "use strict";
   if (typeof $ !== "function" || typeof el !== "function") return;
   var CFG = window.WYZ_CONFIG || {};
+  /* 3.44: what each business connection is doing, for the status strip and the action grid.
+     state: ok | need (setup needed) | err | unknown. Setup cards go to Setup & Admin, never the work screen. */
+  var B = window.wyzBiz = { hostaway: { state: "unknown" }, wa: { state: "unknown" }, pulse: { state: "unknown" } };
+  var tell = function () { try { if (window.wyzCockpit) window.wyzCockpit(); } catch (e) {} };
+  var adminBox = function () { return $("adminSetup") || $("p-conn") || $("p-today"); };
 
   async function call(path, opts) {
     var t = await G.token();
@@ -22,7 +27,7 @@
   function stripBox() {
     if (strip && strip.isConnected) return strip;
     strip = el("div", "card note"); strip.id = "haStrip";
-    var p = $("p-today"); if (p) p.prepend(strip);
+    var p = $("opsTop") || $("p-today"); if (p) p.prepend(strip);
     return strip;
   }
   function tile(label, value, list, sub) {
@@ -37,12 +42,14 @@
   }
   async function loadStrip(fresh) {
     var j;
-    try { j = await call("/api/hostaway" + (fresh ? "?fresh=1" : "")); } catch (e) { return; }
-    if (!j || !j.viewer) { if (strip) strip.remove(); return; }
+    try { j = await call("/api/hostaway" + (fresh ? "?fresh=1" : "")); } catch (e) { B.hostaway = { state: "err", note: String((e && e.message) || "") }; tell(); return; }
+    if (!j || !j.viewer) { if (strip) strip.remove(); B.hostaway = { state: "need", owner: false }; tell(); return; }
+    B.hostaway = { state: !j.ready ? "need" : j.error ? "err" : "ok", owner: !!j.owner, data: j.ready && !j.error ? j : null, note: j.error || "" }; tell();
     var box = stripBox(); box.replaceChildren(); var pad = el("div", "pad"); box.append(pad);
     var head = el("div", "headrow"); head.append(el("h2", "", "Today at " + (CFG.COMPANY || "WYZ Rent")));
     if (!j.ready) {
       if (!j.owner) { box.remove(); return; }
+      adminBox().append(box);
       pad.append(head, el("p", "status", "Connect Hostaway to see today's check-ins, check-outs, guests in house, occupancy and this month's bookings here."));
       pad.append(el("p", "status", "1. Copy your Account ID and create an API key in Hostaway. 2. Add them in Vercel as HOSTAWAY_ACCOUNT_ID and HOSTAWAY_API_KEY. Optional: HOSTAWAY_CITY = Dubai to count Dubai only, and HOSTAWAY_VIEWERS for who else may see it. 3. Redeploy."));
       var a = el("div", "acts"); a.append(link("🔑 Hostaway API settings", "https://dashboard.hostaway.com/settings/hostaway-api", "solid"), link("⚙️ Vercel settings", VENV, "solid"), link("🚀 Vercel deployments", VDEP));
@@ -79,8 +86,10 @@
   async function loadPulse() {
     var j; try { j = await call("/api/pulse"); } catch (e) { return; }
     if (!j || !j.owner) return;
-    var host = $("handoffCard"); if (!host || !host.parentNode) return;
-    var card = $("pulseCard"); if (!card) { card = el("div", "card note"); card.id = "pulseCard"; host.parentNode.insertBefore(card, host); }
+    B.pulse = { state: j.storage ? "ok" : "need" }; tell();
+    var host = $("opsMore") || $("handoffCard"); if (!host) return;
+    var card = $("pulseCard"); if (!card) { card = el("div", "card note"); card.id = "pulseCard"; }
+    (j.storage ? host : adminBox()).append(card);
     card.replaceChildren(); var pad = el("div", "pad"); card.append(pad);
     pad.append(el("h2", "", "Team pulse"));
     if (!j.storage) {
@@ -104,6 +113,7 @@
   }
 
   /* ---------- Send to Command Center ---------- */
+  window.openCC = function () { openCC(); };
   window.ccButton = function () {
     var b = el("button", "btn small", "📤 Command Center"); b.type = "button"; b.title = "Send this to the company Command Center as an action item";
     b.onclick = function () { openCC(); };
@@ -145,14 +155,16 @@
   /* ---------- WhatsApp Business inbox ---------- */
   var waData = null;
   async function loadWA() {
-    var j; try { j = await call("/api/whatsapp"); } catch (e) { return; }
-    if (!j || !j.viewer) return;
+    var j; try { j = await call("/api/whatsapp"); } catch (e) { B.wa = { state: "err", note: String((e && e.message) || "") }; tell(); return; }
+    if (!j || !j.viewer) { B.wa = { state: "need", owner: false }; tell(); return; }
+    B.wa = { state: j.ready ? "ok" : "need", owner: !!j.owner, missing: j.missing || [], chats: j.chats || [] }; tell();
     var anchor = $("owedCard") || $("handoffCard"); if (!anchor || !anchor.parentNode) return;
     var card = $("waCard"); if (!card) { card = el("div", "card note"); card.id = "waCard"; anchor.parentNode.insertBefore(card, anchor.nextSibling); }
     card.replaceChildren(); var pad = el("div", "pad"); card.append(pad);
     var head = el("div", "headrow"); head.append(el("h2", "", "💬 WhatsApp Business")); pad.append(head);
     if (!j.ready) {
       if (!j.owner || state.waHide) { card.remove(); return; }
+      adminBox().append(card);
       var hook = location.origin + "/api/whatsapp";
       pad.append(el("p", "status", "Show your WhatsApp Business messages here and answer them from the page. Still missing: " + j.missing.join(", ") + "."));
       var ol = el("ol", "status"); ol.style.margin = "0"; ol.style.paddingLeft = "18px";

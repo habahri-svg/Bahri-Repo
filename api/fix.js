@@ -406,6 +406,35 @@ async function undo(who, sha) {
   return { ok: true, target: "live", version: ver.version, name: ver.name, updated: ver.stamp, sha: c, branch: branch };
 }
 
+/* Back to the previous version: a new commit whose files are exactly the previous version's files.
+   Pressing it again goes one more version back. "forward" takes back the last go-back. Nothing is ever deleted. */
+async function versionAt(commit) {
+  const c = await gh("/git/commits/" + commit);
+  const t = await gh("/git/trees/" + c.tree.sha + "?recursive=1");
+  const v = (t.tree || []).find(function (e) { return e.path === "docs/version.js"; });
+  const text = v ? await blob(v.sha) : "";
+  return { c: c, version: (/version:\s*"([^"]+)"/.exec(text) || [])[1] || "?", name: (/name:\s*"([^"]*)"/.exec(text) || [])[1] || "" };
+}
+async function rollback(who, dir, dry) {
+  const branch = liveBranch(), head = await headOf(branch), cur = await versionAt(head);
+  const m = /\nRollback-To: ([0-9a-f]{40})/.exec(cur.c.message || ""), fw = /\nRollback-From: ([0-9a-f]{40})/.exec(cur.c.message || "");
+  let target;
+  if (dir === "forward") {
+    if (!m || !fw || fw[1] === m[1]) throw fail(409, "There is no go-back to take back.");
+    target = fw[1];
+  } else {
+    const base = m ? await gh("/git/commits/" + m[1]) : cur.c;      /* the live files are those of base */
+    if (!base.parents || !base.parents.length) throw fail(409, "There is no earlier version.");
+    target = base.parents[0].sha;
+  }
+  const to = await versionAt(target);
+  if (dry) return { from: cur.version, fromName: cur.name, to: to.version, toName: to.name, canForward: !!(m && fw && fw[1] !== m[1]) };
+  const msg = (dir === "forward" ? "Forward again to " : "Back to ") + to.version + " (from " + cur.version + ")\n\nRollback-To: " + target + "\nRollback-From: " + (dir === "forward" ? target : (m && fw ? fw[1] : head)) + "\nAsked by " + who.email;
+  const c = (await gh("/git/commits", { method: "POST", body: { message: msg, tree: to.c.tree.sha, parents: [head] } })).sha;
+  await gh("/git/refs/heads/" + refPath(branch), { method: "PATCH", body: { sha: c, force: false } });
+  return { ok: true, from: cur.version, to: to.version, toName: to.name, sha: c };
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   const token = String(req.headers.authorization || "").replace(/^Bearer\s+/i, "");
@@ -415,6 +444,19 @@ module.exports = async function handler(req, res) {
   if (!who) return res.status(401).json({ error: "Your Google sign-in isn't valid for this site." });
   const owners = S.list(process.env.OWNER_EMAILS);
   if (owners.indexOf(who.email) < 0) return res.status(403).json({ owner: false, error: "The Fix box is only for the owner." });
+  if (req.method === "GET" && String((req.query || {}).rollback || "")) {
+    if (!String(process.env.GITHUB_TOKEN || "").trim()) return res.status(503).json({ error: "GITHUB_TOKEN is missing in Vercel." });
+    try { return res.status(200).json(await rollback(who, req.query.rollback === "forward" ? "forward" : "back", true)); }
+    catch (e) { return res.status((e && e.status) || 502).json({ error: String((e && e.message) || "Couldn't read the versions.").slice(0, 300) }); }
+  }
+  if (req.method === "POST") {
+    const b0 = typeof req.body === "string" ? S.safeParse(req.body) : (req.body || {});
+    if (b0 && b0.action === "rollback") {
+      if (!String(process.env.GITHUB_TOKEN || "").trim()) return res.status(503).json({ error: "GITHUB_TOKEN is missing in Vercel." });
+      try { return res.status(200).json(await rollback(who, b0.dir === "forward" ? "forward" : "back", false)); }
+      catch (e) { return res.status((e && e.status) || 502).json({ error: String((e && e.message) || "Couldn't go back.").slice(0, 300) }); }
+    }
+  }
   /* Download the whole app code as a .zip (owner only). Needs only GITHUB_TOKEN. */
   if (req.method === "GET" && String((req.query || {}).zip || "") === "1") {
     if (!String(process.env.GITHUB_TOKEN || "").trim()) return res.status(503).json({ error: "GITHUB_TOKEN is missing in Vercel." });
