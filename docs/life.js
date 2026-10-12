@@ -61,7 +61,8 @@
   }
   window.wyzLifeDue = function (days) {
     var closed = ["Won", "Lost", "On hold", "Signed"];
-    return live().map(function (x) { return { x: x, d: nextDate(x) }; }).filter(function (o) { var n = daysTo(o.d); return o.d && n <= (days || 14) && n >= -60 && !o.x.done && o.x.c !== "docs" || (o.x.c === "docs" && o.d && n <= 30 && n >= -7); }).filter(function (o) { return closed.indexOf((o.x.f || {}).stage) < 0; }).sort(function (a, b) { return a.d < b.d ? -1 : 1; });
+    return live().map(function (x) { return { x: x, d: nextDate(x) }; }).filter(function (o) { var n = daysTo(o.d); var CC = COLL[o.x.c] || {}; if (CC.noDue) return false; if (CC.dueFuture && n < 0) return false;
+      return o.d && n <= (days || 14) && n >= -60 && !o.x.done && o.x.c !== "docs" || (o.x.c === "docs" && o.d && n <= 30 && n >= -7); }).filter(function (o) { return closed.indexOf((o.x.f || {}).stage) < 0; }).sort(function (a, b) { return a.d < b.d ? -1 : 1; });
   };
 
   /* ---------- saving: this device right away, your Drive a moment later ---------- */
@@ -177,7 +178,9 @@
     var bits = C.fields.filter(function (fd) { return fd[0] !== "t" && fd[0] !== "n" && fd[0] !== "d" && fd[2] !== "textarea" && fd[2] !== "url" && fd[0] !== "pay"; }).map(function (fd) { var v = (x.f || {})[fd[0]]; return v ? (fd[2] === "money" ? fd[1] + " " + Number(v).toLocaleString("en-GB") : v) : ""; }).filter(Boolean);
     if (bits.length) m.append(el("div", "lm", bits.join(" · ")));
     if (x.n) m.append(el("div", "lm", x.n));
-    var d = x.done ? el("span", "due", "✓ Done") : dueLabel(x); if (d) a.append(d);
+    var CC = COLL[x.c] || {}, past = x.d && x.d < today();
+    var plain = x.d ? new Date(x.d + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
+    var d = x.done ? el("span", "due", "✓ Done") : CC.noDue ? (plain ? el("span", "due", plain) : null) : (CC.dueFuture && past) ? el("span", "due", "Past · " + plain) : dueLabel(x); if (d) a.append(d);
     if (extra) extra(x, a);
     a.append(btn("Edit", "btn small ghost", function () { openForm = { c: x.c, id: x.id }; render(); }), btn("Delete", "btn small ghost", function () { del(x); }));
     r.append(m, a); return r;
@@ -202,8 +205,9 @@
     if (f.email && /^\S+@\S+\.\S+$/.test(f.email)) a.append(btn("✉️", "btn small", function () { try { openCompose({ to: f.email }); } catch (e) {} }));
     if (digits(f.phone).length > 6) { var c = el("a", "btn small", "📞"); c.href = "tel:" + digits(f.phone); a.append(c); var w = el("a", "btn small", "💬"); w.href = "https://wa.me/" + digits(f.phone).replace(/^\+/, ""); w.target = "_blank"; w.rel = "noopener"; a.append(w); }
   }
-  var renderers = [];   /* later releases add their sections here, in order */
+  var renderers = [], tops = [];   /* later releases add their sections here, in order */
   window.wyzLifeAddSection = function (fn) { renderers.push(fn); };
+  window.wyzLifeAddTop = function (fn) { tops.push(fn); };
 
   function render() {
     var root = $("lifeRoot"); if (!root || $("p-life").hidden) { drawGroupChips(); return; }
@@ -214,6 +218,7 @@
     if (!due.length) dp.append(el("p", "status", "Nothing due. Birthdays, plans and renewals you add show here."));
     due.slice(0, 12).forEach(function (o) { var r = el("div", "litem"), m = el("div", "main"); m.append(el("div", "lt", o.x.t), el("div", "lm", (COLL[o.x.c] ? COLL[o.x.c].icon + " " + COLL[o.x.c].name : ""))); var a = el("div", "la"); var d = dueLabel(o.x); if (d) a.append(d); r.append(m, a); dp.append(r); });
     root.append(dc);
+    tops.forEach(function (fn) { try { var n = fn(); if (n) root.append(n); } catch (e) {} });
     /* family hub */
     root.append(section("family", { intro: "The people closest to you. Birthdays repeat every year and show above a week before.", empty: "Add your family: name, relation, birthday, email and phone.", extra: familyExtra,
       actions: [btn("✉️ Email family", "btn small", function () { emailGroup("Family"); })] }));
