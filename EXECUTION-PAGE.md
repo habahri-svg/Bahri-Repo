@@ -240,3 +240,11 @@ Code: `docs/docman.js`.
 
 ## Graphs button always shows (3.58)
 Before, the **📊 Graphs** button hid itself when the server answered "not found" or "not a viewer", so a setup problem looked like a missing feature. Now it always shows. If revenue can't load, its window says why: the revenue service isn't on the site (redeploy so `api/revenue.js` is included), or the signed-in Google email isn't in `OWNER_EMAILS` or `REVENUE_VIEWERS` in Vercel. Only "Hostaway keys missing" for a non-owner still hides it.
+
+## Layouts (3.59)
+**Settings > How Today looks** offers four layouts for the Today page, saved on the device only (`wyz-layout` in the browser). **Classic** is the default and nothing changes until you pick another.
+- **Bento squares:** the sections become tiles in a grid, each scrolling inside itself.
+- **Four panes:** Inbox, Calendar, Tasks and Documents side by side (one column below 900 px wide), each scrolling on its own. Setup, Library and Quick links sit full width.
+- **Phone execution:** a narrow column, bigger buttons, and a bottom bar (Inbox, Calendar, Tasks, Files, More) that shows one section at a time.
+
+It is only the look (`docs/layout.js`, CSS keyed on `html[data-layout]`). Nothing is moved or removed, so every button works in every layout. Settings and Install look the same in all of them. Choose later which one to keep as your own default.
