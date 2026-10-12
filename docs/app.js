@@ -435,7 +435,7 @@ function updateHero(){
   defs.forEach(([label,n,color,fn])=>{const b=el("button","hstat");b.type="button";b.append(el("b","",String(n)));const l=el("span");const dot=el("i");dot.style.background=color;l.append(dot,label);b.append(l);b.onclick=fn;b.setAttribute("aria-label",n+" "+label);box.append(b)});
 }
 function renderHello(){
-  try{$("coRules").value=state.coRules!=null?state.coRules:CO_DEFAULT;$("quickArm").checked=state.quickArm!==false}catch(e){}
+  try{$("styleNote").value=state.styleNote||"";$("styleSt").textContent=state.styleNote?(state.styleOwn?"Written by you.":"Learned from your sent emails, "+fmtWhen(state.styleAt||Date.now())+"."):"Not learned yet. It's learned the first time the AI writes a reply for you.";$("coRules").value=state.coRules!=null?state.coRules:CO_DEFAULT;$("quickArm").checked=state.quickArm!==false}catch(e){}
   try{$("pageName").value=state.pageName||"";applyPageName();renderTeam();$("autoDraft").checked=!!state.autoDraft;$("undoSecs").value=String(undoSecs());if($("autoSum"))$("autoSum").checked=state.autoSum!==false;if($("badgeOn"))$("badgeOn").checked=!state.badgeOff;$("alertsOn").checked=!!state.alertsOn&&"Notification" in window&&Notification.permission==="granted";$("autoSuggest").checked=state.autoSuggest!==false;$("tidyOn").checked=!!state.tidy;$("weeklyOn").checked=!state.noWeekly;$("quickList").value=Array.isArray(state.quick)?state.quick.join(", "):"";$("driveFolder").value=state.driveFolder||""}catch(e){}
   const h=new Date().getHours();
   $("hello").textContent=myName?(h<12?"Good morning, ":h<18?"Good afternoon, ":"Good evening, ")+myName.split(" ")[0]:"Your execution page";
@@ -769,9 +769,31 @@ function toneExamples(){
       const mine=(f.messages||[]).filter(m=>addrOf(m.sender).toLowerCase()===myAddr()).pop();
       if(mine){const b=String(mine.plaintextBody||"").split(/\nOn .{5,90} wrote:|\n-{2,} ?Forwarded/)[0].split("\n").filter(l=>!l.startsWith(">")).join("\n").trim().slice(0,500);if(b.length>30)out.push(b)}
     }
-    return out.length?"Match the voice, warmth and length of how they usually write. Examples of their own emails:\n\n"+out.map((x,i)=>"Example "+(i+1)+":\n"+x).join("\n\n"):"";
+    if(sample&&(!state.styleNote||Date.now()-(state.styleAt||0)>30*86400000)&&!state.styleOwn)learnStyle(true).catch(()=>{});
+    const note=state.styleNote?"Write in their own style. How they write: "+state.styleNote+"\n\n":"";
+    return out.length?note+"Match the voice, warmth and length of how they usually write. Examples of their own emails:\n\n"+out.map((x,i)=>"Example "+(i+1)+":\n"+x).join("\n\n"):note;
   }catch(e){return ""}})();
   return toneP;
+}
+/* Learns how the person writes from up to 12 of their sent emails, and keeps a short style note used by every draft. */
+async function learnStyle(quiet){
+  if(!sample||!mcp)throw new Error("Connect Claude or ChatGPT first");
+  if(learnStyle.busy)return learnStyle.busy;
+  learnStyle.busy=(async()=>{try{
+    const r=await mcp.callTool("Gmail","search_threads",{query:"in:sent newer_than:120d -to:me",pageSize:15},{cache:false});const out=[];
+    for(const th of ((r.payload&&r.payload.threads)||[]).slice(0,12)){
+      try{const f=await mcp.callTool("Gmail","get_thread",{threadId:th.id,messageFormat:"PLAIN_TEXT"},{cache:false});
+        const mine=((f.payload&&f.payload.messages)||[]).filter(m=>addrOf(m.sender).toLowerCase()===myAddr()).pop();
+        if(mine){const b=String(mine.plaintextBody||"").split(/\nOn .{5,90} wrote:|\n-{2,} ?Forwarded/)[0].split("\n").filter(l=>!l.startsWith(">")).join("\n").trim().slice(0,700);if(b.length>30)out.push(b)}}catch(e){}
+    }
+    if(out.length<3)throw new Error("not enough sent emails to learn from yet");
+    const a=await creditFallback(prov=>sample("Here are emails one person wrote. Describe how they write, in at most 6 short lines a writer could follow: how they greet, how long their emails are, how formal or warm they are, how they sign off, phrases they often use, and when they use Arabic or English. Describe the style only, never the content or any names, numbers or private details. Plain English, no em dashes.\n\n"+out.map((x,i)=>"Email "+(i+1)+":\n"+x).join("\n\n"),{cache:false,provider:prov}));
+    const t=String(a.text||"").trim().slice(0,900);if(!t)throw new Error("the AI sent back nothing");
+    state.styleNote=t;state.styleAt=Date.now();state.styleOwn=false;persist();toneP=null;
+    if($("styleNote"))$("styleNote").value=t;if($("styleSt"))$("styleSt").textContent="Learned from "+out.length+" of your sent emails, "+fmtWhen(Date.now())+".";
+    return t;
+  }finally{learnStyle.busy=null}})();
+  return learnStyle.busy;
 }
 const gcalLink=ev=>{const f=v=>{let x=String(v||"").replace(/[-:]/g,"").slice(0,15);if(x.length===13)x+="00";return x};return "https://calendar.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent(ev.title||"Meeting")+"&dates="+f(ev.start)+"/"+f(ev.end||ev.start)+"&ctz=Asia%2FDubai"+(ev.location?"&location="+encodeURIComponent(ev.location):"")};
 
@@ -1124,6 +1146,8 @@ function drawQuick(){
   });
   $("thrBody").append(q);
 }
+$("styleLearn").onclick=async()=>{const b=$("styleLearn");b.disabled=true;b.textContent="Reading your sent emails...";$("styleSt").textContent="";try{await learnStyle()}catch(e){$("styleSt").textContent="Couldn't learn it ("+clip((e&&e.message)||"unknown reason",80)+")."}b.disabled=false;b.textContent="Learn my style again"};
+$("styleNote").onchange=()=>{const v=$("styleNote").value.trim();state.styleNote=v||null;state.styleOwn=!!v;state.styleAt=Date.now();toneP=null;persist();$("styleSt").textContent=v?"Saved. Drafts follow your words from now on.":"Cleared. It will be learned again from your sent emails."};
 $("quickArm").onchange=()=>{state.quickArm=$("quickArm").checked;persist()};
 $("quickList").onchange=()=>{const v=$("quickList").value.split(",").map(x=>x.trim()).filter(Boolean).slice(0,8);state.quick=v.length?v:null;persist();if(!$("thr").hidden)drawQuick()};
 async function suggestReply(o){
@@ -1608,6 +1632,30 @@ async function noiseDigest(){
   };
   const a=el("div","acts");a.append(arch);host.append(a);
 }
+/* ---------- report a problem to the owner, with a screenshot ---------- */
+function openReport(){
+  const owner=String((window.WYZ_CONFIG&&WYZ_CONFIG.OWNER_EMAIL)||"").trim();
+  const host=infoOpen("🐞 Report a problem");
+  if(!owner){host.append(el("p","status err","The owner's email isn't set yet (OWNER_EMAIL in config.js)."));return}
+  host.append(el("p","status","Say what went wrong or what you'd like changed. It goes by email from your account to "+owner+", with the version of the page and your device, so it can be fixed fast."));
+  const ta=el("textarea","in");ta.rows=5;ta.style.minHeight="110px";ta.placeholder="Example: when I press Reply here on my phone, the box is cut off at the bottom.";ta.setAttribute("aria-label","What went wrong");
+  const file=document.createElement("input");file.type="file";file.accept="image/*";file.hidden=true;let shot=null;
+  const pick=el("button","btn small ghost","📷 Add a screenshot");pick.type="button";pick.onclick=()=>file.click();
+  const st=el("p","status","");
+  file.onchange=()=>{const f=file.files&&file.files[0];if(!f)return;if(f.size>8000000){st.className="status err";st.textContent="That picture is too big. Use one under 8 MB.";return}const rd=new FileReader();rd.onload=()=>{const m=/^data:([^;]+);base64,(.*)$/.exec(String(rd.result));if(m){shot={name:f.name||"screenshot.png",type:m[1],data:m[2]};pick.textContent="📷 "+clip(shot.name,30)}};rd.readAsDataURL(f)};
+  const send=el("button","btn small solid","Send report");send.type="button";let armed=0;
+  send.onclick=async()=>{
+    const t=ta.value.trim();if(t.length<5){st.className="status err";st.textContent="Describe the problem first.";ta.focus();return}
+    if(!armed){armed=1;send.textContent="Confirm: send to "+owner;st.className="status";st.textContent="Press Confirm to send it.";return}
+    send.disabled=true;send.textContent="Sending...";
+    const v=window.WYZ_VERSION||{};
+    const body=t+"\n\n---\nFrom: "+(myName||"")+" <"+(email||"")+">\nPage version: "+(v.version||"?")+"\nSent: "+new Date().toLocaleString("en-GB",{timeZone:"Asia/Dubai"})+" Dubai time\nDevice: "+navigator.userAgent+"\nScreen: "+innerWidth+" x "+innerHeight+"\n\nTo fix it: open the page, tap 🛠 Fix the app and paste the problem above.";
+    try{await mcp.callTool("Gmail","send_message",{to:[owner],cc:[],subject:"Execution Page problem: "+clip(t,60),body,attachments:shot?[shot]:[]});send.textContent="Sent";st.className="status";st.textContent="Sent to "+owner+". Thank you."}
+    catch(e){armed=0;send.disabled=false;send.textContent="Send report";st.className="status err";st.textContent="Couldn't send it ("+clip((e&&e.message)||"unknown reason",90)+")."}
+  };
+  const a=el("div","acts");a.append(send,pick,file);host.append(ta,a,st);
+}
+$("reportBtn").onclick=()=>{if(!G.connected()){showWelcome();return}openReport()};
 $("noiseGo").onclick=()=>{if(!G.connected()){showWelcome();return}noiseDigest()};
 const ruleAddr=t=>t?addrOf(t.lastFromMe?(t.lastTo||[])[0]:t.from).toLowerCase():"";
 const ruleHit=(list,a)=>!!a&&(list||[]).some(r=>r===a||(r.charAt(0)==="@"&&a.endsWith(r)));
@@ -1754,7 +1802,7 @@ async function draftFor(i,host,btn){
   const box=el("div","draftbox");box.append(toRow,ccRow,dirRow);try{attachAutocomplete(ccIn)}catch(e){}const ta=el("textarea");ta.id="d-"+i.id;ta.value="";const st=el("span","status","Writing a draft");
   box.append(st,ta);host.append(box);btn.textContent="Writing";
   try{
-    const chase=(i.st==="follow"||i.st==="wait");const r=!sample?{text:templateDraft(i,chase)}:await sample((chase?"Write a short, polite follow-up email chasing an answer that is still owed, ":"Write a reply email ")+"for "+(myName||"me")+" at WYZ Rent. Plain text only, ready to edit, "+(sigText()?"with no sign-off and no name, because their signature is added automatically":"signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject.\n\nWhat it's about: "+(i.title||"")+". "+(i.summary||"")+"\n\nThread (latest last):\n"+(text||tById(i.id)?.snippet||""),{cache:false,provider:aiPickValue(),onText:u=>{ta.value=u.text}});
+    const chase=(i.st==="follow"||i.st==="wait");const tone=sample?await toneExamples().catch(()=>""):"";const r=!sample?{text:templateDraft(i,chase)}:await sample((chase?"Write a short, polite follow-up email chasing an answer that is still owed, ":"Write a reply email ")+"for "+(myName||"me")+" at WYZ Rent. Plain text only, ready to edit, "+(sigText()?"with no sign-off and no name, because their signature is added automatically":"signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject."+(tone?"\n\n"+tone:"")+"\n\nWhat it's about: "+(i.title||"")+". "+(i.summary||"")+"\n\nThread (latest last):\n"+(text||tById(i.id)?.snippet||""),{cache:false,provider:aiPickValue(),onText:u=>{ta.value=u.text}});
     ta.value=r.text;st.textContent="Edit it, then press Send. You confirm before it goes.";
   }catch(e){st.textContent="Couldn't write a draft just now ("+clip((e&&e.message)||"unknown reason",110)+"). Write your own here, then save it.";st.className="status err"}
   btn.remove();
@@ -1815,9 +1863,12 @@ async function ask(){
   if(!sample){out.textContent="Ask needs an AI connected. Connect Claude or ChatGPT in the setup steps.";return}
   out.textContent="Thinking...";
   let live=[];try{const w=q.replace(/[^\p{L}\p{N}@. ]/gu," ").split(/\s+/).filter(x=>x.length>2&&!/^(the|and|what|did|does|have|from|with|about|any|send|sent|email|emails|mail|today|this|that|who|when|where|why|how)$/i.test(x)).slice(0,4);
-    if(w.length){const r=await mcp.callTool("Gmail","search_threads",{query:w.join(" OR ")+" newer_than:30d",pageSize:8},{cache:false});live=((r.payload&&r.payload.threads)||[]).map(slimThread).map(t=>({from:nameOf(t.from)||t.from,subject:t.subject,when:t.date,latest:t.snippet,lastFromMe:t.lastFromMe}))}}catch(e){}
+    if(w.length){const r=await mcp.callTool("Gmail","search_threads",{query:"("+w.join(" OR ")+") newer_than:90d",pageSize:12},{cache:false});const ts=((r.payload&&r.payload.threads)||[]).map(slimThread);ts.forEach(t=>{if(!tById(t.id))found.push(t)});live=ts.map(t=>({ref:t.id,from:nameOf(t.from)||t.from,subject:t.subject,when:t.date,latest:t.snippet,lastFromMe:t.lastFromMe}))}}catch(e){}
   const ctx={liveMailSearch:live,today:new Date().toString(),board:(board&&board.items||[]).map(i=>({status:ST[i.st],urgency:UR[i.g],title:i.title,summary:i.summary,from:nameOf((tById(i.id)||{}).from)})),calendar:(events||[]).map(e=>({when:e.start&&(e.start.dateTime||e.start.date),what:e.summary}))};
-  try{const r=await sample("You help "+(myName||"a WYZ Rent team member")+" run their day. Answer briefly and plainly, no em dashes. Their board, calendar and a live search of their mail for this question (liveMailSearch, newest mail included) (JSON):\n"+JSON.stringify(ctx)+"\n\nQuestion: "+q,{cache:false,onText:u=>{out.textContent=u.text}});out.textContent=r.text}
+  try{const r=await sample("You help "+(myName||"a WYZ Rent team member")+" run their day. Answer briefly and plainly, no em dashes. Their board, calendar and a live search of their mail for this question (liveMailSearch, newest mail included, last 90 days) (JSON):\n"+JSON.stringify(ctx)+"\n\nQuestion: "+q+"\n\nAt the very end, on its own line, write USED: followed by the ref values of the liveMailSearch emails your answer relies on, separated by commas, or USED: none.",{cache:false,onText:u=>{out.textContent=String(u.text||"").split(/\n?USED:/)[0]}});
+    const parts=String(r.text||"").split(/\n?USED:/),refs=(parts[1]||"").split(",").map(x=>x.trim()).filter(x=>live.some(l=>l.ref===x));
+    out.replaceChildren(document.createTextNode(parts[0].trim()));
+    if(refs.length){const a=el("div","acts");a.append(el("span","status","From these emails:"));refs.slice(0,6).forEach(id=>{const l=live.find(x=>x.ref===id);const b=el("button","btn small ghost",clip(l.from+": "+l.subject,60));b.type="button";b.onclick=()=>openThread(id);a.append(b)});out.append(a)}}
   catch(e){out.textContent=e&&e.code==="not_granted"?"Allow Claude for this page to use Ask.":"Couldn't answer just now. Try again in a moment."}
 }
 
@@ -2072,13 +2123,13 @@ function fileKind(mime,name){
   if(/^text\//.test(mime)||/^application\/(json|csv|xml)/.test(mime)||/^(txt|csv|md|json|xml)$/.test(ext)||/vnd\.google-apps\.(document|spreadsheet|presentation)$/.test(mime))return "text";
   return "";
 }
-let fileAI={name:"",load:null,cache:null};
+let fileAI={name:"",load:null,cache:null,hist:[]};
 function openFileAI(name,load){
-  fileAI={name,load,cache:null};
+  fileAI={name,load,cache:null,hist:[]};
   $("fileAITitle").textContent=name;$("fileAIQ").value="";$("fileAIOut").replaceChildren();
   $("fileAINote").textContent=sample?"The AI reads this file when you ask. Nothing is saved.":"Connect Claude first, under Settings.";
   const c=$("fileAIChips");c.replaceChildren();
-  [["Summarize","Summarize this in five short lines."],["Key dates and amounts","List every date, deadline and amount of money in this file."],["What must I do?","What do I need to do or decide because of this file?"],["Anything risky?","Point out anything unusual, risky or missing that I should check before agreeing."]].forEach(([l,v])=>{const b=el("button","chip",l);b.type="button";b.onclick=()=>{$("fileAIQ").value=v;runFileAI()};c.append(b)});
+  [["Summarize","Summarize this in five short lines."],["Key dates and amounts","List every date, deadline and amount of money in this file."],["What must I do?","What do I need to do or decide because of this file?"],["Anything risky?","Point out anything unusual, risky or missing that I should check before agreeing."],["Contract check","If this is a contract or offer: who the parties are, the term, fees and payment dates, how to end it, penalties, and anything one-sided against me. If it isn't one, say what kind of document it is."],["Draft my reply","Write a short email reply about this file that I can edit, covering what needs answering or confirming."]].forEach(([l,v])=>{const b=el("button","chip",l);b.type="button";b.onclick=()=>{$("fileAIQ").value=v;runFileAI()};c.append(b)});
   $("fileAI").hidden=false;$("fileAIQ").focus();
 }
 async function runFileAI(){
@@ -2094,11 +2145,21 @@ async function runFileAI(){
     }
     out.replaceChildren(el("p","status","Reading..."));
     const ask="You are the personal assistant of "+(myName||"a manager")+" at WYZ Rent, a Dubai holiday home management company. Today is "+new Date().toDateString()+".\nThe file is called \""+fileAI.name+"\".\nTheir question: "+q+"\n\nAnswer in plain, simple words. Use short lines or a short list. No em dashes. If the file doesn't say, say so. Don't guess.";
-    const content=blocks?[{type:f.mime==="application/pdf"?"document":"image",source:{type:"base64",media_type:f.mime,data:f.data}},{type:"text",text:ask}]:ask+"\n\nFile text:\n"+String(f.text).slice(0,60000);
-    const r=await sample([{role:"user",content}],{cache:false,provider:blocks?"claude":aiPickValue()});
-    const t=el("div","mailtext");t.textContent=String(r.text||"").trim()||"(The AI sent back nothing.)";
-    const cp=el("button","btn small ghost","Copy");cp.type="button";cp.onclick=()=>navigator.clipboard.writeText(t.textContent).then(()=>cp.textContent="Copied").catch(()=>cp.textContent="Select the text to copy");
-    out.replaceChildren(t,cp);
+    /* the file goes with the first question, later questions follow on from the earlier answers */
+    const q1=fileAI.hist.length?fileAI.hist[0].q:q,ask1=ask.replace("Their question: "+q,"Their question: "+q1);
+    const content=blocks?[{type:f.mime==="application/pdf"?"document":"image",source:{type:"base64",media_type:f.mime,data:f.data}},{type:"text",text:ask1}]:ask1+"\n\nFile text:\n"+String(f.text).slice(0,60000);
+    const msgs=[{role:"user",content}];fileAI.hist.forEach((h,k)=>{msgs.push({role:"assistant",content:h.a});msgs.push({role:"user",content:k+1<fileAI.hist.length?fileAI.hist[k+1].q:q})});
+    if(!fileAI.hist.length)msgs.length=1;
+    const r=await sample(msgs,{cache:false,provider:blocks?"claude":aiPickValue()});
+    const ans=String(r.text||"").trim()||"(The AI sent back nothing.)";fileAI.hist.push({q,a:ans});
+    out.replaceChildren();
+    fileAI.hist.forEach((h,k)=>{
+      const box=el("div","");box.style.cssText="border-top:1px solid var(--line);padding-top:8px;margin-top:8px";
+      box.append(el("div","status","You asked: "+clip(h.q,140)));const t=el("div","mailtext",h.a);box.append(t);
+      if(k===fileAI.hist.length-1){const cp=el("button","btn small ghost","Copy");cp.type="button";cp.onclick=()=>navigator.clipboard.writeText(h.a).then(()=>cp.textContent="Copied").catch(()=>cp.textContent="Select the text to copy");const a=el("div","acts");a.append(cp,el("span","status","Ask a follow-up question above."));box.append(a)}
+      out.append(box);
+    });
+    $("fileAIQ").value="";$("fileAIQ").placeholder="Ask a follow-up question";
   }catch(e){
     const p=el("p","status err");
     if(e&&e.code==="consent_required"){p.textContent="Reading files needs one more Google permission. ";const l=el("button","btn small solid","Allow");l.type="button";l.onclick=()=>connectGoogle(true);p.append(l)}

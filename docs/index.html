@@ -302,6 +302,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       <button class="btn" type="button" id="micBtn" title="Speak a task, a question or an email">🎤 Speak</button>
       <button class="btn" type="button" id="focusBtn" aria-pressed="false" title="Show only your top list and the emails waiting for your reply">Focus</button>
       <button class="btn" type="button" id="srcBtn" title="Switch each source of information on or off">Sources on/off</button>
+      <button class="btn" type="button" id="reportBtn" title="Tell the owner what went wrong, with a screenshot">🐞 Report a problem</button>
       <button class="btn" type="button" id="inviteBtn" title="Send someone the link by email or WhatsApp">📨 Invite someone</button>
       <span class="status" id="fresh">Not loaded yet</span>
     </div>
@@ -575,6 +576,9 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       <label class="status chk"><input type="checkbox" id="badgeOn" checked> Show the unread count on the app icon</label>
       <span class="status">Drive folder for saved attachments. It is created the first time you save one.</span>
       <input class="in" id="driveFolder" aria-label="Drive folder name" placeholder="WYZ Rent Attachments" autocomplete="off" maxlength="80">
+      <span class="status">Your writing style. Every draft the AI writes follows it. It's learned from your sent emails, and you can edit it.</span>
+      <textarea id="styleNote" aria-label="Your writing style" style="min-height:90px" placeholder="Learned the first time the AI writes a reply for you"></textarea>
+      <div class="ask" style="align-items:center"><button class="btn small" type="button" id="styleLearn">Learn my style now</button><span class="status" id="styleSt"></span></div>
       <span class="status">One-tap replies. The buttons under an email. Separate them with commas. Each one tells the AI what to say.</span>
       <input class="in" id="quickList" aria-label="One-tap replies" placeholder="Yes, Not now, Need more info, Call me, Thanks" autocomplete="off">
       <label class="status chk"><input type="checkbox" id="quickArm" checked> After a one-tap reply is written, get it ready to send, so one more tap on Confirm sends it</label>

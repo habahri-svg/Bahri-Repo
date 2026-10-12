@@ -354,17 +354,56 @@ async function previewStatus(b) {
   return { state: "waiting" };
 }
 
-/* Puts the code back to how it was before the last Fix box publish. Only works while that publish is still the newest change. */
-async function undo(who) {
-  const branch = liveBranch(), snap = await snapshot(await headOf(branch));
-  if (!/\n\nFix box, asked by /.test(snap.message) || !snap.parents.length) throw fail(409, "The newest change wasn't made by the Fix box, so there is nothing to undo here.");
-  const before = await snapshot(snap.parents[0]);
-  const cur = await blob(snap.files["docs/version.js"].sha);
-  const ver = bumpVersion(cur, "Undo: " + snap.message.split("\n")[0].replace(/^\d+\.\d+:\s*/, ""));
-  const tree = await gh("/git/trees", { method: "POST", body: { base_tree: before.tree, tree: [{ path: "docs/version.js", mode: "100644", type: "blob", content: ver.text }] } });
-  const sha = (await gh("/git/commits", { method: "POST", body: { message: ver.version + ": " + ver.name + "\n\nFix box undo, asked by " + who.email, tree: tree.sha, parents: [snap.commit] } })).sha;
-  await gh("/git/refs/heads/" + refPath(branch), { method: "PATCH", body: { sha: sha, force: false } });
-  return { ok: true, target: "live", version: ver.version, name: ver.name, updated: ver.stamp, sha: sha, branch: branch };
+/* The list of Fix box publishes on the live branch, newest first. */
+async function history() {
+  const r = await gh("/commits?sha=" + encodeURIComponent(liveBranch()) + "&per_page=60");
+  const undone = new Set();
+  const out = [];
+  (Array.isArray(r) ? r : []).forEach(function (c) {
+    const msg = (c.commit && c.commit.message) || "";
+    const m = /\n\nFix box undo of ([0-9a-f]{7,40})/.exec(msg);
+    if (m) undone.add(m[1].slice(0, 7));
+    if (!/\n\nFix box, asked by /.test(msg)) return;
+    const head = msg.split("\n")[0], v = /^(\d+\.\d+):\s*(.*)$/.exec(head) || [];
+    out.push({ sha: c.sha, version: v[1] || "", name: v[2] || head, date: (c.commit.committer && c.commit.committer.date) || "", by: (/asked by (\S+)/.exec(msg) || [])[1] || "" });
+  });
+  out.forEach(function (x) { x.undone = undone.has(x.sha.slice(0, 7)); });
+  return { items: out.slice(0, 30) };
+}
+
+/* Takes back one Fix box publish (the newest one when no sha is given). It only touches the files that fix changed,
+   and refuses when any of them has been changed again since, so nothing newer is lost. */
+async function undo(who, sha) {
+  const branch = liveBranch(), head = await snapshot(await headOf(branch));
+  let target = head;
+  if (sha) {
+    if (!/^[0-9a-f]{40}$/.test(String(sha))) throw fail(400, "Bad request.");
+    target = await snapshot(sha);
+  } else if (!/\n\nFix box, asked by /.test(head.message)) {
+    const h = await history(), last = h.items.filter(function (x) { return !x.undone; })[0];
+    if (!last) throw fail(409, "There is no Fix box change to undo.");
+    target = await snapshot(last.sha);
+  }
+  if (!/\n\nFix box, asked by /.test(target.message) || !target.parents.length) throw fail(409, "That change wasn't made by the Fix box, so it can't be undone here.");
+  const before = await snapshot(target.parents[0]);
+  const paths = Array.from(new Set(Object.keys(target.files).concat(Object.keys(before.files)))).filter(function (p) {
+    return p !== "docs/version.js" && (target.files[p] || {}).sha !== (before.files[p] || {}).sha;
+  });
+  if (!paths.length) throw fail(409, "That fix didn't change any files.");
+  const changedSince = paths.filter(function (p) { return (head.files[p] || {}).sha !== (target.files[p] || {}).sha; });
+  if (changedSince.length) throw fail(409, "Can't undo this one safely: " + changedSince.join(", ") + " changed again after it. Ask the Fix box to change it back instead.");
+  const tree = [];
+  for (const p of paths) {
+    if (before.files[p]) tree.push({ path: p, mode: "100644", type: "blob", sha: before.files[p].sha });
+    else tree.push({ path: p, mode: "100644", type: "blob", sha: null });
+  }
+  const label = target.message.split("\n")[0].replace(/^\d+\.\d+:\s*/, "");
+  const ver = bumpVersion(await blob(head.files["docs/version.js"].sha), "Undo: " + label);
+  tree.push({ path: "docs/version.js", mode: "100644", type: "blob", content: ver.text });
+  const t = await gh("/git/trees", { method: "POST", body: { base_tree: head.tree, tree: tree } });
+  const c = (await gh("/git/commits", { method: "POST", body: { message: ver.version + ": " + ver.name + "\n\nFix box undo of " + target.commit.slice(0, 7) + ", asked by " + who.email, tree: t.sha, parents: [head.commit] } })).sha;
+  await gh("/git/refs/heads/" + refPath(branch), { method: "PATCH", body: { sha: c, force: false } });
+  return { ok: true, target: "live", version: ver.version, name: ver.name, updated: ver.stamp, sha: c, branch: branch };
 }
 
 module.exports = async function handler(req, res) {
@@ -385,7 +424,8 @@ module.exports = async function handler(req, res) {
     if (b.action === "step") return res.status(200).json(await step(who, b));
     if (b.action === "publish") return res.status(200).json(await publish(who, b));
     if (b.action === "preview_status") return res.status(200).json(await previewStatus(b));
-    if (b.action === "undo") return res.status(200).json(await undo(who));
+    if (b.action === "undo") return res.status(200).json(await undo(who, b.sha));
+    if (b.action === "history") return res.status(200).json(await history());
     return res.status(400).json({ error: "Bad request." });
   } catch (e) {
     return res.status((e && e.status) || 500).json({ error: String((e && e.message) || "Something went wrong.").slice(0, 400) });

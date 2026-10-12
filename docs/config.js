@@ -14,5 +14,7 @@ window.WYZ_CONFIG = {
   IPHONE_APP_REDIRECT: false,
   /* Microsoft sign-in (Outlook, Hotmail, Microsoft 365). Paste the Application (client) ID from the Microsoft app
      registration (EXECUTION-PAGE.md, Microsoft). Empty = the Continue with Microsoft button stays hidden. */
-  MS_CLIENT_ID: ""
+  MS_CLIENT_ID: "",
+  /* Where "Report a problem" sends people's reports. */
+  OWNER_EMAIL: "habahri@gmail.com"
 };

@@ -110,21 +110,38 @@
       box.append(p("status", "Version " + last.version + ", \"" + last.name + "\", published " + dubai(last.updated) + "."));
       var ua = el("div", "acts"); ua.append(undoBtn()); box.append(ua); host.append(box);
     }
+    var hs = el("div", "infosec"); hs.append(el("h3", "", "Fix history"));
+    var hl = el("div"); var hb = btn("Show every fix", "ghost", function () { hb.disabled = true; hb.textContent = "Loading..."; drawHistory(hl).then(function () { hb.remove(); }).catch(function (e) { hb.disabled = false; hb.textContent = "Show every fix"; toast(e.message); }); });
+    var ha = el("div", "acts"); ha.append(hb); hs.append(ha, hl); host.append(hs);
     host.append(shortcuts(false));
     host.append(p("status", "Each fix uses a little of your Claude credit. Changes to sign-in, security or who can use the AI are refused here on purpose."));
   }
 
-  function undoBtn() {
-    var armed = false;
-    var b = btn("Undo the last fix", "ghost", function () {
+  function undoBtn(sha, label) {
+    var armed = false, base = label || "Undo the last fix";
+    var b = btn(base, "ghost", function () {
       if (!armed) { armed = true; b.textContent = "Confirm: undo it"; return; }
       b.disabled = true; b.textContent = "Undoing...";
-      api("POST", { action: "undo" }).then(function (r) {
+      api("POST", sha ? { action: "undo", sha: sha } : { action: "undo" }).then(function (r) {
         saveLive(null); S = null; draw();
         host.prepend(p("", "Undone. Version " + r.version + " is live, published " + dubai(r.updated) + ". Refresh the page in about a minute."));
-      }).catch(function (e) { b.disabled = false; armed = false; b.textContent = "Undo the last fix"; toast(e.message); });
+      }).catch(function (e) { b.disabled = false; armed = false; b.textContent = base; toast(e.message); });
     });
     return b;
+  }
+
+  async function drawHistory(box) {
+    var r = await api("POST", { action: "history" });
+    box.replaceChildren();
+    if (!r.items || !r.items.length) { box.append(p("status", "No fixes yet.")); return; }
+    r.items.forEach(function (x) {
+      var row = el("div", "acts"); row.style.alignItems = "center"; row.style.borderTop = "1px solid var(--line)"; row.style.paddingTop = "6px";
+      var t = el("span", "", "Version " + x.version + " · " + x.name); t.style.flex = "1 1 220px";
+      var m = el("span", "status", dubai(x.date) + (x.undone ? " · undone" : "")); m.style.flex = "1 1 100%";
+      row.append(t);
+      if (!x.undone) row.append(undoBtn(x.sha, "Undo"));
+      row.append(m); box.append(row);
+    });
   }
 
   function drawRun() {
