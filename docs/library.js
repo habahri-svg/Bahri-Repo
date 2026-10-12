@@ -145,7 +145,7 @@
     return { texts: texts, memory: memoryTexts };
   }
   async function importFiles(files, hint, say) {
-    var got = await readFiles(files, hint, say), total = 0, srcs = {}, nfiles = 0, gone = {};
+    var got = await readFiles(files, hint, say), total = 0, srcs = {}, nfiles = 0, gone = {}, olds = {};
     (await getAll("trash")).forEach(function (t) { if (t.perm || t.rec) gone[t.key] = !!t.perm; });
     Object.keys(gone).forEach(function (k) { if (!gone[k]) delete gone[k]; });
     for (var i = 0; i < got.texts.length; i++) {
@@ -153,6 +153,7 @@
       got.texts[i] = null;
       if (!Array.isArray(arr)) throw new Error("That file is not a list of conversations.");
       var src = looksLike(arr) || hint;
+      try { if (typeof parseGpt === "function") { (olds[src] = olds[src] || []).push.apply(olds[src], src === "chatgpt" ? parseGpt(arr) : parseClaudeExport(arr)); } } catch (e) {}
       var conv = src === "chatgpt" ? fromChatGPT : fromClaude, batch = [];
       var fb = [];
       for (var j = 0; j < arr.length; j++) {
@@ -167,6 +168,8 @@
       }
       arr = null;
     }
+    /* the same import also feeds the research follow-ups on the Today tab, so there is only one place to import */
+    try { Object.keys(olds).forEach(function (k) { if (olds[k].length && typeof pick === "function") { research[k] = { at: Date.now(), via: "import", convs: pick(olds[k]) }; } }); saveResearch(); renderSetup(); followups(true); } catch (e) {}
     var mem = 0;
     for (var q = 0; q < got.memory.length; q++) {
       try { var t = flatten(JSON.parse(got.memory[q])).trim(); if (t) { await putMany("memory", [{ id: "file:" + Date.now() + ":" + q, src: hint || "export", title: "Memory file from the export", text: t.slice(0, 60000), at: Date.now() }]); mem++; } } catch (e) {}
@@ -559,7 +562,9 @@
   }
 
   var tries = 0;
+  function tidy() { var a = $("aiDocs"); if (a) a.hidden = true; }
   function start() {
+    tidy();
     var on = false; try { on = G.connected(); } catch (e) {}
     if (!on) { if (++tries < 400) setTimeout(start, 2000); return; }
     render().catch(function () {}); hookSearch();
