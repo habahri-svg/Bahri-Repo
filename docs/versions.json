@@ -17,6 +17,11 @@
     },
     {
       "version": "3.43.2",
+      "path": "previous/v3.43.2/",
+      "label": "Security fix: only real Google sign-ins reach the server"
+    },
+    {
+      "version": "3.43.3",
       "path": "",
       "label": "Current"
     }
