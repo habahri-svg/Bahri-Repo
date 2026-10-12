@@ -72,6 +72,11 @@
     },
     {
       "version": "3.53",
+      "path": "previous/v3.53/",
+      "label": "One Graphs button instead of a chart on the page"
+    },
+    {
+      "version": "3.54",
       "path": "",
       "label": "Current"
     }
