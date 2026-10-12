@@ -112,6 +112,19 @@
   G.reconnectAccount = async function () {};
   G.removeAccount = function () { extra = []; threads = threads.filter(function (t) { return !t.account; }); window.dispatchEvent(new CustomEvent("wyz-accounts")); };
 
+  /* sample revenue for the Monthly Revenue Comparison card (invented numbers, only in demo) */
+  var realFetch = window.fetch ? window.fetch.bind(window) : null;
+  window.fetch = function (u, o) {
+    var url = typeof u === "string" ? u : (u && u.url) || "";
+    if (url.replace(location.origin, "").split("?")[0] === "/api/revenue") {
+      var thisY = new Date().getFullYear(), yq = +((url.match(/year=(\d+)/) || [])[1]) || thisY;
+      var base = [310, 300, 240, 350, 280, 235, 290, 310, 330, 600, 780, 850], grow = yq === thisY ? [2.8, 2.1, 1.3, 0.6, 1.25, 1.5, 1.5, 1.7, 1.7, 1.3, 0.38, 0.2] : base.map(function () { return 1; });
+      var body = { viewer: true, owner: true, ready: true, year: yq, at: Date.now(), months: base.map(function (b, i) { var rev = Math.round(b * 1000 * grow[i]); return { revenue: rev, net: Math.round(rev * 0.3), netMissingNights: i === 4 ? 6 : 0, bookedNights: Math.round(rev / 420), listings: yq === thisY ? (i >= 7 ? 55 : 30) : 25 }; }) };
+      return Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } }));
+    }
+    return realFetch ? realFetch(u, o) : Promise.reject(new Error("offline"));
+  };
+
   /* the demo ribbon */
   function note(t) { var n = document.getElementById("demoNote"); if (n) { n.textContent = t; clearTimeout(note.t); note.t = setTimeout(function () { n.textContent = ""; }, 4000); } }
   document.addEventListener("DOMContentLoaded", function () {

@@ -31,6 +31,9 @@
   "functions": {
     "api/fix.js": {
       "maxDuration": 60
+    },
+    "api/revenue.js": {
+      "maxDuration": 60
     }
   },
   "crons": [
