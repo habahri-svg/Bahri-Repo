@@ -70,6 +70,7 @@
     "Google Contacts": { list_contacts: async function () { return { people: [{ name: "Kelvin", email: "kelvin@wyzrent.com" }, { name: "Louloua Bahri", email: "louloua@wyzrent.com" }, { name: "Abbas Fannoush", email: "abbas@wyzrent.com" }] }; } },
     "Google Drive": {
       list_recent_files: async function () { return { files: FILES }; },
+      list_files: async function (a) { var n = String(a.name || "").toLowerCase(), f = a.from ? Date.parse(a.from) : 0, t = a.to ? Date.parse(a.to) : Infinity; return { files: FILES.filter(function (x) { var m = Date.parse(x.modifiedTime); return m >= f && m < t && (!n || x.title.toLowerCase().indexOf(n) >= 0); }).map(function (x) { return Object.assign({ by: "you" }, x); }) }; },
       search_files: async function (a) { var q = String(a.query || "").toLowerCase(); return { files: FILES.filter(function (f) { return !q || f.title.toLowerCase().indexOf(q.split(" ")[0]) >= 0; }) }; },
       read_file: async function () { return { text: "Demo file. In the real page this is the file's text." }; }, save_file: pretend("Save to Drive")
     },

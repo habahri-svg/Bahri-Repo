@@ -440,11 +440,14 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
     <div class="sec wrap" data-sec="docs" style="gap:14px">
     <div class="card" id="c-docs">
       <div class="pad">
-        <h2>Recent documents</h2>
-        <div class="ask" style="padding:0 14px 8px"><input class="in" id="docQ" placeholder="Search all your Drive files by name" aria-label="Search Drive"><button class="btn" type="button" id="docGo">Search</button></div>
+        <h2>Documents</h2>
+        <div class="ask" style="padding:0 14px 8px"><input class="in" id="docQ" placeholder="Search your Drive files by name (works with the dates below)" aria-label="Search Drive"><button class="btn" type="button" id="docGo">Search</button></div>
+        <div class="chips" id="docRanges" style="padding:0 14px 6px;flex-wrap:wrap" aria-label="Show files changed"></div>
+        <div class="ask" id="docPick" hidden style="padding:0 14px 8px;flex-wrap:wrap"><label class="status" for="docFrom">From</label><input class="in" type="date" id="docFrom" style="flex:0 1 170px"><label class="status" for="docTo">To</label><input class="in" type="date" id="docTo" style="flex:0 1 170px"><button class="btn small solid" type="button" id="docPickGo">Show</button></div>
         <p class="sub" id="docsHead">The Google Drive files you've been working on show here once Google Drive is connected in the setup steps.</p>
       </div>
       <div id="docs"></div>
+      <div id="aiDocs" style="border-top:1px solid var(--line);margin-top:8px"></div>
     </div>
     </div>
     <div class="sec wrap" data-sec="links" style="gap:14px">

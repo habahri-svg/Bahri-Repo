@@ -266,6 +266,13 @@
       },
       "Google Drive": {
         list_recent_files: async function (a) { var j = await g("/me/drive/recent?$top=" + (a.pageSize || 10)); return { files: (j.value || []).filter(function (f) { return f.file || (f.remoteItem && f.remoteItem.file); }).map(fileOf) }; },
+        list_files: async function (a) {
+          var j = a.name ? await g("/me/drive/root/search(q='" + encodeURIComponent(q(a.name)) + "')?$top=100") : await g("/me/drive/recent?$top=200");
+          var from = a.from ? Date.parse(a.from) : 0, to = a.to ? Date.parse(a.to) : Infinity;
+          var files = (j.value || []).filter(function (f) { return f.file || (f.remoteItem && f.remoteItem.file); }).map(fileOf).filter(function (f) { var t = Date.parse(f.modifiedTime || 0); return t >= from && t < to; });
+          files.sort(function (x, y) { return Date.parse(y.modifiedTime || 0) - Date.parse(x.modifiedTime || 0); });
+          return { files: files.slice(0, a.pageSize || 50) };
+        },
         search_files: async function (a) { var j = await g("/me/drive/root/search(q='" + encodeURIComponent(q(a.query || "")) + "')?$top=" + (a.pageSize || 15)); return { files: (j.value || []).filter(function (f) { return f.file; }).map(fileOf) }; },
         read_file: async function (a) {
           var p = itemPath(a.fileId), meta = await g(p + "?$select=size,name,file");

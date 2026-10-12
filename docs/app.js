@@ -1732,7 +1732,7 @@ function parseClaudeExport(arr){
 }
 async function readUpload(file){
   if(/\.zip$/i.test(file.name)||file.type.includes("zip")){
-    if(!window.JSZip)throw new Error("Couldn't open the .zip here. Unzip it and choose conversations.json instead.");
+    if(!window.JSZip){await new Promise((ok,no)=>{const sc=document.createElement("script");sc.src="jszip.min.js";sc.onload=ok;sc.onerror=()=>no(new Error("Couldn't open the .zip here. Unzip it and choose conversations.json instead."));document.head.append(sc)})}
     const z=await JSZip.loadAsync(file);const f=Object.values(z.files).find(x=>/(^|\/)conversations\.json$/i.test(x.name));
     if(!f)throw new Error("That file has no conversations.json inside. Make sure it's the export from Settings.");
     return JSON.parse(await f.async("string"));
@@ -1745,7 +1745,8 @@ function wireImport(id,key){
     $("resHead").textContent="Reading your "+(key==="chatgpt"?"ChatGPT":"Claude")+" file...";show("t-today");
     try{const data=await readUpload(file);const convs=key==="chatgpt"?parseGpt(data):parseClaudeExport(data);
       if(!convs.length)throw new Error("No conversations found in that file.");
-      research[key]={at:Date.now(),via:"import",convs:pick(convs)};saveResearch();renderSetup();followups(true);}
+      research[key]={at:Date.now(),via:"import",convs:pick(convs)};saveResearch();renderSetup();followups(true);
+      try{const docs=key==="chatgpt"?gptDocs(data):claudeDocs(data);saveAiDocs(key,docs);renderDocs();if(docs.length)toast(docs.length+" "+(key==="chatgpt"?"ChatGPT":"Claude")+" documents added to Documents.")}catch(x){}}
     catch(err){$("resHead").textContent=(err&&err.message)||"Couldn't read that file. Choose the export file from Settings.";}
   });
 }
@@ -1886,25 +1887,47 @@ document.addEventListener("click",e=>{document.querySelectorAll("details.askdd[o
 /* ---------- Google Drive: recent documents ---------- */
 const DRIVE="Google Drive";
 let drive={state:"unknown",files:[]};
+const DOC_RANGES=[["today","Today"],["week","This week"],["lastweek","Last week"],["month","This month"],["all","All"],["pick","Pick dates"]];
+const docRangeKey=()=>DOC_RANGES.some(r=>r[0]===state.docRange)?state.docRange:"week";
+function docRange(k){
+  const d0=new Date();d0.setHours(0,0,0,0);const mon=new Date(d0);mon.setDate(d0.getDate()-((d0.getDay()+6)%7));
+  if(k==="today")return [d0,null];
+  if(k==="week")return [mon,null];
+  if(k==="lastweek"){const a=new Date(mon);a.setDate(mon.getDate()-7);return [a,mon]}
+  if(k==="month")return [new Date(d0.getFullYear(),d0.getMonth(),1),null];
+  if(k==="pick"){const f=state.docFrom,t=state.docTo;return [f?new Date(f+"T00:00:00"):null,t?new Date(new Date(t+"T00:00:00").getTime()+864e5):null]}
+  return [null,null];
+}
+function docRangeLabel(k){if(k==="pick"){const f=state.docFrom,t=state.docTo;return f&&t?(f===t?"on "+niceDay(f):"from "+niceDay(f)+" to "+niceDay(t)):f?"since "+niceDay(f):t?"up to "+niceDay(t):"in the dates you pick"}return {today:"today",week:"this week",lastweek:"last week",month:"this month",all:""}[k]||""}
+function drawDocRanges(){
+  const h=$("docRanges");if(!h)return;h.replaceChildren();const k=docRangeKey();
+  DOC_RANGES.forEach(([id,l])=>{const b=el("button","chip",l);b.type="button";b.setAttribute("aria-pressed",String(k===id));b.onclick=()=>{state.docRange=id;persist();drawDocRanges();if(id!=="pick")loadDrive()};h.append(b)});
+  const pk=$("docPick");if(pk){pk.hidden=k!=="pick";$("docFrom").value=state.docFrom||"";$("docTo").value=state.docTo||""}
+}
 async function loadDrive(){
   if(!mcp)return;
+  drawDocRanges();
+  const k=docRangeKey(),[from,to]=docRange(k),name=($("docQ")&&$("docQ").value.trim())||"";
+  if($("docsHead")&&drive.state==="ok")$("docsHead").textContent="Loading...";
   try{
-    const r=await mcp.callTool(DRIVE,"list_recent_files",{pageSize:10,orderBy:"lastModifiedByMe",excludeContentSnippets:true},{cache:false});
-    const p=r.payload||{};drive.files=(Array.isArray(p.files)?p.files:[]).map(f=>({id:String(f.id||""),t:String(f.title||f.name||"Untitled"),mod:f.modifiedTime||"",ext:String(f.fileExtension||"").toUpperCase(),mime:String(f.mimeType||"")})).filter(f=>f.id);
-    drive.state="ok";
+    const r=await mcp.callTool(DRIVE,"list_files",{name,from:from?from.toISOString():"",to:to?to.toISOString():"",pageSize:k==="all"&&!name?25:60},{cache:false});
+    const p=r.payload||{};drive.files=(Array.isArray(p.files)?p.files:[]).map(f=>({id:String(f.id||""),t:String(f.title||f.name||"Untitled"),mod:f.modifiedTime||"",ext:String(f.fileExtension||"").toUpperCase(),mime:String(f.mimeType||""),link:String(f.link||""),by:String(f.by||"")})).filter(f=>f.id);
+    drive.state="ok";drive.at=Date.now();drive.rk=k;drive.name=name;
   }catch(e){const c=e&&e.code;drive.state=c==="server_not_connected"||c==="selection_required"?"missing":c==="needs_reauth"?"reauth":c==="not_in_manifest"||c==="consent_required"?"denied":"error";drive.files=[];drive.note=(e&&e.message)||""}
   renderDocs();renderSetup();
 }
 const kindOf=f=>/document/.test(f.mime)?"Doc":/spreadsheet/.test(f.mime)?"Sheet":/presentation/.test(f.mime)?"Slides":/folder/.test(f.mime)?"Folder":(f.ext||"File");
 let docResults=null;
 function renderDocs(){
+  try{renderAiDocs()}catch(e){}
   const host=$("docs");if(!host)return;host.replaceChildren();
   if(drive.state!=="ok"){$("docsHead").textContent=drive.state==="error"?"Couldn't read Google Drive just now. Tap Refresh now.":"The Google Drive files you've been working on show here once Google Drive is connected in the setup steps.";return}
-  $("docsHead").textContent=drive.files.length?"The files you changed most recently.":"No recent files in your Google Drive.";
+  const lbl=docRangeLabel(drive.rk||docRangeKey()),nm=drive.name?" matching \""+drive.name+"\"":"";
+  $("docsHead").textContent=drive.files.length?drive.files.length+" file"+(drive.files.length>1?"s":"")+nm+" changed "+(lbl||"most recently")+", newest first. Updated "+fmtTime(new Date(drive.at||Date.now()).toISOString())+".":"No files"+nm+" changed "+(lbl||"yet")+".";
   (docResults||drive.files).forEach(f=>{
     const r=el("div","item");r.append(el("span","dot none"));const m=el("div","main");
-    m.append(el("span","t",f.t));m.append(el("span","m",kindOf(f)+(f.mod?" · Changed "+fmtWhen(f.mod):"")));
-    const a=el("div","acts");const o=el("a","btn small","Open");o.href="https://drive.google.com/file/d/"+encodeURIComponent(f.id)+"/view";o.target="_blank";o.rel="noopener";
+    m.append(el("span","t",f.t));m.append(el("span","m",kindOf(f)+(f.mod?" · Changed "+fmtWhen(f.mod):"")+(f.by?" by "+f.by:"")));
+    const a=el("div","acts");const o=el("a","btn small","Open");o.href=f.link||"https://drive.google.com/file/d/"+encodeURIComponent(f.id.replace(/^a\d+~/,""))+"/view";o.target="_blank";o.rel="noopener";
     const at=el("button","btn small ghost","Add to tasks");at.type="button";at.onclick=()=>{addTask("Finish: "+f.t,"Google Drive");at.textContent="Added";at.disabled=true};
     a.append(o);
     if(fileKind(f.mime,f.t)){const rd=el("button","btn small","Ask AI about it");rd.type="button";rd.onclick=()=>openFileAI(f.t,()=>mcp.callTool("Google Drive","read_file",{fileId:f.id,mimeType:f.mime},{cache:false}).then(r=>r.payload));a.append(rd)}
@@ -2395,17 +2418,8 @@ setInterval(checkVersion,180000);document.addEventListener("visibilitychange",()
 })();
 
 /* ---------- search Drive, text size, invite, weekly review ---------- */
-async function searchDocs(){
-  const q=$("docQ").value.trim();
-  if(!q){docResults=null;renderDocs();return}
-  if(!G.connected())return;
-  try{
-    const r=await mcp.callTool("Google Drive","search_files",{query:q,pageSize:15});
-    docResults=((r.payload&&r.payload.files)||[]).map(f=>({id:String(f.id),t:String(f.title||"Untitled"),mod:f.modifiedTime||"",ext:String(f.fileExtension||"").toUpperCase(),mime:String(f.mimeType||"")}));
-    renderDocs();$("docsHead").textContent=docResults.length?docResults.length+" file"+(docResults.length>1?"s":"")+" found. Clear the box and search to go back to recent files.":"No files found."
-  }catch(e){$("docsHead").textContent="Couldn't search Drive just now ("+clip((e&&e.message)||"unknown reason",90)+")."}
-}
-$("docGo").onclick=searchDocs;$("docQ").addEventListener("keydown",e=>{if(e.key==="Enter")searchDocs()});
+function searchDocs(){docResults=null;if(!G.connected())return;loadDrive()}
+$("docGo").onclick=searchDocs;if($("docPickGo"))$("docPickGo").onclick=()=>{state.docFrom=$("docFrom").value;state.docTo=$("docTo").value;if(state.docFrom&&state.docTo&&state.docTo<state.docFrom){const x=state.docFrom;state.docFrom=state.docTo;state.docTo=x}persist();drawDocRanges();loadDrive()};$("docQ").addEventListener("keydown",e=>{if(e.key==="Enter")searchDocs()});
 const ZOOMS=[1,1.15,1.3];
 function applyZoom(){let z=1;try{z=+localStorage.getItem("wyz-zoom")||1}catch(e){}document.body.style.zoom=z;$("zoomBtn").textContent=z>1?"Text size "+Math.round(z*100)+"%":"Text size"}
 $("zoomBtn").onclick=()=>{let z=1;try{z=+localStorage.getItem("wyz-zoom")||1}catch(e){}const n=ZOOMS[(ZOOMS.indexOf(z)+1)%ZOOMS.length];try{localStorage.setItem("wyz-zoom",String(n))}catch(e){}applyZoom()};
@@ -3328,3 +3342,75 @@ function updateBadge(){
 if($("attBtn"))$("attBtn").onclick=()=>{if(!G.connected()){showWelcome();return}openAttachments("")};
 if($("autoSum"))$("autoSum").onchange=()=>{state.autoSum=$("autoSum").checked;persist()};
 if($("badgeOn"))$("badgeOn").onchange=()=>{state.badgeOff=!$("badgeOn").checked;persist();updateBadge()};
+
+/* ---------- 3.36: documents you made or shared in ChatGPT and Claude, read from their export files ---------- */
+let aiDocs={chatgpt:[],claude:[]};
+function loadAiDocs(){try{const v=JSON.parse(localStorage.getItem(LS+"-aidocs")||"null");if(v)aiDocs=Object.assign({chatgpt:[],claude:[]},v)}catch(e){}}
+function saveAiDocs(key,docs){
+  aiDocs[key]=docs.sort((a,b)=>b.at-a.at).slice(0,400);
+  for(let cap=12000;cap>=1000;cap=Math.floor(cap/2)){
+    const out=JSON.stringify({chatgpt:aiDocs.chatgpt.map(d=>Object.assign({},d,{text:(d.text||"").slice(0,cap)})),claude:aiDocs.claude.map(d=>Object.assign({},d,{text:(d.text||"").slice(0,cap)}))});
+    if(out.length<2500000){try{localStorage.setItem(LS+"-aidocs",out);return}catch(e){}}
+  }
+}
+function gptDocs(arr){
+  const out=[],seen=new Map();
+  (Array.isArray(arr)?arr:[]).forEach(c=>{
+    const id=c.conversation_id||c.id||"",url=id?"https://chatgpt.com/c/"+id:"https://chatgpt.com/",chat=String(c.title||"Untitled");
+    Object.values(c.mapping||{}).map(n=>n&&n.message).filter(Boolean).sort((a,b)=>(a.create_time||0)-(b.create_time||0)).forEach(m=>{
+      const at=(m.create_time||c.update_time||c.create_time||0)*1000,parts=(m.content&&Array.isArray(m.content.parts))?m.content.parts:[];
+      const rc=String(m.recipient||"");
+      if(/^canmore\.(create|update)_textdoc$/.test(rc)){
+        try{const j=JSON.parse(parts.filter(p=>typeof p==="string").join(""));
+          if(rc.endsWith("create_textdoc")){const k="canvas:"+id+":"+(j.name||"");const d={src:"chatgpt",kind:"Canvas",title:String(j.name||"Canvas document"),at,url,chat,text:String(j.content||"")};seen.set(k,d);out.push(d)}
+          else{const last=[...seen.entries()].filter(([k])=>k.startsWith("canvas:"+id+":")).pop();if(last){last[1].at=at;const u=(j.updates||[])[0];if(u&&u.pattern===".*"&&u.replacement)last[1].text=String(u.replacement)}}
+        }catch(e){}
+      }
+      ((m.metadata&&m.metadata.attachments)||[]).forEach(a=>{if(a&&a.name&&!seen.has("att:"+id+":"+a.name)){const d={src:"chatgpt",kind:"You shared",title:String(a.name),at,url,chat,text:""};seen.set("att:"+id+":"+a.name,d);out.push(d)}});
+      if(m.author&&m.author.role==="assistant")parts.filter(p=>typeof p==="string").forEach(p=>{(p.match(/sandbox:\/mnt\/data\/[^\s)\]"']+/g)||[]).forEach(u=>{const n=decodeURIComponent(u.split("/").pop());if(n&&!seen.has("made:"+id+":"+n)){const d={src:"chatgpt",kind:"Made by ChatGPT",title:n,at,url,chat,text:""};seen.set("made:"+id+":"+n,d);out.push(d)}})});
+    });
+  });
+  return out;
+}
+function claudeDocs(arr){
+  const out=[],seen=new Set();
+  (Array.isArray(arr)?arr:[]).forEach(c=>{
+    const url=c.uuid?"https://claude.ai/chat/"+c.uuid:"https://claude.ai/",chat=String(c.name||"Untitled");
+    (c.chat_messages||[]).forEach(m=>{
+      const at=Date.parse(m.created_at||c.updated_at||c.created_at)||0;
+      (m.content||[]).forEach(x=>{if(x&&x.type==="tool_use"&&x.name==="artifacts"&&x.input&&(x.input.title||x.input.id)){const k=c.uuid+":"+(x.input.id||x.input.title);const prev=out.find(d=>d.k===k);if(prev){prev.at=at;if(x.input.content)prev.text=String(x.input.content)}else if(!seen.has(k)){seen.add(k);out.push({k,src:"claude",kind:"Artifact",title:String(x.input.title||x.input.id),at,url,chat,text:String(x.input.content||"")})}}});
+      (m.attachments||[]).concat(m.files||[]).forEach(a=>{const n=a&&(a.file_name||a.name);if(n&&!seen.has(c.uuid+":f:"+n)){seen.add(c.uuid+":f:"+n);out.push({src:"claude",kind:"You shared",title:String(n),at,url,chat,text:""})}});
+    });
+  });
+  return out;
+}
+function aiDocsInRange(){
+  const k=docRangeKey(),[from,to]=docRange(k),name=(($("docQ")&&$("docQ").value)||"").trim().toLowerCase();
+  return aiDocs.chatgpt.concat(aiDocs.claude).filter(d=>(!from||d.at>=from.getTime())&&(!to||d.at<to.getTime())&&(!name||d.title.toLowerCase().includes(name)||d.chat.toLowerCase().includes(name))).sort((a,b)=>b.at-a.at);
+}
+function renderAiDocs(){
+  const host=$("aiDocs");if(!host)return;host.replaceChildren();
+  const have=aiDocs.chatgpt.length+aiDocs.claude.length;
+  const head=el("div","pad");const h=el("h3","","From ChatGPT and Claude");h.style.margin="0 0 4px";head.append(h);host.append(head);
+  const imp=el("div","acts");imp.style.padding="0 14px 8px";
+  const g=el("button","btn small"+(aiDocs.chatgpt.length?"":" solid"),aiDocs.chatgpt.length?"Update from ChatGPT":"Import from ChatGPT");g.type="button";g.onclick=()=>$("f-chatgpt").click();
+  const c=el("button","btn small ghost",aiDocs.claude.length?"Update from Claude":"Import from Claude");c.type="button";c.onclick=()=>$("f-claude").click();
+  const how=el("button","btn small ghost","How to get the file");how.type="button";how.onclick=()=>{const b=infoOpen("Get your ChatGPT and Claude documents");
+    [["ChatGPT","In ChatGPT open Settings, Data controls, then Export data. ChatGPT emails you a link within a few minutes. Download the .zip and choose it with Import from ChatGPT here. No need to unzip it."],["Claude","In Claude open Settings, Privacy, then Export data. Download the .zip from the email and choose it with Import from Claude."],["Why a file","ChatGPT and Claude don't let other apps read your chats directly, so the export file is the only way in. Do it again whenever you want the list refreshed."]].forEach(([t,x])=>{const s=infoSection(b,t);s.append(el("p","status",x))})};
+  imp.append(g,c,how);host.append(imp);
+  if(!have){host.append(el("p","sub","Import your ChatGPT export to list the canvas documents you wrote there, the files you shared with it and the files it made for you. Claude works the same way.")) ;return}
+  const list=aiDocsInRange(),lbl=docRangeLabel(docRangeKey());
+  host.append(el("p","sub",list.length?list.length+" document"+(list.length>1?"s":"")+" from your chats "+(lbl||"in total")+". Imported "+fmtWhen(new Date(Math.max((research.chatgpt&&research.chatgpt.at)||0,(research.claude&&research.claude.at)||0)||Date.now()).toISOString())+".":"No ChatGPT or Claude documents "+(lbl||"found")+"."));
+  list.slice(0,60).forEach(d=>{
+    const r=el("div","item");r.append(el("span","dot none"));const m=el("div","main");
+    m.append(el("span","t",d.title));m.append(el("span","m",(d.src==="chatgpt"?"ChatGPT":"Claude")+" · "+d.kind+(d.at?" · "+fmtWhen(new Date(d.at).toISOString()):"")+" · in \""+clip(d.chat,50)+"\""));
+    const a=el("div","acts");
+    if(d.text){
+      a.append(onbBtn("Read",()=>{const b=infoOpen(d.title);b.append(el("p","status",(d.src==="chatgpt"?"ChatGPT":"Claude")+" "+d.kind.toLowerCase()+" · "+fmtWhen(new Date(d.at).toISOString())));const t=el("div","mailtext",d.text);b.append(t);const ac=el("div","acts");const cp=onbBtn("Copy text",()=>navigator.clipboard.writeText(d.text).then(()=>cp.textContent="Copied").catch(()=>{}),"small");ac.append(cp);b.append(ac)},"small solid"));
+      a.append(onbBtn("Ask AI about it",()=>openFileAI(d.title,async()=>({text:d.text})),"small"));
+    }
+    const o=el("a","btn small ghost","Open the chat ↗");o.href=d.url;o.target="_blank";o.rel="noopener";a.append(o);
+    m.append(a);r.append(m);host.append(r);
+  });
+}
+loadAiDocs();

@@ -483,6 +483,16 @@
         var f = await gfetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink", { method: "POST", headers: { "Content-Type": "multipart/related; boundary=" + boundary }, body: body }, SC.driveFile);
         return { id: f.id, name: f.name, link: f.webViewLink || ("https://drive.google.com/file/d/" + f.id + "/view"), folderId: folderId, folder: name };
       },
+      list_files: async function (a) {
+        var parts = ["trashed=false", "mimeType != 'application/vnd.google-apps.folder'"];
+        if (a.name) parts.push("name contains '" + String(a.name).replace(/\\/g, "\\\\").replace(/'/g, "\\'") + "'");
+        if (a.from) parts.push("modifiedTime >= '" + a.from + "'");
+        if (a.to) parts.push("modifiedTime < '" + a.to + "'");
+        var q = "pageSize=" + (a.pageSize || 50) + "&orderBy=" + encodeURIComponent("modifiedTime desc") + "&supportsAllDrives=true&includeItemsFromAllDrives=true" +
+          "&q=" + encodeURIComponent(parts.join(" and ")) + "&fields=" + encodeURIComponent("files(id,name,modifiedTime,mimeType,fileExtension,webViewLink,lastModifyingUser(displayName,me))");
+        var j = await gfetch("https://www.googleapis.com/drive/v3/files?" + q, null, SC.drive);
+        return { files: (j.files || []).map(function (f) { var u = f.lastModifyingUser || {}; return { id: f.id, title: f.name, modifiedTime: f.modifiedTime, mimeType: f.mimeType, fileExtension: f.fileExtension, link: f.webViewLink || "", by: u.me ? "you" : (u.displayName || "") }; }) };
+      },
       list_recent_files: async function (a) {
         var q = "pageSize=" + (a.pageSize || 10) + "&orderBy=" + encodeURIComponent("modifiedByMeTime desc") +
           "&q=" + encodeURIComponent("trashed=false") + "&fields=" + encodeURIComponent("files(id,name,modifiedTime,mimeType,fileExtension)");
@@ -553,6 +563,7 @@
     "Gmail.search_threads": function (rs) { var all = [].concat.apply([], rs.map(function (r) { return r.threads || []; })); all.sort(function (a, b) { return dateOf(b) - dateOf(a); }); return { threads: all }; },
     "Google Calendar.list_events": function (rs) { var all = [].concat.apply([], rs.map(function (r) { return r.events || []; })); all.sort(function (a, b) { return Date.parse((a.start || {}).dateTime || (a.start || {}).date || 0) - Date.parse((b.start || {}).dateTime || (b.start || {}).date || 0); }); return { events: all }; },
     "Google Drive.list_recent_files": function (rs) { var all = [].concat.apply([], rs.map(function (r) { return r.files || []; })); all.sort(function (a, b) { return Date.parse(b.modifiedTime || 0) - Date.parse(a.modifiedTime || 0); }); return { files: all }; },
+    "Google Drive.list_files": function (rs) { var all = [].concat.apply([], rs.map(function (r) { return r.files || []; })); all.sort(function (a, b) { return Date.parse(b.modifiedTime || 0) - Date.parse(a.modifiedTime || 0); }); return { files: all }; },
     "Google Drive.search_files": function (rs) { return { files: [].concat.apply([], rs.map(function (r) { return r.files || []; })) }; },
     "Google Contacts.list_contacts": function (rs) { return { people: [].concat.apply([], rs.map(function (r) { return r.people || []; })) }; }
   };
