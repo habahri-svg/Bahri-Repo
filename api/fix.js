@@ -415,6 +415,18 @@ module.exports = async function handler(req, res) {
   if (!who) return res.status(401).json({ error: "Your Google sign-in isn't valid for this site." });
   const owners = S.list(process.env.OWNER_EMAILS);
   if (owners.indexOf(who.email) < 0) return res.status(403).json({ owner: false, error: "The Fix box is only for the owner." });
+  /* Download the whole app code as a .zip (owner only). Needs only GITHUB_TOKEN. */
+  if (req.method === "GET" && String((req.query || {}).zip || "") === "1") {
+    if (!String(process.env.GITHUB_TOKEN || "").trim()) return res.status(503).json({ error: "GITHUB_TOKEN is missing in Vercel." });
+    try {
+      const r = await gh("/zipball/" + encodeURIComponent(liveBranch()), { raw: true });
+      if (!r.ok) return res.status(502).json({ error: "GitHub didn't send the code (" + r.status + ")." });
+      const buf = Buffer.from(await r.arrayBuffer());
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader("Content-Disposition", "attachment; filename=\"WYZ-Execution-Page-code.zip\"");
+      return res.status(200).send(buf);
+    } catch (e) { return res.status(502).json({ error: "Couldn't fetch the code from GitHub." }); }
+  }
   const miss = missing();
   if (req.method === "GET") return res.status(200).json({ owner: true, ready: !miss.length, missing: miss, repo: repoName(), branch: liveBranch(), model: MODEL });
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });

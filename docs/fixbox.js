@@ -71,7 +71,37 @@
     var box = el("div", "infosec"); box.append(el("h3", "", setup ? "Shortcuts to set it up" : "Shortcuts"));
     var a = el("div", "acts");
     links.forEach(function (l) { var n = el("a", "btn small" + (setup && a.childNodes.length < 2 ? " solid" : ""), l[0]); n.href = l[1]; n.target = "_blank"; n.rel = "noopener"; n.title = l[2]; a.append(n); });
+    var z = el("button", "btn small solid", "⬇️ Download app code (.zip)"); z.type = "button"; z.title = "The full code: the page, the server functions and settings";
+    z.onclick = function () { downloadZip(z); }; a.prepend(z);
     box.append(a); return box;
+  }
+  /* Whole code from GitHub. If GitHub isn't connected yet, zips the page files this site serves instead. */
+  async function downloadZip(btn) {
+    var old = btn.textContent; btn.disabled = true; btn.textContent = "Preparing...";
+    var d = new Date(), pad = function (n) { return String(n).padStart(2, "0"); };
+    var dub = new Date(d.getTime() + 4 * 3600000);
+    var stamp = dub.getUTCFullYear() + "-" + pad(dub.getUTCMonth() + 1) + "-" + pad(dub.getUTCDate()) + "_" + pad(dub.getUTCHours()) + pad(dub.getUTCMinutes());
+    var ver = (window.WYZ_VERSION && window.WYZ_VERSION.version) || "";
+    var name = "WYZ-Execution-Page_v" + ver + "_" + stamp + ".zip", blob = null, partial = false;
+    try {
+      var t = await G.token();
+      var r = await fetch("/api/fix?zip=1", { headers: { Authorization: "Bearer " + t } });
+      if (r.ok && /zip/.test(r.headers.get("content-type") || "")) blob = await r.blob();
+    } catch (e) {}
+    if (!blob) {
+      try {
+        if (!window.JSZip) throw new Error("no zip");
+        var files = ["index.html", "app.js", "connectors.js", "config.js", "version.js", "fixbox.js", "demo.js", "microsoft.js", "sw.js", "manifest.webmanifest", "admin.html", "privacy.html", "ms-redirect.html"];
+        var zip = new JSZip();
+        for (var i = 0; i < files.length; i++) { try { var q = await fetch(files[i] + "?t=" + Date.now(), { cache: "no-store" }); if (q.ok) zip.file("docs/" + files[i], await q.text()); } catch (e) {} }
+        blob = await zip.generateAsync({ type: "blob" }); partial = true;
+      } catch (e) {}
+    }
+    btn.disabled = false; btn.textContent = old;
+    if (!blob) { if (typeof toast === "function") toast("Couldn't prepare the zip. Try again in a moment."); return; }
+    var u = URL.createObjectURL(blob), l = document.createElement("a"); l.href = u; l.download = name; document.body.append(l); l.click(); l.remove();
+    setTimeout(function () { URL.revokeObjectURL(u); }, 60000);
+    if (typeof toast === "function") toast("Downloaded " + name + (partial ? ". Page files only, add GITHUB_TOKEN in Vercel to include the server code." : ", the full code."));
   }
 
   function drawSetup() {

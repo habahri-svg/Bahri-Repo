@@ -1071,6 +1071,7 @@ document.addEventListener("keydown",e=>{
 async function openThread(id,o){
   if(thr.counting){thrNote("Your email is about to be sent. Press Undo to stop it, or wait a few seconds.");return}
   o=o||{};const t=tById(id)||{};
+  if(thr.counting&&!thr.bg){thr.bg=true;sendBar(thr,"tick")}
   thr={id,msgs:[],item:o.item||{id,st:"reply",title:t.subject||"",summary:t.snippet||""},armed:0,done:false,mode:"reply",files:[],autoCc:[]};$("thrCc").value="";
   setMode("reply");renderTplSelect();syncRuleBtns();renderThrPick();$("thrFiles").value="";$("thrFileList").textContent="";$("thrArchive").disabled=false;$("thrArchive").textContent="Archive";$("thrRemind").value="3";
   $("thr").hidden=false;$("thrTitle").textContent=(t.subject||"Conversation")+(t.account?" · in "+t.account:"");
@@ -1357,13 +1358,32 @@ async function thrAct(kind){
   thr.armed=0;
   const secs=undoSecs();
   if(!secs)return thrDeliver("send",a);
-  let left=secs;thr.counting=true;setSendButtons(true);
+  /* 3.43: you can leave straight away. Close the email and the countdown carries on in a small bar at the bottom,
+     with Undo and Send now. Or press Send now to skip the wait. */
+  const T=thr;T.remind=+$("thrRemind").value||0;T.sum=!!($("thrSum")&&$("thrSum").checked);let left=secs;T.counting=true;setSendButtons(true);
   const who=a.to[0]+(a.to.length>1?" +"+(a.to.length-1):"");
-  const tick=()=>{$("thrSend").textContent="Undo ("+left+")";st.className="status";st.textContent="Sending to "+who+" in "+left+" second"+(left===1?"":"s")+". Press Undo to stop it."};
+  T.left=()=>left;T.who=who;
+  T.fire=()=>{if(!T.counting)return;clearInterval(T.timer);T.counting=false;sendBar(T,null);thrDeliver("send",a,T)};
+  const tick=()=>{if(T.bg){sendBar(T,"tick");return}$("thrSend").textContent="Undo ("+left+")";st.className="status";st.replaceChildren(document.createTextNode("Sending to "+who+" in "+left+" second"+(left===1?"":"s")+". Press Undo to stop it, or close this window, it still goes. "));
+    const now=el("button","btn small solid","Send now");now.type="button";now.onclick=()=>T.fire();st.append(now)};
   tick();
-  thr.timer=setInterval(()=>{left--;if(left<=0){clearInterval(thr.timer);thr.counting=false;thrDeliver("send",a)}else tick()},1000);
+  T.timer=setInterval(()=>{left--;if(left<=0)T.fire();else tick()},1000);
 }
-async function thrDeliver(kind,a){
+/* Small bar at the bottom while an email you left is counting down */
+function sendBar(T,mode){
+  let b=$("sendBar");
+  if(!mode){if(b&&b.dataset.tid===String(T.id||"new"))b.remove();return}
+  if(!b){b=el("div","updbar");b.id="sendBar";b.setAttribute("role","status");document.body.append(b)}
+  b.dataset.tid=String(T.id||"new");b.replaceChildren(el("span","","Sending to "+T.who+" in "+T.left()+"s"));
+  const u=el("button","btn small","Undo");u.type="button";u.onclick=()=>{clearInterval(T.timer);T.counting=false;T.bg=false;b.remove();toast("Not sent. Your email is still open, tap Undo again if you closed it by mistake.");reopenDraft(T)};
+  const n=el("button","btn small solid","Send now");n.type="button";n.onclick=()=>T.fire();
+  b.append(u,n);
+}
+/* after Undo from the bar, open the same email again with the text still in it */
+function reopenDraft(T){if(thr!==T)return;$("thr").hidden=false;setSendButtons(false);$("thrSend").disabled=false;$("thrSend").textContent="Send";const st=$("thrSt");st.className="status";st.textContent="Cancelled. Nothing was sent."}
+async function thrDeliver(kind,a,T){
+  T=T||thr;
+  if(T.bg||thr!==T)return bgDeliver(a,T);
   const st=$("thrSt"),btn=$(kind==="send"?"thrSend":"thrSave");
   thr.armed=0;btn.disabled=true;const old=btn.textContent;btn.textContent=kind==="send"?"Sending...":"Saving...";
   if(kind==="send")setSendButtons(true);
@@ -1387,6 +1407,18 @@ async function thrDeliver(kind,a){
     setSendButtons(false);btn.disabled=false;btn.textContent=old==="Sending..."?"Send":"Save to Gmail drafts";st.className="status err";
     st.textContent=e&&e.code==="consent_required"?"Google didn't allow sending. Sign out and back in, and tick every box.":"Couldn't "+(kind==="send"?"send":"save")+" it ("+clip((e&&e.message)||"unknown reason",100)+"). Check Gmail before trying again."
   }
+}
+/* sending after you closed the email: same steps, the result shows as a toast */
+async function bgDeliver(a,T){
+  try{
+    if(T.mode==="forward"&&T.sum&&sample){const sm=await sample("Summarize this email conversation for someone who has not seen it, in 4 short bullet lines, plain words, no em dashes.\n\n"+threadBlock(T.msgs),{cache:false});a.body=withSigText()+"\n\nSummary:\n"+sm.text.trim()}
+    const r=await mcp.callTool("Gmail","send_message",a);T.done=true;
+    const tid=T.mode==="new"?(r.payload&&r.payload.threadId):T.id;
+    if(T.mode==="new")logDone({id:tid,title:"Sent: "+a.subject},"sent");else{setDone(T.id,true);logDone(T.item)}
+    let msg="Sent to "+a.to.join(", ")+".";
+    const n=T.remind||0;if((T.mode==="reply"||T.mode==="new")&&n>0&&tid){const d=new Date();d.setDate(d.getDate()+n);state.chase=state.chase||{};state.chase[tid]={due:ymd(d),title:a.subject,at:Date.now(),to:a.to[0]};msg+=" Reminder set for "+niceDay(ymd(d))+"."}
+    persist();renderBoard();try{renderTop3()}catch(e){}toast(msg);
+  }catch(e){toast("Couldn't send your email to "+a.to[0]+" ("+clip((e&&e.message)||"unknown reason",80)+"). Open it again and resend.")}
 }
 /* The AI reads the email before it goes */
 async function thrCheck(){
@@ -1472,7 +1504,7 @@ function thrMore(){
   });
   host.append(d);
 }
-function thrClose(){if(thr.counting){thrNote("Your email is about to be sent. Press Undo to stop it, or wait a few seconds.");return}$("thr").hidden=true}
+function thrClose(){if(thr.counting){thr.bg=true;$("thr").hidden=true;sendBar(thr,"tick");return}$("thr").hidden=true}
 $("thrClose").onclick=thrClose;$("thrAI").onclick=()=>{if(!sample&&chatAI()){showFree();return}if(thr.mode==="new")composeDraft();else if($("thrAIpick").value==="free")showFree();else suggestReply({prov:aiPickValue(),force:true})};$("thrAll").onchange=fillTargets;
 $("thrSend").onclick=()=>thrAct("send");
 $("thrAllSel").onchange=()=>{$("thrAll").checked=$("thrAllSel").value==="all";fillTargets()};
@@ -2946,6 +2978,7 @@ $("repClose").onclick=()=>{$("report").hidden=true};
 function fillFrom(){const w=$("thrFromWrap"),s=$("thrFrom");if(!w)return;const acc=G.accounts().filter(x=>x.email);w.hidden=!(thr.mode==="new"&&acc.length>1);if(w.hidden)return;const v=s.value;s.replaceChildren(...acc.map(x=>new Option(x.email,String(x.n))));if(v&&acc.some(x=>String(x.n)===v))s.value=v}
 function openCompose(o){
   o=o||{};
+  if(thr.counting&&!thr.bg){thr.bg=true;sendBar(thr,"tick")}
   thr={id:"",msgs:[],item:{id:"",st:"work",title:"New email",summary:""},armed:0,done:false,mode:"new",files:[]};
   $("thr").hidden=false;$("thrTitle").textContent="New email";
   setMode("new");renderTplSelect();renderThrPick();loadContacts();drawTools();
