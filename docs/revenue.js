@@ -1,4 +1,4 @@
-/* Monthly Revenue Comparison: this year against last year, month by month, from Hostaway (via /api/revenue).
+/* Graphs: one header button opens the Monthly Revenue Comparison (this year against last year, month by month, from Hostaway via /api/revenue).
    Same idea as the Revenue Hub chart. Shown only to owners and the people listed in REVENUE_VIEWERS.
    Months that have not happened yet show bookings made so far, and are marked so they are not read as a drop. */
 (function () {
@@ -15,7 +15,7 @@
   var svg = function (tag, attrs, text) { var e = document.createElementNS(NS, tag); Object.keys(attrs || {}).forEach(function (a) { e.setAttribute(a, attrs[a]); }); if (text != null) e.textContent = text; return e; };
 
   var S = { year: nowY(), metric: "total", cur: null, prev: null, state: "idle", msg: "", info: null };
-  var card = null;
+  var card = null, dlg = null, btn = null;
 
   async function load(year, fresh) {
     var t = await G.token();
@@ -87,8 +87,8 @@
 
   function draw() {
     if (!card) return;
-    if (S.state === "hidden") { card.hidden = true; return; }
-    card.hidden = false; card.replaceChildren();
+    if (S.state === "hidden") { if (btn) btn.hidden = true; return; }
+    card.replaceChildren();
     var pad = el("div", "pad"); card.append(pad);
     var head = el("div", "headrow"); head.append(el("h2", "", "Monthly " + (S.metric === "net" ? "Net to WyzRent" : "Revenue") + " Comparison"));
     var tg = el("div", "chips"); [["total", "Total revenue"], ["net", "Company net"]].forEach(function (m) { var c = el("button", "chip", m[1]); c.type = "button"; c.setAttribute("aria-pressed", String(S.metric === m[0])); c.onclick = function () { S.metric = m[0]; draw(); }; tg.append(c); });
@@ -116,14 +116,32 @@
     var ac = el("div", "acts"); ac.append(bt("Refresh", function () { refresh(true); }, "ghost")); pad.append(ac);
   }
 
+  /* one button in the header opens the graphs in a window; nothing sits on the page */
+  function openGraphs() {
+    if (!dlg) {
+      dlg = el("div", "onb"); dlg.id = "gfxDlg"; dlg.hidden = true; dlg.setAttribute("role", "dialog"); dlg.setAttribute("aria-modal", "true"); dlg.setAttribute("aria-labelledby", "gfxTitle");
+      var box = el("div", "onbbox card"); box.style.maxWidth = "1000px"; var pad = el("div", "pad");
+      var hr = el("div", "headrow"); var t = el("h2", "", "Graphs"); t.id = "gfxTitle"; t.style.flex = "1 1 200px"; hr.append(t, bt("Close", function () { dlg.hidden = true; }));
+      var body = el("div"); body.id = "gfxBody"; pad.append(hr, body); box.append(pad); dlg.append(box); document.body.append(dlg);
+      dlg.addEventListener("click", function (e) { if (e.target === dlg) dlg.hidden = true; });
+      document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !dlg.hidden) dlg.hidden = true; });
+    }
+    card = $("gfxBody"); card.replaceChildren(); dlg.hidden = false;
+    if (S.state === "ok" || S.state === "stale") draw(); else refresh(false);
+    var c = dlg.querySelector("button"); if (c) c.focus();
+  }
+  function addButton() {
+    if (btn || S.state === "hidden") return;
+    var row = document.querySelector(".herorefresh"); if (!row) return;
+    btn = el("button", "btn", "📊 Graphs"); btn.type = "button"; btn.id = "graphsBtn"; btn.title = "Show the graphs";
+    btn.onclick = openGraphs; var after = $("refresh"); after && after.nextSibling ? row.insertBefore(btn, after.nextSibling) : row.append(btn);
+  }
   var tries = 0;
   function start() {
     var on = false; try { on = G.connected(); } catch (e) {}
     if (!on) { if (++tries < 400) setTimeout(start, 2500); return; }
-    var host = $("p-today"); if (!host) return;
-    card = $("revCard"); if (!card) { card = el("div", "card note"); card.id = "revCard"; card.hidden = true; var before = $("secs"); before ? host.insertBefore(card, before) : host.append(card); }
-    refresh(false);
-    setInterval(function () { if (!document.hidden && S.state !== "hidden") refresh(false); }, 15 * 60000);
+    card = el("div");                       /* detached until the window is opened */
+    refresh(false).then(addButton);
   }
   window.WYZ_REV = { state: function () { return S; }, refresh: refresh };
   setTimeout(start, 2500);
