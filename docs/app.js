@@ -564,13 +564,13 @@ function applyPageName(){
   bar.title="You are using version "+v.version+(when?", updated "+when:"")+". If it looks old, refresh the page.";
 })();
 /* colour palette and light/dark look, saved per device and applied before first paint by a tiny script in index.html */
-const PAL_META={ocean:"#104b70",ivory:"#16324e"};
+const PAL_META={ocean:"#104b70",ivory:"#16324e",marina:"#0f6466",dune:"#7a3a22",graphite:"#1f2633"};
 function lookNow(){try{return JSON.parse(localStorage.getItem("wyz-look")||"{}")}catch(e){return {}}}
 function applyLook(l){
   const r=document.documentElement,p=PAL_META[l.p]?l.p:"ocean";
   r.setAttribute("data-palette",p);
   if(l.m==="light"||l.m==="dark")r.setAttribute("data-theme",l.m);else r.removeAttribute("data-theme");
-  document.querySelectorAll("#swatches .swatch").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.pal===p)));
+  document.querySelectorAll("#swatches .swatch,.lookc").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.pal===p)));
   $("lookMode").value=l.m==="light"||l.m==="dark"?l.m:"auto";
   const mt=document.querySelector('meta[name="theme-color"]');if(mt)mt.content=PAL_META[p];
   try{applyOwnColours(l)}catch(e){}
@@ -579,14 +579,18 @@ function applyOwnColours(l){
   let st=document.getElementById("ownCol");if(!st){st=document.createElement("style");st.id="ownCol";document.head.append(st)}
   const any=l.c1||l.c2||l.cH||l.cB||l.cP||l.cT;
   st.textContent=any&&window.ownColCss?window.ownColCss(l):"";
-  COLS.forEach(([id,k,def])=>{$(id).value=l[k]||(k==="cH"&&l.c1)||def});
+  /* show the colours actually on screen, so the pickers start from the chosen look */
+  const cs=getComputedStyle(document.documentElement),VAR={cH:"--hero1",c1:"--navy",c2:"--gold",cB:"--bg",cP:"--panel",cT:"--fg"};
+  const hex=v=>{v=String(v||"").trim();return /^#[0-9a-f]{6}$/i.test(v)?v:/^#[0-9a-f]{3}$/i.test(v)?"#"+v.slice(1).split("").map(c=>c+c).join(""):""};
+  COLS.forEach(([id,k,def])=>{const e=$(id);if(e)e.value=l[k]||(k==="cH"&&l.c1)||hex(cs.getPropertyValue(VAR[k]))||def});
+  try{if(window.wyzLookSync)window.wyzLookSync()}catch(e){}
   const mt=document.querySelector('meta[name="theme-color"]');if(mt&&l.c1)mt.content=l.c1;
 }
 const COLS=[["colHeader","cH","#104b70"],["colMain","c1","#104b70"],["colAccent","c2","#b8923c"],["colBg","cB","#f4f8fc"],["colPanel","cP","#ffffff"],["colText","cT","#0e2238"]];
 COLS.forEach(([id,k])=>{$(id).oninput=()=>saveLook({[k]:$(id).value})});
 $("colReset").onclick=()=>{saveLook({c1:"",c2:"",cH:"",cB:"",cP:"",cT:"",p:"ocean"})};
 function saveLook(patch){const l=Object.assign({},lookNow(),patch);try{localStorage.setItem("wyz-look",JSON.stringify(l))}catch(e){}applyLook(l)}
-document.querySelectorAll("#swatches .swatch").forEach(b=>b.onclick=()=>saveLook({p:b.dataset.pal}));
+document.querySelectorAll("#swatches .swatch").forEach(b=>b.onclick=()=>saveLook({p:b.dataset.pal,c1:"",c2:"",cH:"",cB:"",cP:"",cT:""}));
 $("lookMode").onchange=()=>saveLook({m:$("lookMode").value});
 applyLook(lookNow());
 $("pageName").addEventListener("input",()=>{state.pageName=$("pageName").value;persist();applyPageName()});
