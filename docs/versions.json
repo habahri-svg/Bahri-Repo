@@ -22,6 +22,11 @@
     },
     {
       "version": "3.43.3",
+      "path": "previous/v3.43.3/",
+      "label": "Five looks to choose from, your own colours, smoother design"
+    },
+    {
+      "version": "3.45",
       "path": "",
       "label": "Current"
     }
