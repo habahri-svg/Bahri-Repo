@@ -92,6 +92,11 @@
     },
     {
       "version": "3.57",
+      "path": "previous/v3.57/",
+      "label": "HTML files open as real pages, and a created-files view with versions"
+    },
+    {
+      "version": "3.58",
       "path": "",
       "label": "Current"
     }
