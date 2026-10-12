@@ -82,6 +82,11 @@
     },
     {
       "version": "3.55",
+      "path": "previous/v3.55/",
+      "label": "Undo and Redo for what you do in the page, with a history"
+    },
+    {
+      "version": "3.56",
       "path": "",
       "label": "Current"
     }
