@@ -237,3 +237,6 @@ Code: `docs/docman.js`.
 - **Versions.** Claude artifacts (create, update, rewrite) and ChatGPT canvas documents (edits applied in order) keep each version, up to 25 per file. Each has Read, Preview (HTML), and shows its size. Import again to pick up new versions. Nothing is duplicated.
 - **PDFs.** Exports list a PDF's name, date and chat, not the PDF. Open the original chat to download it again.
 - **Size.** Documents show the file size from Google Drive. Native Google Docs and Sheets have none, so they say so. Library files show the export's size, or the size of the text, or "size not in export".
+
+## Graphs button always shows (3.58)
+Before, the **📊 Graphs** button hid itself when the server answered "not found" or "not a viewer", so a setup problem looked like a missing feature. Now it always shows. If revenue can't load, its window says why: the revenue service isn't on the site (redeploy so `api/revenue.js` is included), or the signed-in Google email isn't in `OWNER_EMAILS` or `REVENUE_VIEWERS` in Vercel. Only "Hostaway keys missing" for a non-owner still hides it.

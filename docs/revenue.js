@@ -20,9 +20,9 @@
   async function load(year, fresh) {
     var t = await G.token();
     var r = await fetch("/api/revenue?year=" + year + (fresh ? "&fresh=1" : ""), { headers: { Authorization: "Bearer " + t } });
-    if (r.status === 404 || r.status === 405) { var e = new Error("no server"); e.none = true; throw e; }
+    if (r.status === 404 || r.status === 405) { var e = new Error("no server"); e.none = "noserver"; throw e; }
     var j = {}; try { j = await r.json(); } catch (x) {}
-    if (j.viewer === false) { var v = new Error("not a viewer"); v.none = true; throw v; }
+    if (j.viewer === false) { var v = new Error("not a viewer"); v.none = "notviewer"; throw v; }
     if (j.ready === false) { var s = new Error("setup"); s.setup = j; throw s; }
     if (!r.ok || !j.months) throw new Error(j.error || "Hostaway did not answer.");
     return j;
@@ -33,7 +33,7 @@
       var both = await Promise.all([load(S.year, fresh), load(S.year - 1, fresh)]);
       S.cur = both[0]; S.prev = both[1]; S.state = "ok"; S.msg = "";
     } catch (e) {
-      if (e.none) { S.state = "hidden"; }
+      if (e.none) { S.state = e.none; }
       else if (e.setup) { S.state = e.setup.owner ? "setup" : "hidden"; S.info = e.setup; }
       else { S.state = S.cur && S.prev && S.cur.year === S.year ? "stale" : "error"; S.msg = (e && e.message) || ""; }
     }
@@ -95,6 +95,12 @@
     var sel = el("select", "in"); sel.style.cssText = "flex:0 0 auto;width:auto"; sel.setAttribute("aria-label", "Year"); for (var y = nowY(); y >= nowY() - 4; y--) sel.append(new Option(String(y), String(y))); sel.value = String(S.year); sel.onchange = function () { S.year = +sel.value; S.cur = S.prev = null; refresh(false); };
     head.append(tg, sel); pad.append(head);
     pad.append(el("p", "sub", S.year + " against " + (S.year - 1) + " · AED · Hostaway" + (S.metric === "net" ? " · property manager payout" : "")));
+    if (S.state === "noserver" || S.state === "notviewer") {
+      pad.append(el("p", "status err", S.state === "noserver" ? "The revenue service isn't on this site. The page asked for /api/revenue and the server said it doesn't exist." : "Your Google account isn't on the revenue list, so the server refused to show revenue."));
+      pad.append(el("p", "status", S.state === "noserver" ? "Fix: in Vercel, redeploy the project from the live branch (the file api/revenue.js must be in it). Then reload this page." : "Fix: in Vercel, open Settings, Environment Variables, and add your Google email to OWNER_EMAILS or REVENUE_VIEWERS (several emails separated by commas). Redeploy, then reload this page."));
+      var ac0 = el("div", "acts"); ac0.append(bt("Check again", function () { refresh(true); }, "solid")); pad.append(ac0);
+      return;
+    }
     if (S.state === "setup") {
       pad.append(el("p", "status", "Not switched on yet. It reads Hostaway with the same Account ID and API key as the strip above, and shows only to owners (add others in the Vercel variable REVENUE_VIEWERS). Missing: " + ((S.info && S.info.missing) || []).join(", ") + "."));
       return;
