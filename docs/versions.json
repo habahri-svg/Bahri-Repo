@@ -27,6 +27,11 @@
     },
     {
       "version": "3.45",
+      "path": "previous/v3.45/",
+      "label": "My Life: Work and Life switch, Family hub, groups, Drive sync, backup and export"
+    },
+    {
+      "version": "3.46",
       "path": "",
       "label": "Current"
     }
