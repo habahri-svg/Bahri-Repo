@@ -37,6 +37,11 @@
     },
     {
       "version": "3.47",
+      "path": "previous/v3.47/",
+      "label": "Capture: say or type it, scan and file, travel, spending"
+    },
+    {
+      "version": "3.48",
       "path": "",
       "label": "Current"
     }
