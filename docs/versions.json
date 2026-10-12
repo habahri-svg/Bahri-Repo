@@ -12,6 +12,11 @@
     },
     {
       "version": "3.43.1",
+      "path": "previous/v3.43.1/",
+      "label": "Back and Forward between versions at the top of the page, kept automatically"
+    },
+    {
+      "version": "3.43.2",
       "path": "",
       "label": "Current"
     }
