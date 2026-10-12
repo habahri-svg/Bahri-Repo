@@ -855,7 +855,11 @@ function quoteOf(m){
 }
 function fillTargets(){
   const all=$("thrAll").checked,t=replyTargets(all);$("thrAllSel").value=all?"all":"sender";
-  $("thrTo").value=t.to.join(", ");$("thrCc").value=t.cc.join(", ");$("thrCcWrap").hidden=!all;
+  const lc=x=>addrOf(x).toLowerCase(),auto=new Set((thr.autoCc||[]).map(lc));
+  const extra=String($("thrCc").value||"").split(/[,;]/).map(x=>x.trim()).filter(x=>x&&/@/.test(x)&&!auto.has(lc(x)));
+  const have=new Set(t.cc.map(lc).concat(t.to.map(lc)));
+  thr.autoCc=t.cc.slice();
+  $("thrTo").value=t.to.join(", ");$("thrCc").value=t.cc.concat(extra.filter(x=>!have.has(lc(x)))).join(", ");$("thrCcWrap").hidden=false;
 }
 /* Real email view: HTML mail goes in a locked iframe (no scripts, links open in a new tab), plain text gets clickable links. */
 function linkify(txt){
@@ -1029,7 +1033,7 @@ document.addEventListener("keydown",e=>{
 async function openThread(id,o){
   if(thr.counting){thrNote("Your email is about to be sent. Press Undo to stop it, or wait a few seconds.");return}
   o=o||{};const t=tById(id)||{};
-  thr={id,msgs:[],item:o.item||{id,st:"reply",title:t.subject||"",summary:t.snippet||""},armed:0,done:false,mode:"reply",files:[]};
+  thr={id,msgs:[],item:o.item||{id,st:"reply",title:t.subject||"",summary:t.snippet||""},armed:0,done:false,mode:"reply",files:[],autoCc:[]};$("thrCc").value="";
   setMode("reply");renderTplSelect();syncRuleBtns();renderThrPick();$("thrFiles").value="";$("thrFileList").textContent="";$("thrArchive").disabled=false;$("thrArchive").textContent="Archive";$("thrRemind").value="3";
   $("thr").hidden=false;$("thrTitle").textContent=(t.subject||"Conversation")+(t.account?" · in "+t.account:"");
   $("thrGmail").href=t.url||"https://mail.google.com/";
@@ -1617,9 +1621,10 @@ async function draftFor(i,host,btn){
   toSel.append(new Option("Reply to sender only","sender"),new Option("Reply to everyone (all)","all"));toRow.append(toSel);
   const remSel=el("select","in");remSel.style.flex="0 1 230px";remSel.setAttribute("aria-label","Remind me if no reply");
   [["0","No reminder"],["2","Remind me if no reply in 2 days"],["3","Remind me if no reply in 3 days"],["7","Remind me if no reply in 1 week"]].forEach(([v,t])=>remSel.append(new Option(t,v)));remSel.value="3";toRow.append(remSel);
+  const ccRow=el("div","ask");const ccIn=el("input","in");ccIn.placeholder="Add people (Cc), type a name or email";ccIn.setAttribute("aria-label","Add people to Cc");ccIn.autocomplete="off";ccRow.append(el("span","status","Cc"),ccIn);
   const dirRow=el("div","ask");const dirIn=el("input","in");dirIn.placeholder="Your direction for the answer (optional)";dirIn.setAttribute("aria-label","Your direction for the answer");
   const dirGo=el("button","btn small","Write it my way");dirGo.type="button";dirRow.append(dirIn,dirGo);
-  const box=el("div","draftbox");box.append(toRow,dirRow);const ta=el("textarea");ta.id="d-"+i.id;ta.value="";const st=el("span","status","Writing a draft");
+  const box=el("div","draftbox");box.append(toRow,ccRow,dirRow);try{attachAutocomplete(ccIn)}catch(e){}const ta=el("textarea");ta.id="d-"+i.id;ta.value="";const st=el("span","status","Writing a draft");
   box.append(st,ta);host.append(box);btn.textContent="Writing";
   try{
     const chase=(i.st==="follow"||i.st==="wait");const r=!sample?{text:templateDraft(i,chase)}:await sample((chase?"Write a short, polite follow-up email chasing an answer that is still owed, ":"Write a reply email ")+"for "+(myName||"me")+" at WYZ Rent. Plain text only, ready to edit, "+(sigText()?"with no sign-off and no name, because their signature is added automatically":"signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject.\n\nWhat it's about: "+(i.title||"")+". "+(i.summary||"")+"\n\nThread (latest last):\n"+(text||tById(i.id)?.snippet||""),{cache:false,provider:aiPickValue(),onText:u=>{ta.value=u.text}});
@@ -1644,19 +1649,22 @@ async function draftFor(i,host,btn){
   const last=()=>msgs[msgs.length-1]||{};
   const target=()=>{const l=last(),t=tById(i.id)||{};const lastSent=(l.labelIds||[]).includes("SENT");return lastSent?addrOf((l.toRecipients||[])[0]||t.from):addrOf(l.replyTo||l.sender||t.from)};
   sd.onclick=async()=>{
-    if(counting){clearInterval(cdT);counting=false;armed=0;sd.textContent="Send";ta.disabled=false;st.className="status";st.textContent="Cancelled. Nothing was sent.";return}
+    if(counting){clearInterval(cdT);counting=false;armed=0;sd.textContent="Send";ta.disabled=false;ccIn.disabled=false;st.className="status";st.textContent="Cancelled. Nothing was sent.";return}
     if(!ta.value.trim()){st.textContent="Write your reply first.";st.className="status err";return}
     if(/\[(DATE|DETAIL)[^\]]*\]/i.test(ta.value)){st.textContent="Fill in the [DATE] or [DETAIL] part first.";st.className="status err";ta.focus();return}
     const to=target();if(!/^\S+@\S+\.\S+$/.test(to)){st.textContent="Couldn't find who to send it to. Open the email instead.";st.className="status err";return}
-    if(!armed){armed=1;sd.textContent="Confirm: send to "+to+(toSel.value==="all"?" and everyone":"");st.className="status";st.textContent="Check it, then press Confirm.";return}
+    if(ccIn.value.trim()&&ccIn.value.split(/[,;]/).map(x=>x.trim()).filter(Boolean).some(x=>!/^\S+@\S+\.\S+$/.test(addrOf(x)))){armed=0;sd.textContent="Send";st.className="status err";st.textContent="Check the Cc addresses.";ccIn.focus();return}
+    if(!armed){const nCc=ccIn.value.split(/[,;]/).filter(x=>/@/.test(x)).length;armed=1;sd.textContent="Confirm: send to "+to+(toSel.value==="all"?" and everyone":"")+(nCc?" + "+nCc+" in Cc":"");st.className="status";st.textContent="Check it, then press Confirm.";return}
     const secs=undoSecs();
-    if(secs&&!goNow){counting=true;let left=secs;ta.disabled=true;armed=0;
+    if(secs&&!goNow){counting=true;let left=secs;ta.disabled=true;ccIn.disabled=true;armed=0;
       const tick=()=>{sd.textContent="Undo ("+left+")";st.className="status";st.textContent="Sending to "+to+" in "+left+" second"+(left===1?"":"s")+". Press Undo to stop it."};tick();
       cdT=setInterval(()=>{left--;if(left<=0){clearInterval(cdT);counting=false;goNow=true;armed=1;sd.onclick()}else tick()},1000);return}
     goNow=false;
     sd.disabled=true;sd.textContent="Sending...";
     const mine=new Set(G.accounts().map(x=>String(x.email||"").toLowerCase()).concat([String(email||"").toLowerCase()]));
-    const cc=toSel.value==="all"?[...new Set([addrOf(last().sender)].concat((last().toRecipients||[]).map(addrOf),(last().ccRecipients||[]).map(addrOf)).map(x=>String(x||"").toLowerCase()))].filter(x=>x&&x!==to.toLowerCase()&&!mine.has(x)):[];
+    const extraCc=ccIn.value.split(/[,;]/).map(x=>addrOf(x.trim()).toLowerCase()).filter(x=>/^\S+@\S+\.\S+$/.test(x));
+    const cc0=toSel.value==="all"?[...new Set([addrOf(last().sender)].concat((last().toRecipients||[]).map(addrOf),(last().ccRecipients||[]).map(addrOf)).map(x=>String(x||"").toLowerCase()))].filter(x=>x&&x!==to.toLowerCase()&&!mine.has(x)):[];
+    const cc=[...new Set(cc0.concat(extraCc))].filter(x=>x!==to.toLowerCase());
     const t=tById(i.id)||{},l=last(),sg=sigText(),body=ta.value.trimEnd()+(sg&&!ta.value.includes(sg)?"\n\n"+sg:"")+(l.id?quoteOf(l):"");
     const subj=(t.subject||"").match(/^re:/i)?t.subject:"Re: "+(t.subject||"");
     try{await mcp.callTool("Gmail","send_message",{to:[to],cc,subject:subj,body,replyToMessageId:l.id||t.lastId});
@@ -1666,7 +1674,7 @@ async function draftFor(i,host,btn){
       persist();setTimeout(()=>{try{renderBoard()}catch(e){}},1500)}
     catch(e){armed=0;ta.disabled=false;sd.disabled=false;sd.textContent="Send";st.className="status err";st.textContent="Couldn't send it ("+clip((e&&e.message)||"unknown reason",90)+"). Check your sent mail before trying again."}
   };
-  ta.addEventListener("input",()=>{if(armed){armed=0;sd.textContent="Send"}});toSel.onchange=()=>{if(armed){armed=0;sd.textContent="Send"}};
+  ta.addEventListener("input",()=>{if(armed){armed=0;sd.textContent="Send"}});ccIn.addEventListener("input",()=>{if(armed){armed=0;sd.textContent="Send"}});toSel.onchange=()=>{if(armed){armed=0;sd.textContent="Send"}};
   sv.className="btn small";
   acts.prepend(sd);acts.append(sv,cp,wa);box.append(acts);
 }
