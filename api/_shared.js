@@ -10,17 +10,11 @@ const safeParse = function (s) { try { return JSON.parse(s); } catch (e) { retur
 async function verify(token) {
   const hit = g.__wyzTok.get(token);
   if (hit && hit.exp > Date.now()) return hit.who;
-  if (!/^ya29\./.test(token)) {
-    /* Microsoft account: ask Microsoft Graph who this is */
-    const m = await fetch("https://graph.microsoft.com/v1.0/me?$select=mail,userPrincipalName", { headers: { Authorization: "Bearer " + token } });
-    if (m.ok) {
-      const u = await m.json(), email = String(u.mail || u.userPrincipalName || "").toLowerCase();
-      if (!email || email.indexOf("@") < 0) return null;
-      const who = { email: email };
-      g.__wyzTok.set(token, { who: who, exp: Date.now() + 300000 });
-      return who;
-    }
-  }
+  /* 3.43.2 security fix: Microsoft tokens are no longer accepted here. The old check asked Microsoft Graph for the
+     "mail" field of any token, from any app or tenant, so someone could make a token that claims the owner's address.
+     Only Google sign-ins are checked below. Before Microsoft sign-in is switched on, add MS_CLIENT_ID in Vercel and verify
+     a Microsoft ID token (signature, audience equals MS_CLIENT_ID, verified address), never a Graph access token. */
+  if (!token || /\s/.test(token)) return null;
   const r = await fetch("https://oauth2.googleapis.com/tokeninfo?access_token=" + encodeURIComponent(token));
   if (!r.ok) return null;
   const j = await r.json();
