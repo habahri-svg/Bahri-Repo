@@ -47,6 +47,11 @@
     },
     {
       "version": "3.48.1",
+      "path": "previous/v3.48.1/",
+      "label": "My Life fixes: safer Drive sync, bills show late until paid, groups, calendar times"
+    },
+    {
+      "version": "3.49",
       "path": "",
       "label": "Current"
     }
