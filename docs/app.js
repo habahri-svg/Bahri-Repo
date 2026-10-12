@@ -3392,12 +3392,22 @@ function renderAiDocs(){
   const host=$("aiDocs");if(!host)return;host.replaceChildren();
   const have=aiDocs.chatgpt.length+aiDocs.claude.length;
   const head=el("div","pad");const h=el("h3","","From ChatGPT and Claude");h.style.margin="0 0 4px";head.append(h);host.append(head);
+  const EXP={chatgpt:{name:"ChatGPT",url:"https://chatgpt.com/#settings/DataControls",where:"Settings, Data controls, Export data, then Confirm export",q:"from:openai.com (export OR \"data export\") newer_than:14d",input:"f-chatgpt",n:aiDocs.chatgpt.length},
+             claude:{name:"Claude",url:"https://claude.ai/settings/data-privacy-controls",where:"Settings, Privacy, then Export data",q:"from:anthropic.com (export OR \"data export\") newer_than:14d",input:"f-claude",n:aiDocs.claude.length}};
+  const findMail=async x=>{const b=infoOpen("Your "+x.name+" export email");b.append(el("p","status","Open the email and tap its download link. Then come back and tap Import from "+x.name+"."));const l=el("div");b.append(l);l.append(el("p","status","Searching your mail..."));
+    try{const t=await gmailFind(x.q,6);l.replaceChildren();if(!t.length){l.append(el("p","status","No export email yet. It usually arrives within a few minutes of asking. Check again shortly."));return}t.forEach(z=>l.append(threadRow(z,infoClose)))}catch(e){l.replaceChildren(el("p","status err","Couldn't search your mail ("+clip((e&&e.message)||"unknown reason",80)+")."))}};
+  Object.values(EXP).forEach(x=>{
+    const row=el("div","acts");row.style.padding="0 14px 6px";row.append(el("b","",x.name+":"));
+    const a1=el("a","btn small","1. Ask "+x.name+" for the file ↗");a1.href=x.url;a1.target="_blank";a1.rel="noopener";a1.title=x.where;
+    const a2=el("button","btn small","2. Find the email");a2.type="button";a2.onclick=()=>findMail(x);
+    const a3=el("button","btn small"+(x.n?"":" solid"),"3. "+(x.n?"Update":"Import")+" from "+x.name);a3.type="button";a3.onclick=()=>$(x.input).click();
+    row.append(a1,a2,a3);host.append(row);
+  });
   const imp=el("div","acts");imp.style.padding="0 14px 8px";
-  const g=el("button","btn small"+(aiDocs.chatgpt.length?"":" solid"),aiDocs.chatgpt.length?"Update from ChatGPT":"Import from ChatGPT");g.type="button";g.onclick=()=>$("f-chatgpt").click();
-  const c=el("button","btn small ghost",aiDocs.claude.length?"Update from Claude":"Import from Claude");c.type="button";c.onclick=()=>$("f-claude").click();
-  const how=el("button","btn small ghost","How to get the file");how.type="button";how.onclick=()=>{const b=infoOpen("Get your ChatGPT and Claude documents");
-    [["ChatGPT","In ChatGPT open Settings, Data controls, then Export data. ChatGPT emails you a link within a few minutes. Download the .zip and choose it with Import from ChatGPT here. No need to unzip it."],["Claude","In Claude open Settings, Privacy, then Export data. Download the .zip from the email and choose it with Import from Claude."],["Why a file","ChatGPT and Claude don't let other apps read your chats directly, so the export file is the only way in. Do it again whenever you want the list refreshed."]].forEach(([t,x])=>{const s=infoSection(b,t);s.append(el("p","status",x))})};
-  imp.append(g,c,how);host.append(imp);
+  const how=el("button","btn small ghost","How it works");how.type="button";how.onclick=()=>{const b=infoOpen("Get your ChatGPT and Claude documents");
+    Object.values(EXP).forEach(x=>{const s=infoSection(b,x.name);s.append(el("p","status","1. Tap the link. It opens "+x.where+". Ask for the export."),el("p","status","2. "+x.name+" emails you a download link, usually within minutes. Tap Find the email on your page, open it and download the .zip."),el("p","status","3. Tap Import from "+x.name+" and choose the .zip. No need to unzip it."));const a=el("a","btn small solid","Open "+x.name+" export settings ↗");a.href=x.url;a.target="_blank";a.rel="noopener";s.append(a)});
+    const w=infoSection(b,"Why a file");w.append(el("p","status","ChatGPT and Claude don't let other apps read your chats directly, so the export file is the only way in. Repeat it whenever you want the list refreshed, about once a week is enough."))};
+  imp.append(how);host.append(imp);
   if(!have){host.append(el("p","sub","Import your ChatGPT export to list the canvas documents you wrote there, the files you shared with it and the files it made for you. Claude works the same way.")) ;return}
   const list=aiDocsInRange(),lbl=docRangeLabel(docRangeKey());
   host.append(el("p","sub",list.length?list.length+" document"+(list.length>1?"s":"")+" from your chats "+(lbl||"in total")+". Imported "+fmtWhen(new Date(Math.max((research.chatgpt&&research.chatgpt.at)||0,(research.claude&&research.claude.at)||0)||Date.now()).toISOString())+".":"No ChatGPT or Claude documents "+(lbl||"found")+"."));
