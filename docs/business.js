@@ -104,6 +104,8 @@
   }
 
   /* ---------- Send to Command Center ---------- */
+  window.wyzWA = function () { return waData || []; };
+  window.wyzOpenWA = function (c) { openWA(c); };
   window.ccButton = function () {
     var b = el("button", "btn small", "📤 Command Center"); b.type = "button"; b.title = "Send this to the company Command Center as an action item";
     b.onclick = function () { openCC(); };

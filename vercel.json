@@ -32,5 +32,15 @@
     "api/fix.js": {
       "maxDuration": 60
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/push?cron=morning",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/push?cron=evening",
+      "schedule": "0 14 * * *"
+    }
+  ]
 }
