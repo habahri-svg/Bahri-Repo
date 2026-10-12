@@ -77,6 +77,11 @@
     },
     {
       "version": "3.54",
+      "path": "previous/v3.54/",
+      "label": "Today and Settings are separate pages, each with its own address, Back button and top"
+    },
+    {
+      "version": "3.55",
       "path": "",
       "label": "Current"
     }
