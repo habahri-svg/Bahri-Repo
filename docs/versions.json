@@ -97,6 +97,11 @@
     },
     {
       "version": "3.58",
+      "path": "previous/v3.58/",
+      "label": "Graphs button always shows, and says why when revenue is unavailable"
+    },
+    {
+      "version": "3.59",
       "path": "",
       "label": "Current"
     }
