@@ -186,7 +186,9 @@
         var perm = await Notification.requestPermission(); if (perm !== "granted") throw new Error("Notifications weren't allowed.");
         var info = await api("GET"); if (!info.ready) throw new Error(info.storage === false ? "Setup needed: storage (Upstash) isn't switched on for this site yet. Ask Houssam." : "The server isn't ready for notifications yet.");
         var reg = await navigator.serviceWorker.ready;
-        var sub = await reg.pushManager.getSubscription(); if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(info.key) });
+        var want = b64ToBytes(info.key), sub = await reg.pushManager.getSubscription();
+        if (sub) { var have = sub.options && sub.options.applicationServerKey ? new Uint8Array(sub.options.applicationServerKey) : null; if (!have || have.length !== want.length || have.some(function (v, i) { return v !== want[i]; })) { await sub.unsubscribe(); sub = null; } }
+        if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: want });
         await api("POST", { action: "subscribe", sub: { endpoint: sub.endpoint } });
         state.pushOn = 1; persist(); show("On. You'll get the brief at 8am and 6pm Dubai time on this device.");
       } catch (x) { show(String((x && x.message) || "Couldn't turn it on."), true); }

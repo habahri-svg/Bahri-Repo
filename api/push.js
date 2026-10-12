@@ -62,7 +62,9 @@ module.exports = async function handler(req, res) {
     const secret = String(process.env.CRON_SECRET || "");
     const auth = String(req.headers.authorization || "");
     const agent = String(req.headers["user-agent"] || "");
-    if (secret ? auth !== "Bearer " + secret : !/vercel-cron/i.test(agent)) return res.status(401).json({ error: "Not allowed." });
+    /* without CRON_SECRET, only the Vercel cron agent in the right hour (04 UTC = 8am Dubai, 14 UTC = 6pm Dubai) */
+    const hourOk = new Date().getUTCHours() === (q.cron === "morning" ? 4 : 14);
+    if (secret ? auth !== "Bearer " + secret : !(/vercel-cron/i.test(agent) && hourOk)) return res.status(401).json({ error: "Not allowed." });
     if (!S.store()) return res.status(200).json({ ok: false, storage: false });
     const lock = (await S.redis([["SET", "wyz:push:sent:" + dubaiDay() + ":" + q.cron, "1", "NX", "EX", 86400]]))[0];
     if (lock !== "OK") return res.status(200).json({ ok: true, already: true });

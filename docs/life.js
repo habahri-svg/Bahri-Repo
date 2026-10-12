@@ -15,7 +15,7 @@
   var COLL = {
     family: { name: "Family", icon: "👪", repeat: "yearly", dateLabel: "Birthday",
       fields: [["t", "Name", "text"], ["rel", "Relation", "text"], ["d", "Birthday", "date"], ["email", "Email", "email"], ["phone", "Phone", "tel"], ["n", "Notes", "textarea"]] },
-    plans: { name: "Family plans", icon: "🗓️", dateLabel: "When",
+    plans: { name: "Family plans", icon: "🗓️", dateLabel: "When", dueFuture: true,
       fields: [["t", "What", "text"], ["d", "When", "date"], ["who", "Who's coming", "text"], ["n", "Notes", "textarea"]] }
   };
   window.wyzLifeCollections = COLL;   /* later releases add more */
@@ -41,8 +41,10 @@
     if (!x || !x.d || !/^\d{4}-\d{2}-\d{2}$/.test(x.d)) return "";
     var rep = x.r || (COLL[x.c] && COLL[x.c].repeat) || "";
     if (!rep) return x.d;
+    /* bills, home and health have Paid or Done: the saved date stays until you press it, so a missed one shows as late */
+    if (COLL[x.c] && COLL[x.c].manualRoll) return x.d;
     var t = today(), y = +t.slice(0, 4), md = x.d.slice(4);
-    if (rep === "yearly") { var n = y + md; return n >= t ? n : (y + 1) + md; }
+    if (rep === "yearly") { if (x.d >= t) return x.d; var n = y + md; return n >= t ? n : (y + 1) + md; }
     /* monthly and quarterly: the next date on or after today, counted from the date you set */
     if (rep === "monthly" || rep === "quarterly") {
       if (x.d >= t) return x.d;
@@ -75,7 +77,8 @@
     Object.keys(ri).forEach(function (k) { var a = l.items[k], b = ri[k]; if (b && (!a || (+b.u || 0) > (+a.u || 0))) { l.items[k] = b; changedAny = true; } });
     if (remote.groups && (+remote.gu || 0) > (+l.gu || 0)) { l.groups = remote.groups; l.gu = remote.gu; changedAny = true; }
     /* forget deleted items after 90 days */
-    var old = Date.now() - 90 * 864e5; Object.keys(l.items).forEach(function (k) { var x = l.items[k]; if (x && x.x && (+x.u || 0) < old) delete l.items[k]; });
+    /* deleted items keep a small marker for good, so a device that was away can't bring them back */
+    Object.keys(l.items).forEach(function (k) { var x = l.items[k]; if (x && x.x && (x.t || x.f)) l.items[k] = { id: x.id, c: x.c, x: 1, u: x.u }; });
     return changedAny;
   }
   async function syncNow() {
@@ -85,8 +88,13 @@
     syncing = true; syncNote = "Saving to your Drive..."; drawSync();
     try {
       var m = meta();
-      var got = (await mcp.callTool("Google Drive", "get_text", { name: FILE, fileId: m.fileId || "" }, { cache: false })).payload || {};
-      if (got.text) { try { if (merge(JSON.parse(got.text))) { persist(); render(); } } catch (e) {} }
+      var got = (await mcp.callTool("Google Drive", "get_text", { name: FILE, folder: FOLDER }, { cache: false })).payload || {};
+      var texts = [got.text].concat(got.others || []).filter(Boolean), any = false;
+      for (var i = 0; i < texts.length; i++) {
+        var parsed; try { parsed = JSON.parse(texts[i]); } catch (pe) { if (i === 0) throw new Error("your Drive copy couldn't be read, so it wasn't overwritten"); continue; }
+        if (merge(parsed)) any = true;
+      }
+      if (any) { persist(); softRender(); }
       var body = JSON.stringify({ app: "WYZ Execution Page", v: 1, saved: new Date().toISOString(), items: L().items, groups: L().groups, gu: L().gu });
       var put = (await mcp.callTool("Google Drive", "put_text", { name: FILE, folder: FOLDER, fileId: got.id || "", text: body }, { cache: false })).payload || {};
       m.fileId = put.id || got.id || m.fileId; m.syncAt = Date.now(); persist();
@@ -95,7 +103,7 @@
       syncNote = e && e.code === "consent_required" ? "Saved on this device. To keep it in your Drive too, sign out and in again and tick Drive." : "Saved on this device. Drive didn't answer (" + clip((e && e.message) || "unknown reason", 60) + "), it tries again on the next change.";
       if (e && /not found|404/i.test(String(e.message || ""))) meta().fileId = "";
     }
-    syncing = false; drawSync(); autoBackup();
+    syncing = false; drawSync(); if (meta().syncAt) autoBackup();
   }
   window.wyzLifeChanged = changed;
   window.wyzLifeItems = live;
@@ -104,17 +112,17 @@
 
   /* ---------- groups ---------- */
   function teamDefault() { try { return teamList().map(function (p) { return p.email; }); } catch (e) { return []; } }
+  var serverGroups = {};
   function groups() {
-    var g = Object.assign({}, L().groups);
-    if (!g.Team) { var t = teamDefault(); if (t.length) g.Team = t; }
+    var own = L().groups, del = (own.__deleted || []), g = {};
+    Object.keys(serverGroups).forEach(function (k) { if (del.indexOf(k) < 0 && Array.isArray(serverGroups[k])) g[k] = serverGroups[k].slice(0, 50); });
+    if (del.indexOf("Team") < 0) { var t = teamDefault(); if (t.length) g.Team = t; }
+    Object.keys(own).forEach(function (k) { if (k !== "__deleted" && Array.isArray(own[k])) g[k] = own[k]; });
     return g;
   }
   window.wyzServerGroups = function (sg) {
     if (!sg || typeof sg !== "object") return;
-    var l = L(), add = false;
-    Object.keys(sg).forEach(function (k) { if (!l.groups[k] && Array.isArray(sg[k]) && sg[k].length) { l.groups[k] = sg[k].slice(0, 50); add = true; } });
-    if (add) { l.gu = Date.now(); changed(); }
-    drawGroupChips();
+    serverGroups = sg; drawGroupChips(); softRender();
   };
   function drawGroupChips() {
     var h = $("thrGroups"); if (!h) return; h.replaceChildren();
@@ -227,6 +235,16 @@
     root.append(groupsCard(), backupCard());
     drawSync(); drawGroupChips();
   }
+  var pending = false;
+  function busy() {
+    var root = $("lifeRoot"); if (!root) return false;
+    if (openForm || root.querySelector(".lform")) return true;
+    var a = document.activeElement; if (a && root.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return true;
+    return [].some.call(root.querySelectorAll("#life-capture input, #life-ask input, #life-docs input"), function (i) { return i.type !== "file" && i.value; });
+  }
+  function softRender() { if (busy()) { pending = true; return; } pending = false; render(); }
+  document.addEventListener("focusout", function () { if (pending) setTimeout(function () { if (pending) softRender(); }, 400); });
+  window.wyzLifeSoftRender = softRender;
   window.wyzLifeRender = render;
   window.wyzLifeRow = row;
   window.wyzLifeOpenForm = function (c, id) { openForm = { c: c, id: id || "" }; render(); var n = $("life-" + c); if (n) n.scrollIntoView({ block: "start" }); };
@@ -240,7 +258,7 @@
       var r = el("div", "litem"), m = el("div", "main"), a = el("div", "la");
       m.append(el("div", "lt", name + " (" + (g[name] || []).length + ")"), el("div", "lm", (g[name] || []).join(", ")));
       a.append(btn("Email", "btn small", function () { emailGroup(name); }), btn("Edit", "btn small ghost", function () { editGroup(name); }));
-      if (name !== "Team" || L().groups.Team) a.append(btn("Delete", "btn small ghost", function () { if (!confirm("Delete the group " + name + "?")) return; delete L().groups[name]; L().gu = Date.now(); changed(); }));
+      a.append(btn("Delete", "btn small ghost", function () { if (!confirm("Delete the group " + name + "?")) return; var l = L(); delete l.groups[name]; l.groups.__deleted = (l.groups.__deleted || []).filter(function (k) { return k !== name; }).concat([name]); l.gu = Date.now(); changed(); }));
       r.append(m, a); pad.append(r);
     });
     pad.append(el("div", "acts")); pad.lastChild.append(btn("＋ New group", "btn small solid", function () { editGroup(""); }));
@@ -255,7 +273,8 @@
       var nn = n.value.trim().slice(0, 40); if (!nn) { m.textContent = "Give the group a name."; return; }
       var list = t.value.split(/[\s,;]+/).map(function (s) { return s.trim(); }).filter(Boolean), bad = list.filter(function (e) { return !/^\S+@\S+\.\S+$/.test(e); });
       if (bad.length) { m.textContent = "These don't look like email addresses: " + bad.join(", "); return; }
-      var l = L(); if (name && name !== nn) delete l.groups[name]; l.groups[nn] = Array.from(new Set(list)); l.gu = Date.now(); infoClose(); changed(); say("Group saved.");
+      var l = L(); if (name && name !== nn) { delete l.groups[name]; l.groups.__deleted = (l.groups.__deleted || []).concat([name]); }
+      l.groups[nn] = Array.from(new Set(list)); l.groups.__deleted = (l.groups.__deleted || []).filter(function (k) { return k !== nn; }); l.gu = Date.now(); infoClose(); changed(); say("Group saved.");
     });
     var a = el("div", "acts"); a.append(go);
     h.append(n, t, a, m);
@@ -281,9 +300,10 @@
       if (!auto) say("Backed up to your Drive as " + name + ", created " + dubaiNice() + " Dubai time.");
     } catch (e) { if (!auto) say("Couldn't back up (" + clip((e && e.message) || "unknown reason", 70) + ")."); }
     if (b) { b.disabled = false; b.textContent = "Back up now"; }
-    render();
+    softRender();
   }
-  function autoBackup() { var m = meta(); if (live().length && (!m.lastBackup || Date.now() - m.lastBackup > 7 * 864e5) && !m.bkBusy) { m.bkBusy = 1; backup(true).then(function () { delete m.bkBusy; }); } }
+  var bkBusy = false;
+  function autoBackup() { var m = meta(); delete m.bkBusy; if (live().length && (!m.lastBackup || Date.now() - m.lastBackup > 7 * 864e5) && !bkBusy) { bkBusy = true; backup(true).then(function () { bkBusy = false; }); } }
   function loadLib(src, test) { return test() ? Promise.resolve() : new Promise(function (ok, no) { var s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = function () { no(new Error("couldn't load " + src)); }; document.head.append(s); }); }
   function rowsFor(c) {
     var C = COLL[c];
@@ -295,7 +315,7 @@
       await loadLib("xlsx.mini.min.js", function () { return !!window.XLSX; });
       var wb = XLSX.utils.book_new();
       Object.keys(COLL).forEach(function (c) { var r = rowsFor(c); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(r.length ? r : [{ Note: "Nothing yet" }]), COLL[c].name.slice(0, 31)); });
-      var g = groups(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(Object.keys(g).map(function (k) { return { Group: k, Emails: (g[k] || []).join(", ") }; })), "Groups");
+      var g = groups(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(Object.keys(g).filter(function (k) { return k !== "__deleted"; }).map(function (k) { return { Group: k, Emails: (g[k] || []).join(", ") }; })), "Groups");
       var name = "My_Life_" + dubaiStamp() + ".xlsx"; XLSX.writeFile(wb, name);
       say("Downloaded " + name + ", created " + dubaiNice() + " Dubai time.");
     } catch (e) { say("Couldn't make the Excel file (" + clip((e && e.message) || "", 60) + ")."); }
@@ -319,7 +339,9 @@
   var MODEKEY = "wyz-mode";
   var getMode = function () { try { return localStorage.getItem(MODEKEY) === "life" ? "life" : "work"; } catch (e) { return "work"; } };
   function setMode(m, fromClick) {
-    try { localStorage.setItem(MODEKEY, m); } catch (e) {}
+    var signed = false; try { signed = G.connected(); } catch (e) {}
+    if (m === "life" && !signed) { if (fromClick) { try { toast("Sign in first with Continue with Google, then tap Life."); showWelcome(); } catch (e) {} } m = "work"; }
+    else { try { localStorage.setItem(MODEKEY, m); } catch (e) {} }
     document.querySelectorAll("#modeSw button").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.mode === m)); });
     $("t-life").hidden = m !== "life"; $("t-today").hidden = m === "life";
     var cur = ["t-today", "t-life", "t-conn", "t-inst"].find(function (t) { return $(t).getAttribute("aria-selected") === "true"; });
@@ -337,6 +359,7 @@
     var on = false; try { on = G.connected() && !!mcp; } catch (e) {}
     if (!on) { if (++tries < 400) setTimeout(start, 3000); drawGroupChips(); return; }
     if (started) return; started = true;
+    setMode(getMode(), false);
     syncNow(); drawGroupChips();
     document.addEventListener("visibilitychange", function () { if (!document.hidden && Date.now() - (meta().syncAt || 0) > 5 * 60000) syncNow(); });
   }

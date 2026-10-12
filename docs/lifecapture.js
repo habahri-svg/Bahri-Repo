@@ -78,7 +78,7 @@
     ta.addEventListener("keydown", function (e) { if (e.key === "Enter") go.click(); });
     row.append(ta, mic, go); p.append(row, out);
     /* scan and file */
-    var sc = el("div", "acts"), file = el("input"); file.type = "file"; file.accept = "image/*,application/pdf"; file.setAttribute("capture", "environment"); file.hidden = true;
+    var sc = el("div", "acts"), file = el("input"); file.type = "file"; file.accept = "image/*,application/pdf"; file.hidden = true;
     sc.append(btn("📷 Scan and file a document", "btn small", function () { file.click(); }), file);
     p.append(sc); var sout = el("div"); p.append(sout);
     file.onchange = function () { var f = file.files && file.files[0]; file.value = ""; if (f) scan(f, sout); };
@@ -103,12 +103,14 @@
     var x = { title: f.name.replace(/\.[^.]+$/, ""), collection: "docs" };
     try {
       var raw = await readB64(f), small = isPdf ? raw : (await shrink(f)) || raw;
-      if (sample && Connectors.ai.avail("claude")) {
+      var aiNote = "";
+      if (sample && Connectors.ai.avail("claude")) try {
         var block = { type: isPdf ? "document" : "image", source: { type: "base64", media_type: isPdf ? "application/pdf" : (small === raw ? f.type : "image/jpeg"), data: small } };
         var r = await sample([{ role: "user", content: [block, { type: "text", text: "Today is " + new Date().toDateString() + ". This is a document photographed or uploaded by " + (myName || "the user") + " for their personal life organiser. Read it and return JSON only: {\"collection\":\"one of " + KINDS.join(", ") + "\",\"title\":\"short plain title, e.g. DEWA bill September 2026\",\"kind\":\"Receipt, Bill, Contract, ID, Medical, Letter, Ticket or Other\",\"date\":\"YYYY-MM-DD: due date for bills, expiry for IDs, date for receipts and letters\",\"amount\":\"number in AED or empty\",\"category\":\"for receipts: " + CATS.join(", ") + "\",\"provider\":\"\",\"summary\":\"one line\"}. Receipts go to spend, bills to bills, IDs and contracts to docs, medical to health, tickets to travel." }] }], { cache: false, provider: "claude" });
-        var j = parseJ(r.text); x = { title: j.title || x.title, collection: KINDS.indexOf(j.collection) >= 0 ? j.collection : "docs", date: j.date, amount: j.amount, category: j.category, notes: j.summary || "", fields: { kind: j.kind || "", prov: j.provider || "" }, kindName: j.kind || "Other" };
-      }
-      out.replaceChildren(el("p", "status", sample ? "Check it, then press Add it. The file is saved to your Drive at the same time." : "No AI connected, so fill it in yourself. The file is saved to your Drive when you press Add it."));
+        var j = {}; try { j = parseJ(r.text); } catch (pe) { j = {}; }
+        x = { title: j.title || x.title, collection: KINDS.indexOf(j.collection) >= 0 ? j.collection : "docs", date: j.date, amount: j.amount, category: j.category, notes: j.summary || "", fields: { kind: j.kind || "", prov: j.provider || "" }, kindName: j.kind || "Other" };
+      } catch (ae) { aiNote = "The AI couldn't read it (" + clip((ae && ae.message) || "unknown reason", 60) + "), so fill it in yourself. "; }
+      out.replaceChildren(el("p", "status", aiNote + (sample ? "Check it, then press Add it. The file is saved to your Drive at the same time." : "No AI connected, so fill it in yourself. The file is saved to your Drive when you press Add it.")));
       var folder = "Execution Page scans";
       preview(out, x, null);
       var addBtn = out.querySelector(".lform .btn.solid"), orig = addBtn.onclick;
@@ -125,13 +127,15 @@
         } catch (e) { addBtn.disabled = false; addBtn.textContent = "Add it"; say("Couldn't save to Drive (" + clip((e && e.message) || "unknown reason", 70) + ")."); }
       };
       if (sample && !Connectors.ai.avail("claude")) out.prepend(el("p", "status", "Reading photos needs Claude. ChatGPT here only reads text, so fill it in yourself."));
-    } catch (e) { out.replaceChildren(el("p", "status err", "Couldn't read it (" + clip((e && e.message) || "unknown reason", 80) + ").")); }
+    } catch (e) {
+      out.replaceChildren(el("p", "status err", "The AI couldn't read it (" + clip((e && e.message) || "unknown reason", 80) + "). Fill it in yourself:"));
+      preview(out, { title: f.name.replace(/\.[^.]+$/, ""), collection: "docs" }, function () { out.replaceChildren(el("p", "status", "Added. The file wasn't saved to Drive, add it from the Document vault.")); });
+    }
   }
 
   /* ---------- travel ---------- */
   function addCal(title, d, t, mins, desc) {
-    var p = t.split(":"), m = (+p[0]) * 60 + (+p[1] || 0) + (mins || 30), end = pad(Math.floor(m / 60) % 24) + ":" + pad(m % 60);
-    return mcp.callTool("Google Calendar", "create_event", { title: title, start: d + "T" + t, end: d + "T" + end, description: desc || "From My Life on your Execution Page." }, { cache: false });
+    return mcp.callTool("Google Calendar", "create_event", { title: title, start: d + "T" + t, end: window.wyzEndAt(d, t, mins || 30), description: desc || "From My Life on your Execution Page." }, { cache: false });
   }
   function travelExtra(x, a) {
     var f = x.f || {};

@@ -487,15 +487,16 @@
          {name, folder, text, fileId?} returns {id, link}. get_text {name, folder} returns {id, text} or {id:""} when there's none. */
       get_text: async function (a) {
         var base = "https://www.googleapis.com/drive/v3/files", esc = function (v) { return String(v).replace(/\\/g, "\\\\").replace(/'/g, "\\'"); };
-        var id = String(a.fileId || "");
-        if (!id) {
-          var q = "trashed=false and name='" + esc(a.name) + "' and mimeType!='application/vnd.google-apps.folder'";
-          var f = await gfetch(base + "?pageSize=1&orderBy=" + encodeURIComponent("modifiedTime desc") + "&fields=files(id)&q=" + encodeURIComponent(q), null, SC.drive);
-          id = f.files && f.files[0] && f.files[0].id;
-          if (!id) return { id: "", text: "" };
-        }
-        var buf = await gfetch(base + "/" + encodeURIComponent(id) + "?alt=media", { as: "buffer" }, SC.drive);
-        return { id: id, text: new TextDecoder().decode(buf) };
+        /* only your own files, never one shared with you, never one in the bin. The oldest copy is the one used,
+           so two devices that each made a copy end up on the same file. Up to two other copies come back to be merged in. */
+        var q = "trashed=false and 'me' in owners and name='" + esc(a.name) + "' and mimeType!='application/vnd.google-apps.folder'";
+        var f = await gfetch(base + "?pageSize=3&orderBy=" + encodeURIComponent("createdTime") + "&fields=files(id)&q=" + encodeURIComponent(q), null, SC.drive);
+        var ids = (f.files || []).map(function (x) { return x.id; });
+        if (!ids.length) return { id: "", text: "", others: [] };
+        var read = async function (id) { var buf = await gfetch(base + "/" + encodeURIComponent(id) + "?alt=media", { as: "buffer" }, SC.drive); return new TextDecoder().decode(buf); };
+        var main = await read(ids[0]), others = [];
+        for (var i = 1; i < ids.length; i++) { try { others.push(await read(ids[i])); } catch (e) {} }
+        return { id: ids[0], text: main, others: others };
       },
       put_text: async function (a) {
         var text = String(a.text || ""), mime = a.mime || "application/json";

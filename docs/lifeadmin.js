@@ -7,6 +7,12 @@
 (function () {
   "use strict";
   var C = window.wyzLifeCollections; if (!C || typeof el !== "function") return;
+  /* start date + time + minutes -> "YYYY-MM-DDTHH:MM", rolling into the next day when needed (pure date maths, no time zones) */
+  window.wyzEndAt = function (d, t, mins) {
+    var p = String(t || "09:00").split(":"), ms = Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10), +p[0] || 0, (+p[1] || 0) + (mins || 30));
+    var e = new Date(ms), z = function (n) { return String(n).padStart(2, "0"); };
+    return e.getUTCFullYear() + "-" + z(e.getUTCMonth() + 1) + "-" + z(e.getUTCDate()) + "T" + z(e.getUTCHours()) + ":" + z(e.getUTCMinutes());
+  };
   var btn = function (label, cls, fn) { var b = el("button", cls || "btn small", label); b.type = "button"; if (fn) b.onclick = fn; return b; };
   var say = function (t) { try { toast(t); } catch (e) {} };
   var items = function (c) { return window.wyzLifeItems(c); };
@@ -14,13 +20,13 @@
   var nid = function () { return "l" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); };
   var link = function (label, href) { if (!/^https?:\/\//i.test(String(href || ""))) return null; var a = el("a", "btn small", label); a.href = href; a.target = "_blank"; a.rel = "noopener"; return a; };
 
-  C.bills = { name: "Bills and renewals", icon: "💳", dateLabel: "Due", allowRepeat: true,
+  C.bills = { name: "Bills and renewals", icon: "💳", dateLabel: "Due", allowRepeat: true, manualRoll: true,
     fields: [["t", "What", "text"], ["d", "Due date", "date"], ["amt", "Amount (AED)", "money"], ["prov", "Company or account", "text"], ["pay", "How to pay (link or note)", "text"], ["n", "Notes", "textarea"]] };
-  C.home = { name: "Home and car", icon: "🚗", dateLabel: "Next date", allowRepeat: true,
+  C.home = { name: "Home and car", icon: "🚗", dateLabel: "Next date", allowRepeat: true, manualRoll: true,
     fields: [["t", "What", "text"], ["kind", "Type", "select", ["Car service", "Car registration", "Car insurance", "Home maintenance", "Home insurance", "Appliance", "Warranty", "Other"]], ["d", "Next date", "date"], ["prov", "Garage, company or contact", "text"], ["amt", "Cost (AED)", "money"], ["n", "Notes", "textarea"]] };
-  C.health = { name: "Health and appointments", icon: "🩺", dateLabel: "Date", allowRepeat: true,
+  C.health = { name: "Health and appointments", icon: "🩺", dateLabel: "Date", allowRepeat: true, manualRoll: true,
     fields: [["t", "What", "text"], ["kind", "Type", "select", ["Appointment", "Medication", "Test", "Check-up", "Record"]], ["d", "Date", "date"], ["time", "Time", "time"], ["who", "Doctor or clinic", "text"], ["n", "Notes", "textarea"]] };
-  C.property = { name: "Property and investments", icon: "🏢", dateLabel: "Key date",
+  C.property = { name: "Property and investments", icon: "🏢", dateLabel: "Key date", dueFuture: true,
     fields: [["t", "Name", "text"], ["loc", "Where", "select", ["Dubai", "Athens", "Lebanon", "Other"]], ["kind", "Type", "select", ["Apartment", "Villa", "Building", "Land", "Fund", "Shares", "Other"]], ["value", "Value (AED)", "money"], ["rent", "Rent in per month (AED)", "money"], ["d", "Key date (lease end, service charge, sale)", "date"], ["docs", "Documents link", "url"], ["n", "Notes", "textarea"]] };
   C.deals = { name: "Deals pipeline", icon: "🤝", dateLabel: "Next step by",
     fields: [["t", "Deal", "text"], ["co", "For", "select", ["SAMOCO", "WYZ Rent", "Personal", "Other"]], ["stage", "Stage", "select", ["Idea", "Talking", "Proposal sent", "Negotiating", "Signed", "Won", "Lost", "On hold"]], ["next", "Next step", "text"], ["d", "Next step by", "date"], ["who", "Counterparty", "text"], ["value", "Value", "money"], ["link", "Main document link", "url"], ["n", "Notes", "textarea"]] };
@@ -30,9 +36,9 @@
   /* ---------- actions on each item ---------- */
   function addToCalendar(x) {
     if (!x.d) { say("Add a date first."); return; }
-    var t = (x.f && x.f.time) || "09:00", end = (function () { var p = t.split(":"); var m = (+p[0]) * 60 + (+p[1] || 0) + 30; return String(Math.floor(m / 60) % 24).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0"); })();
-    var d = window.wyzLifeNext(x) || x.d;
-    mcp.callTool("Google Calendar", "create_event", { title: (C[x.c] ? C[x.c].icon + " " : "") + x.t, start: d + "T" + t, end: d + "T" + end, description: "From My Life on your Execution Page." + (x.n ? "\n" + x.n : "") }, { cache: false })
+    var t = (x.f && x.f.time) || "09:00", d = window.wyzLifeNext(x) || x.d;
+    var endAt = window.wyzEndAt(d, t, 30);
+    mcp.callTool("Google Calendar", "create_event", { title: (C[x.c] ? C[x.c].icon + " " : "") + x.t, start: d + "T" + t, end: endAt, description: "From My Life on your Execution Page." + (x.n ? "\n" + x.n : "") }, { cache: false })
       .then(function () { say("Added to your calendar on " + d + " at " + t + "."); })
       .catch(function (e) { say("Couldn't add it to the calendar (" + clip((e && e.message) || "unknown reason", 70) + ")."); });
   }
@@ -40,9 +46,8 @@
     var y = Object.assign({}, x, { f: Object.assign({}, x.f || {}) }); y.f.lastPaid = new Date().toISOString().slice(0, 10);
     var rep = x.r || "";
     if (rep) {
-      var nd = window.wyzLifeNext(x);
-      /* move past the date just paid */
-      var step = rep === "monthly" ? 1 : rep === "quarterly" ? 3 : 12, b = new Date((nd || x.d) + "T00:00:00"), day = b.getDate();
+      /* one payment moves it one period on from the date it was due */
+      var step = rep === "monthly" ? 1 : rep === "quarterly" ? 3 : 12, b = new Date(x.d + "T00:00:00"), day = b.getDate();
       var n2 = new Date(b.getFullYear(), b.getMonth() + step, 1); n2.setDate(Math.min(day, new Date(n2.getFullYear(), n2.getMonth() + 1, 0).getDate()));
       y.d = n2.getFullYear() + "-" + String(n2.getMonth() + 1).padStart(2, "0") + "-" + String(n2.getDate()).padStart(2, "0");
       save(y); say("Marked as paid. Next due " + y.d + ".");
