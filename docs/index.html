@@ -581,6 +581,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       <div class="ask" style="align-items:center"><button class="btn small" type="button" id="styleLearn">Learn my style now</button><span class="status" id="styleSt"></span></div>
       <span class="status">One-tap replies. The buttons under an email. Separate them with commas. Each one tells the AI what to say.</span>
       <input class="in" id="quickList" aria-label="One-tap replies" placeholder="Yes, Not now, Need more info, Call me, Thanks" autocomplete="off">
+      <label class="status chk"><input type="checkbox" id="pulseShare" checked> Team pulse: share my counts with the owner (how many emails to reply to, people to chase and overdue tasks, never the emails themselves)</label>
       <label class="status chk"><input type="checkbox" id="quickArm" checked> After a one-tap reply is written, get it ready to send, so one more tap on Confirm sends it</label>
       <span class="status">Company tabs. One line per company, the name, a colon, then words or addresses that point to it. Emails that match nothing go under Other.</span>
       <textarea id="coRules" aria-label="Company tabs" style="min-height:80px" spellcheck="false"></textarea>
@@ -736,5 +737,6 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
 <script src="demo.js"></script>
 <script src="app.js"></script>
 <script src="fixbox.js"></script>
+<script src="business.js"></script>
 </body>
 </html>

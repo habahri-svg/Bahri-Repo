@@ -64,7 +64,9 @@
       ["🚀 Vercel deployments", V + "deployments", "See each publish and press Redeploy"],
       ["📁 App code on GitHub", "https://github.com/" + ((info && info.repo) || ""), "Every change made to the app"],
       ["💳 Claude credit", "https://console.anthropic.com/settings/billing", "Top up the credit the AI uses"],
-      ["👥 Who uses the AI", "/admin", "Your owner page"]
+      ["👥 Who uses the AI", "/admin", "Your owner page"],
+      ["🏷️ Brand for another company", "/brand", "Name, logo and colours for a company that buys the page"],
+      ["🏨 Hostaway API key", "https://dashboard.hostaway.com/settings/hostaway-api", "For the numbers strip at the top of Today"]
     ];
     var box = el("div", "infosec"); box.append(el("h3", "", setup ? "Shortcuts to set it up" : "Shortcuts"));
     var a = el("div", "acts");

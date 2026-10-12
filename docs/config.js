@@ -15,6 +15,15 @@ window.WYZ_CONFIG = {
   /* Microsoft sign-in (Outlook, Hotmail, Microsoft 365). Paste the Application (client) ID from the Microsoft app
      registration (EXECUTION-PAGE.md, Microsoft). Empty = the Continue with Microsoft button stays hidden. */
   MS_CLIENT_ID: "",
+  /* Brand. To sell this page to another company, change these (open /brand to build them with a preview). */
+  COMPANY: "WYZ Rent",
+  COMPANY_DESC: "a Dubai holiday home management company",
+  APP_NAME: "Execution Page",
+  LOGO_URL: "",          /* empty = the built-in tick logo. Or a picture address like https://.../logo.png */
+  COLOR_MAIN: "",        /* empty = WYZ navy. Or a colour like #104b70 */
+  COLOR_ACCENT: "",      /* empty = WYZ gold. Or a colour like #b8923c */
+  /* Command Center: where "Send to Command Center" posts an action item. Empty = the button explains what's needed. */
+  COMMAND_CENTER_URL: "",
   /* Where "Report a problem" sends people's reports. */
   OWNER_EMAIL: "habahri@gmail.com"
 };

@@ -183,3 +183,10 @@ Needs these in Vercel, Settings, Environment Variables, then a redeploy:
 - Optional: FIX_MODEL (default claude-sonnet-5-5), FIX_BRANCH, GITHUB_REPO.
 
 Locked on purpose: api/_shared.js, api/fix.js, api/admin.js, api/seen.js, docs/config.js. Those hold sign-in and safety checks and can only be changed by a developer.
+
+## Business extras (3.41)
+
+- WYZ numbers strip (Hostaway): add HOSTAWAY_ACCOUNT_ID and HOSTAWAY_API_KEY in Vercel. Optional HOSTAWAY_CITY (for example Dubai) and HOSTAWAY_VIEWERS (who else may see it). Owners see it by default.
+- Team pulse: needs Upstash Redis on the Vercel project (same storage as /admin). Each page sends counts only, and people can switch sharing off in Settings.
+- Send to Command Center: set COMMAND_CENTER_URL in docs/config.js once the Command Center has an intake endpoint. The button shows the request to send Abbas until then.
+- Brand for another company: open /brand, fill it in, and paste the settings into docs/config.js of that company's copy.

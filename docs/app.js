@@ -1,5 +1,7 @@
 const PAGE_URL = location.href.split("#")[0];
 const G = Connectors.google;
+/* Brand: set in config.js, so the same page can be sold to another company (see brand.html) */
+const BR=(()=>{const c=window.WYZ_CONFIG||{};return {co:String(c.COMPANY||""+BR.co+""),desc:String(c.COMPANY_DESC||"a Dubai holiday home management company"),app:String(c.APP_NAME||"Execution Page"),logo:String(c.LOGO_URL||""),c1:String(c.COLOR_MAIN||""),c2:String(c.COLOR_ACCENT||"")}})();
 const ST = {reply:"Reply today",follow:"Follow up",work:"Work on",wait:"Waiting on others",fyi:"FYI"};
 const ORDER = ["reply","follow","work","wait","fyi"];
 const UR = {4:"Critical",3:"High",2:"Medium",1:"Low"};
@@ -143,7 +145,7 @@ function toast(t){let n=$("toastMsg");if(!n){n=el("div","updbar");n.id="toastMsg
 const APPS=[["WhatsApp Business","https://web.whatsapp.com/"],["Hostaway","https://dashboard.hostaway.com/"],["Wafeq","https://app.wafeq.com/"],["PriceLabs","https://app.pricelabs.co/"],["Outlook","https://outlook.office.com/mail/"],["Slack","https://app.slack.com/"],["Notion","https://www.notion.so/"],["Canva","https://www.canva.com/"],["LinkedIn","https://www.linkedin.com/"],["Google Sheets","https://docs.google.com/spreadsheets/"],["Microsoft Teams","https://teams.microsoft.com/"],["Microsoft To Do","https://to-do.office.com/"],["Zoom","https://app.zoom.us/"],["Yahoo Mail","https://mail.yahoo.com/"],["iCloud Mail","https://www.icloud.com/mail"],["Proton Mail","https://mail.proton.me/"]];
 const dashLink=()=>(window.WYZ_CONFIG&&window.WYZ_CONFIG.DASHBOARD_LINK)||state.dashLink||"";
 function addApp(n,u){state.links=state.links||[];if(!state.links.some(l=>l.u===u))state.links.push({n,u});persist();try{renderLinks()}catch(e){}window.open(u,"_blank","noopener");renderSetup()}
-function setDashLink(){const v=prompt("Paste the WYZ Rent dashboard address (it starts with https://)",state.dashLink||"");if(v===null)return;const u=v.trim();if(!/^https:\/\/\S+$/.test(u)){toast("That doesn't look like a web address.");return}state.dashLink=u;persist();addApp("WYZ Rent dashboard",u)}
+function setDashLink(){const v=prompt("Paste the "+BR.co+" dashboard address (it starts with https://)",state.dashLink||"");if(v===null)return;const u=v.trim();if(!/^https:\/\/\S+$/.test(u)){toast("That doesn't look like a web address.");return}state.dashLink=u;persist();addApp(""+BR.co+" dashboard",u)}
 /* Paste a list (iPhone Reminders, Notes, anything): every line becomes a task */
 function importList(){
   let d=$("listDlg");
@@ -209,12 +211,12 @@ function stepDefs(){
     Object.assign({name:"Your ChatGPT research"},imp("chatgpt","ChatGPT",GPT_EXPORT,"f-chatgpt","1. Tap Open ChatGPT export page and sign in if asked. 2. In Data controls, tap Export data, then Confirm export. 3. OpenAI emails you a download link. 4. Download the .zip from that email, no need to unzip it. 5. Come back here, tap Import file and choose it. Repeat weekly to keep it current.")),
     optional("Google Drive (optional)",drive.state,"Connected. Your recent documents show under Documents.","skipDrive","Shows the documents you've been working on. Uses the same Google sign-in as Gmail.",["Connect Google",()=>connectGoogle(drive.state==="denied")],"Google didn't give this page access to Drive. Tap Allow and tick every box on Google's screen.",{note:drive.note,fn:loadDrive}),
     optional("Todoist (optional)",todo.state,"Connected. Your Todoist tasks for today show under My tasks.","skipTodo","Use Todoist? In Todoist open Settings, Integrations, Developer and copy your API token, then tap Add token. No Todoist? Tap Skip, the built-in task list already works.",["Add token",setTodoToken],"Todoist didn't accept the token. Tap Replace token and paste it again.",{note:todo.note,fn:loadTodoist}),
-    ...(DASH?[{name:"WYZ Rent dashboard (optional)",done:!!state.shareDash||!!state.skipDash,
+    ...(DASH?[{name:""+BR.co+" dashboard (optional)",done:!!state.shareDash||!!state.skipDash,
       desc:state.shareDash?(state.dashErr?"Couldn't share: "+state.dashErr:"Sharing is on. Only counts and your research topics and ideas go to the company dashboard, never email text."+(state.dashAt?" Last shared "+fmtWhen(state.dashAt)+".":"")):"Optional. Share a daily summary with the company dashboard. Only counts and research topics and ideas are sent, never email text. You can turn it off any time.",
       btn:state.shareDash?["Share now",()=>shareSummary()]:["Turn on sharing",()=>setShare(true)],
       btn2:state.shareDash?["Turn off",()=>setShare(false)]:(state.skipDash?null:["Not now",()=>{state.skipDash=1;persist();renderSetup()}])}]:[]),
     {name:"Your to-do list from iPhone (optional)",done:!!state.listImported||!!state.skipList,desc:state.listImported?"Imported "+fmtWhen(state.listImported)+". Import again any time to add new items.":"Bring in your list from iPhone Reminders, Notes or anywhere else. Copy it, paste it here, and every line becomes a task.",btn:["Import a list",importList],btn2:state.listImported||state.skipList?null:["Later",()=>{state.skipList=1;persist();renderSetup()}]},
-    {name:"WYZ Rent dashboard",done:!!dashLink()&&!!(state.links||[]).some(l=>l.u===dashLink())||!!state.skipDashLink,desc:dashLink()?"Opens the company dashboard in a new tab. Sign in there once and it stays on your Quick links.":"Add the company dashboard to your page. Ask Abbas or Sam for the address if you don't have it.",btn:dashLink()?["Open and sign in",()=>addApp("WYZ Rent dashboard",dashLink())]:["Add dashboard link",setDashLink],btn2:state.skipDashLink?null:["Later",()=>{state.skipDashLink=1;persist();renderSetup()}]},
+    {name:""+BR.co+" dashboard",done:!!dashLink()&&!!(state.links||[]).some(l=>l.u===dashLink())||!!state.skipDashLink,desc:dashLink()?"Opens the company dashboard in a new tab. Sign in there once and it stays on your Quick links.":"Add the company dashboard to your page. Ask Abbas or Sam for the address if you don't have it.",btn:dashLink()?["Open and sign in",()=>addApp(""+BR.co+" dashboard",dashLink())]:["Add dashboard link",setDashLink],btn2:state.skipDashLink?null:["Later",()=>{state.skipDashLink=1;persist();renderSetup()}]},
     {name:"Your other apps (optional)",done:(state.links||[]).length>0||!!state.skipApps,desc:"Put the apps you use every day one tap away. Each one opens so you can sign in, then stays on your Quick links. Add any other app under Quick links.",
       more:APPS.filter(([n,u])=>!(state.links||[]).some(l=>l.u===u)).slice(0,16).map(([n,u])=>["+ "+n,()=>addApp(n,u)]),btn2:state.skipApps||(state.links||[]).length?null:["Later",()=>{state.skipApps=1;persist();renderSetup()}]},
     {name:"Installed on your phone or computer",done:!!state.installed,desc:state.installed?"Done.":"Pin the page so it opens like an app. Steps are in the Install tab.",btn:state.installed?null:["Show me how",()=>show("t-inst")],btn2:state.installed?null:["I've done it",()=>{state.installed=1;persist();renderSetup()}]}
@@ -281,10 +283,10 @@ function onbRender(){
     p("Later is fine. It stays under Settings.","status");
   }else if(k==="apps"){
     $("onbTitle").textContent="Your dashboard and everyday apps";
-    p("Put the WYZ Rent dashboard and the apps you use every day one tap away. Each one opens so you can sign in, then stays on your Quick links. Choose any, or tap Later.");
+    p("Put the "+BR.co+" dashboard and the apps you use every day one tap away. Each one opens so you can sign in, then stays on your Quick links. Choose any, or tap Later.");
     const r=el("div","acts");
-    if(dashLink())r.append(onbBtn("WYZ Rent dashboard",()=>{addApp("WYZ Rent dashboard",dashLink());onbRender()},"solid"));
-    else r.append(onbBtn("Add the WYZ Rent dashboard",()=>{setDashLink();onbRender()},"solid"));
+    if(dashLink())r.append(onbBtn(""+BR.co+" dashboard",()=>{addApp(""+BR.co+" dashboard",dashLink());onbRender()},"solid"));
+    else r.append(onbBtn("Add the "+BR.co+" dashboard",()=>{setDashLink();onbRender()},"solid"));
     APPS.forEach(([n,u])=>{const on=(state.links||[]).some(l=>l.u===u);const b=onbBtn((on?"✓ ":"+ ")+n,()=>{addApp(n,u);onbRender()},"small"+(on?" solid":""));r.append(b)});
     body.append(r);
     p("WhatsApp Business opens WhatsApp Web, where you scan the code with your phone once. Any other app can be added under Quick links.","status");
@@ -346,7 +348,7 @@ function onbRender(){
     acts.append(onbBtn("Done",()=>onbGo(onbI+1),"solid"),onbBtn("Later",()=>onbGo(onbI+1),"ghost"));
   }else if(k==="dash"){
     $("onbTitle").textContent="Share a daily summary with the company";
-    p("Optional. Turn this on to send a short daily summary to the WYZ Rent dashboard, so the team can see how the day is going.");
+    p("Optional. Turn this on to send a short daily summary to the "+BR.co+" dashboard, so the team can see how the day is going.");
     p("What is sent: counts only (emails to reply, follow-ups, meetings today, open tasks) and your research topics and ideas. Never email text, names or files. You can turn it off at any time.");
     acts.append(onbBtn("Turn on sharing",()=>{setShare(true);onbGo(onbI+1)},"solid"),onbBtn("Not now",()=>{state.skipDash=1;persist();onbGo(onbI+1)},"ghost"));
   }else{
@@ -360,7 +362,7 @@ function onbRender(){
     const n=((research.chatgpt&&research.chatgpt.convs)||[]).length+((research.claude&&research.claude.convs)||[]).length;
     line(n>0,n?"Research: "+n+" conversations imported":"Research: not imported yet");
     if(DASH)line(!!state.shareDash,state.shareDash?"Company dashboard: sharing a daily summary":"Company dashboard: not sharing");
-    p("When you want more, everything else is in Settings, Your data sources: a second email account, your to-do list, research, the WYZ Rent dashboard and your everyday apps.");
+    p("When you want more, everything else is in Settings, Your data sources: a second email account, your to-do list, research, the "+BR.co+" dashboard and your everyday apps.");
     acts.append(onbBtn("Open my page",()=>onbClose(true),"solid"));
   }
   const f=body.querySelector("input")||acts.querySelector("button");if(f)setTimeout(()=>f.focus(),30);
@@ -534,12 +536,25 @@ function renderThrPick(){
 function setAIButton(){$("thrAI").textContent=!sample&&chatAI()?"Write it with "+CHAT[chatAI()].name:thr.mode==="new"?(sample?"Write it for me":"Use my note"):"Suggest an answer"}
 $("thrAIpick").onchange=()=>{const v=$("thrAIpick").value;if(v==="free"){showFree();return}Connectors.ai.setChosen(v);renderAI()};
 /* Settings, Personalise */
-const baseTitle=()=>state.pageName&&state.pageName.trim()?state.pageName.trim():"WYZ Rent Execution Page";
+const baseTitle=()=>state.pageName&&state.pageName.trim()?state.pageName.trim():""+BR.co+" "+BR.app+"";
 function applyPageName(){
   const n=state.pageName&&state.pageName.trim();
-  document.querySelector(".hero .eyebrow").textContent=n||"WYZ Rent · Execution Page";
+  document.querySelector(".hero .eyebrow").textContent=n||""+BR.co+" · "+BR.app+"";
   document.title=baseTitle();try{updateHero()}catch(e){}
 }
+/* brand from config.js: name, logo and colours (brand.html builds these settings) */
+(function(){
+  try{
+    document.title=baseTitle();const eb=document.querySelector(".hero .eyebrow");if(eb&&!(state.pageName||"").trim())eb.textContent=BR.co+" · "+BR.app;
+    const am=document.querySelector('meta[name="apple-mobile-web-app-title"]');if(am)am.content=BR.app;
+    if(/^https:\/\/|^[\w.\/-]+\.(png|jpe?g|svg|webp)$/i.test(BR.logo)){const svg=document.querySelector(".hero .logo");if(svg){const im=document.createElement("img");im.src=BR.logo;im.alt="";im.width=26;im.height=26;im.className="logo";im.style.cssText="border-radius:6px;object-fit:contain";svg.replaceWith(im)}}
+    const hex=/^#[0-9a-f]{6}$/i;
+    let own=false;try{const L=JSON.parse(localStorage.getItem("wyz-look")||"{}");own=!!(L.c1||L.c2||L.cH)}catch(e){}
+    if(!own&&(hex.test(BR.c1)||hex.test(BR.c2))){const v=(hex.test(BR.c1)?"--navy:"+BR.c1+";--hero1:"+BR.c1+";":"")+(hex.test(BR.c2)?"--gold:"+BR.c2+";":"");
+      const imp=v.replace(/;/g," !important;");const st=document.createElement("style");st.textContent="@media not (prefers-color-scheme: dark){:root:not([data-theme=\"dark\"]){"+imp+"}}:root[data-theme=\"light\"]{"+imp+"}";document.head.append(st);
+      const tc=document.querySelector('meta[name="theme-color"]');if(tc&&hex.test(BR.c1))tc.content=BR.c1}
+  }catch(e){}
+})();
 /* version and last update, shown at the very top (set in version.js) */
 (function(){
   const v=window.WYZ_VERSION||{},bar=$("verBar");if(!bar||!v.version)return;
@@ -678,7 +693,7 @@ async function triage(sig,force){
   if(!sample){board=heuristicBoard(sig,true);persist();renderBoard();setFresh("ok");return}
   setFresh("load","Sorting your inbox with Claude");
   const now=new Date();
-  const prompt="You are triaging one person's email for their daily run sheet. The person is "+(myName||"the reader")+" at WYZ Rent, a Dubai holiday home management company. Today is "+now.toString()+".\n\n"+
+  const prompt="You are triaging one person's email for their daily run sheet. The person is "+(myName||"the reader")+" at "+BR.co+", "+BR.desc+". Today is "+now.toString()+".\n\n"+
   "Email threads (JSON). inInbox = in the inbox now. lastFromMe = the person sent the last message. lastTo = who they wrote to. daysSinceLast = days since the last message:\n"+JSON.stringify(threads.map(({url,lastId,...r})=>r))+
   "\n\nReturn JSON only: {\"headline\": one or two plain sentences on what matters today, \"items\": [{\"id\": thread id, \"st\": one of reply|follow|work|wait|fyi, \"g\": urgency 1-4 (4 critical), \"title\": short action-style title, \"summary\": one or two sentences saying what it is and what to do, \"when\": short timing note like 'You asked Tue, 3 days ago' }]}.\n"+
   "Statuses: reply = someone wrote and is waiting for this person's answer. work = a task to do that isn't a reply. wait = lastFromMe is true, they asked for something or are expecting an answer, and it's been under 3 days. follow = lastFromMe is true, they're still owed an answer, and it's been 3 days or more, so they should chase (name who to chase in the title). fyi = worth knowing, nothing to do. "+
@@ -741,7 +756,7 @@ function snoozeDrop(id,after){
         const busy={};(events||[]).forEach(e=>{const s=e.start&&(e.start.date||(e.start.dateTime||"").slice(0,10));if(s)busy[s]=(busy[s]||0)+1});
         const days=Array.from({length:10},(_,n)=>{const x=new Date();x.setDate(x.getDate()+n+1);return ymd(x)+" "+x.toLocaleDateString("en-GB",{weekday:"short"})+(busy[ymd(x)]?" ("+busy[ymd(x)]+" meetings)":"")}).join(", ");
         const txt=await threadText(id);
-        const r=await creditFallback(prov=>sample.json("Pick the best day to bring this email back to "+(myName||"me")+" at WYZ Rent. Today is "+new Date().toDateString()+". Days ahead: "+days+". Rules: if the email names a date or deadline, pick the day before it or the same morning. If it waits on someone else, pick the day they should have answered. Prefer days with few meetings. Never pick today. Do not pick a weekend (Friday and Saturday are the weekend in Dubai, prefer Sunday to Thursday) unless the email says so.\n\nThe email:\n"+String(txt).slice(0,3000)+"\n\nReturn JSON only: {\"date\":\"YYYY-MM-DD\",\"why\":\"one short reason, 12 words or fewer\"}",{cache:false,provider:prov}));
+        const r=await creditFallback(prov=>sample.json("Pick the best day to bring this email back to "+(myName||"me")+" at "+BR.co+". Today is "+new Date().toDateString()+". Days ahead: "+days+". Rules: if the email names a date or deadline, pick the day before it or the same morning. If it waits on someone else, pick the day they should have answered. Prefer days with few meetings. Never pick today. Do not pick a weekend (Friday and Saturday are the weekend in Dubai, prefer Sunday to Thursday) unless the email says so.\n\nThe email:\n"+String(txt).slice(0,3000)+"\n\nReturn JSON only: {\"date\":\"YYYY-MM-DD\",\"why\":\"one short reason, 12 words or fewer\"}",{cache:false,provider:prov}));
         const when=String(r.date||"");const max=new Date();max.setDate(max.getDate()+60);
         if(!/^\d{4}-\d{2}-\d{2}$/.test(when)||when<=todayKey()||when>ymd(max))throw new Error("no sensible date");
         const ok=el("button","","Snooze to "+niceDay(when)+(r.why?", "+clip(String(r.why),60):""));ok.type="button";ok.title="Snooze to "+niceDay(when);
@@ -840,7 +855,7 @@ function buildInstruct(i,box,getText,useReply){
       const txt=cached||await getText();cached=txt||"";
       const first=(myName||"").split(" ")[0];
       const tone=/reply|draft|write|answer|respond/i.test(q)?await toneExamples():"";
-      const r=await sample.json("You are the personal assistant of "+(myName||"a manager")+" at WYZ Rent, a Dubai holiday home management company. Today is "+new Date().toDateString()+".\n\nEmail thread (latest last):\n"+cached+"\n\nTheir instruction: "+q+"\n\nReturn JSON only: {\"answer\": a short plain answer, max 120 words, no em dashes, \"reply\": a ready-to-send reply email body in their voice (contractions, "+(sigText()?"no sign-off or name, their signature is added automatically":"signed with the first name"+(first?" "+first:""))+") or an empty string when no reply is needed, \"tasks\": [ {\"title\": short, \"due\": \"YYYY-MM-DD\" or \"\"} ] only when they ask for a task or one is clearly needed, \"snooze_days\": a whole number of days to snooze this email, or 0, \"event\": null, or {\"title\", \"start\": \"YYYY-MM-DDTHH:MM\", \"end\": \"YYYY-MM-DDTHH:MM\", \"location\"} only when the email proposes or confirms a meeting }."+(tone?"\n\n"+tone:""),{provider:opt.id,cache:false});
+      const r=await sample.json("You are the personal assistant of "+(myName||"a manager")+" at "+BR.co+", "+BR.desc+". Today is "+new Date().toDateString()+".\n\nEmail thread (latest last):\n"+cached+"\n\nTheir instruction: "+q+"\n\nReturn JSON only: {\"answer\": a short plain answer, max 120 words, no em dashes, \"reply\": a ready-to-send reply email body in their voice (contractions, "+(sigText()?"no sign-off or name, their signature is added automatically":"signed with the first name"+(first?" "+first:""))+") or an empty string when no reply is needed, \"tasks\": [ {\"title\": short, \"due\": \"YYYY-MM-DD\" or \"\"} ] only when they ask for a task or one is clearly needed, \"snooze_days\": a whole number of days to snooze this email, or 0, \"event\": null, or {\"title\", \"start\": \"YYYY-MM-DDTHH:MM\", \"end\": \"YYYY-MM-DDTHH:MM\", \"location\"} only when the email proposes or confirms a meeting }."+(tone?"\n\n"+tone:""),{provider:opt.id,cache:false});
       result(r||{});
     }catch(e){out.replaceChildren(el("p","status err","Couldn't do that ("+clip((e&&e.message)||"unknown reason",110)+")."))}
     go.disabled=false;
@@ -1188,10 +1203,10 @@ async function creditFallback(run){
 const isCreditErr=e=>/no credit|credit left|billing|quota/i.test((e&&e.message)||"");
 function freePrompt(){
   if(thr.mode==="new"){
-    return "Write an email for "+(myName||"me")+" at WYZ Rent, a Dubai holiday home management company.\nIt is to: "+($("thrTo").value.trim()||"someone")+".\nWhat it should say: "+($("thrBrief").value.trim()||"(describe it here)")+"\n\nPlain text only, short, warm, professional, with contractions. No em dashes. Give a subject line first, then the email body.";
+    return "Write an email for "+(myName||"me")+" at "+BR.co+", "+BR.desc+".\nIt is to: "+($("thrTo").value.trim()||"someone")+".\nWhat it should say: "+($("thrBrief").value.trim()||"(describe it here)")+"\n\nPlain text only, short, warm, professional, with contractions. No em dashes. Give a subject line first, then the email body.";
   }
   const chase=thrChase();
-  return (chase?"Write a short, polite follow-up email chasing an answer that is still owed":"Write a reply email")+" for "+(myName||"me")+" at WYZ Rent, a Dubai holiday home management company. Plain text only, short, warm, professional, with contractions. No em dashes, no semicolons. Use [DATE] or [DETAIL] where a fact is unknown. Give only the email body.\n\nSubject: "+$("thrTitle").textContent+"\nThread (latest last):\n"+threadBlock(thr.msgs).slice(-6000);
+  return (chase?"Write a short, polite follow-up email chasing an answer that is still owed":"Write a reply email")+" for "+(myName||"me")+" at "+BR.co+", "+BR.desc+". Plain text only, short, warm, professional, with contractions. No em dashes, no semicolons. Use [DATE] or [DETAIL] where a fact is unknown. Give only the email body.\n\nSubject: "+$("thrTitle").textContent+"\nThread (latest last):\n"+threadBlock(thr.msgs).slice(-6000);
 }
 function showFree(){
   $("thrFree").hidden=false;$("thrFree").scrollIntoView({block:"nearest"});
@@ -1226,7 +1241,7 @@ async function tidyVoice(){
   st.className="status";st.textContent="Turning what you said into an email...";
   try{
     const first=(myName||"").split(" ")[0],reply=thr.mode==="reply";
-    const r=await creditFallback(prov=>sample("Turn this spoken note into a clean email "+(reply?"reply":"")+" for "+(myName||"me")+" at WYZ Rent. Keep every fact and the meaning. Fix grammar, remove filler words, make it short and warm. Use contractions. No em dashes, no semicolons. Plain text only. "+(sigText()?"No sign-off and no name, the signature is added automatically.":"Sign with the first name"+(first?" "+first:"")+".")+" Return only the email body.\n\nWhat they said:\n"+raw+(reply?"\n\nThe email they are answering:\n"+threadBlock(thr.msgs).slice(-2500):""),{cache:false,provider:prov}));
+    const r=await creditFallback(prov=>sample("Turn this spoken note into a clean email "+(reply?"reply":"")+" for "+(myName||"me")+" at "+BR.co+". Keep every fact and the meaning. Fix grammar, remove filler words, make it short and warm. Use contractions. No em dashes, no semicolons. Plain text only. "+(sigText()?"No sign-off and no name, the signature is added automatically.":"Sign with the first name"+(first?" "+first:"")+".")+" Return only the email body.\n\nWhat they said:\n"+raw+(reply?"\n\nThe email they are answering:\n"+threadBlock(thr.msgs).slice(-2500):""),{cache:false,provider:prov}));
     const t=String(r.text||"").trim();if(t){ta.value=t;$("thrExact").hidden=false}
     st.className="status";st.textContent="Edit it, then send it or save it as a draft.";
   }catch(e){st.className="status err";st.textContent="I couldn't tidy it ("+clip((e&&e.message)||"unknown reason",90)+"). Your exact words are in the box."}
@@ -1254,7 +1269,7 @@ async function writeMyWay(dir,chase,text,set,status,about){
   try{let tone="";try{tone=await toneExamples()}catch(x){}const r=await creditFallback(p=>sample(replyPrompt(chase,tone,text,about)+dirNote(dir),{cache:false,provider:p}));const t=String(r.text||"").trim();if(!t)throw new Error("the AI sent back nothing");set(t);status("Here it is, written your way. Edit anything, then send.")}
   catch(e){status("Couldn't write it ("+clip((e&&e.message)||"unknown reason",90)+"). Your direction is still in the box above.",true)}
 }
-function replyPrompt(chase,tone,text,about){const it=about||thr.item||{};return (chase?"Write a short, polite follow-up email chasing an answer that is still owed, ":"Write a reply email ")+"for "+(myName||"me")+" at WYZ Rent. Plain text only, ready to edit, "+(sigText()?"with no sign-off and no name, because their signature is added automatically":"signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject, no quoted text."+(tone?"\n\n"+tone:"")+"\n\nWhat it's about: "+(it.title||"")+". "+(it.summary||"")+"\n\nThread (latest last):\n"+text}
+function replyPrompt(chase,tone,text,about){const it=about||thr.item||{};return (chase?"Write a short, polite follow-up email chasing an answer that is still owed, ":"Write a reply email ")+"for "+(myName||"me")+" at "+BR.co+". Plain text only, ready to edit, "+(sigText()?"with no sign-off and no name, because their signature is added automatically":"signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject, no quoted text."+(tone?"\n\n"+tone:"")+"\n\nWhat it's about: "+(it.title||"")+". "+(it.summary||"")+"\n\nThread (latest last):\n"+text}
 async function thrDraft(){
   const ta=$("thrText"),st=$("thrSt"),chase=thrChase();
   st.className="status";st.textContent=sample?"Writing a draft with Claude...":"";ta.value="";
@@ -1561,7 +1576,7 @@ function reminderItems(){
   return out;
 }
 /* ---------- company tabs: WYZ Rent, SAMOCO, Personal, Other ---------- */
-const CO_DEFAULT="WYZ Rent: wyzrent.com, hostaway, airbnb, booking.com, guest, owner, check-in, listing, holiday home\nSAMOCO: samoco, spc, deir, concession, ueg, petroleum, oil field\nPersonal: gmail.com, hotmail.com, icloud.com, yahoo.com, outlook.com";
+const CO_DEFAULT=""+BR.co+": wyzrent.com, hostaway, airbnb, booking.com, guest, owner, check-in, listing, holiday home\nSAMOCO: samoco, spc, deir, concession, ueg, petroleum, oil field\nPersonal: gmail.com, hotmail.com, icloud.com, yahoo.com, outlook.com";
 function coRules(){return String(state.coRules!=null?state.coRules:CO_DEFAULT).split("\n").map(l=>{const m=l.match(/^\s*([^:]{1,30}):(.*)$/);return m?{name:m[1].trim(),keys:m[2].split(",").map(x=>x.trim().toLowerCase()).filter(Boolean)}:null}).filter(r=>r&&r.name&&r.keys.length).slice(0,6)}
 function coOf(i){const t=tById(i.id)||{};const h=[t.from,(t.lastTo||[]).join(" "),t.subject,t.snippet,i.title].join(" ").toLowerCase();for(const r of coRules()){if(r.keys.some(k=>h.indexOf(k)>=0))return r.name}return "Other"}
 function drawCoChips(items){
@@ -1614,7 +1629,7 @@ async function noiseDigest(){
   if(sample){
     sum.textContent="Summing them up...";
     try{
-      const r=await creditFallback(prov=>sample("These are newsletters and automatic notifications from one person's inbox in the last day. The person works at WYZ Rent, a Dubai holiday home company. Write at most 6 short lines. First anything that needs action (a payment due, a security alert, a booking or account problem), each starting with \"Action:\". Then the few things worth knowing. Skip pure marketing. Plain English, no em dashes, no headings.\n\n"+JSON.stringify(list.map(t=>({from:nameOf(t.from),subject:t.subject,snippet:t.snippet.slice(0,200)}))),{cache:false,provider:prov}));
+      const r=await creditFallback(prov=>sample("These are newsletters and automatic notifications from one person's inbox in the last day. The person works at "+BR.co+", "+BR.desc+". Write at most 6 short lines. First anything that needs action (a payment due, a security alert, a booking or account problem), each starting with \"Action:\". Then the few things worth knowing. Skip pure marketing. Plain English, no em dashes, no headings.\n\n"+JSON.stringify(list.map(t=>({from:nameOf(t.from),subject:t.subject,snippet:t.snippet.slice(0,200)}))),{cache:false,provider:prov}));
       sum.textContent=String(r.text||"").trim()||"Nothing worth knowing.";
     }catch(e){sum.textContent="Couldn't sum them up ("+clip((e&&e.message)||"unknown reason",80)+"). The list is below."}
   }else sum.remove();
@@ -1740,7 +1755,7 @@ async function draftOne(i){
   const last=msgs[msgs.length-1],to=targetsFor(msgs);if(!to.length)throw new Error("nobody to reply to");
   const t=tById(i.id)||{},subj=String(t.subject||i.title||"");
   const tone=await toneExamples();
-  const r=await creditFallback(prov=>sample("Write a reply email for "+(myName||"me")+" at WYZ Rent. Plain text only, ready to edit, "+(sigText()?"with no sign-off and no name, because their signature is added automatically":"signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject, no quoted text."+(tone?"\n\n"+tone:"")+"\n\nWhat it's about: "+(i.title||"")+". "+(i.summary||"")+"\n\nThread (latest last):\n"+threadBlock(msgs),{cache:false,provider:prov}));
+  const r=await creditFallback(prov=>sample("Write a reply email for "+(myName||"me")+" at "+BR.co+". Plain text only, ready to edit, "+(sigText()?"with no sign-off and no name, because their signature is added automatically":"signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject, no quoted text."+(tone?"\n\n"+tone:"")+"\n\nWhat it's about: "+(i.title||"")+". "+(i.summary||"")+"\n\nThread (latest last):\n"+threadBlock(msgs),{cache:false,provider:prov}));
   let body=String(r.text||"").trim();if(!body)throw new Error("the AI sent back nothing");
   const sg=sigText();if(sg&&!body.includes(sg))body+="\n\n"+sg;
   await mcp.callTool("Gmail","create_draft",{to,cc:[],subject:/^re:/i.test(subj)?subj:"Re: "+subj,body:body+quoteOf(last),replyToMessageId:last.id,attachments:[]});
@@ -1802,7 +1817,7 @@ async function draftFor(i,host,btn){
   const box=el("div","draftbox");box.append(toRow,ccRow,dirRow);try{attachAutocomplete(ccIn)}catch(e){}const ta=el("textarea");ta.id="d-"+i.id;ta.value="";const st=el("span","status","Writing a draft");
   box.append(st,ta);host.append(box);btn.textContent="Writing";
   try{
-    const chase=(i.st==="follow"||i.st==="wait");const tone=sample?await toneExamples().catch(()=>""):"";const r=!sample?{text:templateDraft(i,chase)}:await sample((chase?"Write a short, polite follow-up email chasing an answer that is still owed, ":"Write a reply email ")+"for "+(myName||"me")+" at WYZ Rent. Plain text only, ready to edit, "+(sigText()?"with no sign-off and no name, because their signature is added automatically":"signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject."+(tone?"\n\n"+tone:"")+"\n\nWhat it's about: "+(i.title||"")+". "+(i.summary||"")+"\n\nThread (latest last):\n"+(text||tById(i.id)?.snippet||""),{cache:false,provider:aiPickValue(),onText:u=>{ta.value=u.text}});
+    const chase=(i.st==="follow"||i.st==="wait");const tone=sample?await toneExamples().catch(()=>""):"";const r=!sample?{text:templateDraft(i,chase)}:await sample((chase?"Write a short, polite follow-up email chasing an answer that is still owed, ":"Write a reply email ")+"for "+(myName||"me")+" at "+BR.co+". Plain text only, ready to edit, "+(sigText()?"with no sign-off and no name, because their signature is added automatically":"signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject."+(tone?"\n\n"+tone:"")+"\n\nWhat it's about: "+(i.title||"")+". "+(i.summary||"")+"\n\nThread (latest last):\n"+(text||tById(i.id)?.snippet||""),{cache:false,provider:aiPickValue(),onText:u=>{ta.value=u.text}});
     ta.value=r.text;st.textContent="Edit it, then press Send. You confirm before it goes.";
   }catch(e){st.textContent="Couldn't write a draft just now ("+clip((e&&e.message)||"unknown reason",110)+"). Write your own here, then save it.";st.className="status err"}
   btn.remove();
@@ -1859,13 +1874,13 @@ $("showOff").onclick=()=>{showOff=!showOff;renderBoard()};
 $("askGo").onclick=ask;$("askQ").addEventListener("keydown",e=>{if(e.key==="Enter")ask()});
 async function ask(){
   const q=$("askQ").value.trim();if(!q)return;const out=$("askOut");out.hidden=false;
-  if(!sample&&chatAI()){const ctx=(board&&board.items||[]).slice(0,25).map(i=>"- "+ST[i.st]+": "+i.title).join("\n");const c=CHAT[chatAI()];out.replaceChildren(outsideOffer({name:c.name,url:c.url,kind:"chat"},"I'm "+(myName||"a WYZ Rent team member")+". My board today:\n"+ctx+"\n\nQuestion: "+q));return}
+  if(!sample&&chatAI()){const ctx=(board&&board.items||[]).slice(0,25).map(i=>"- "+ST[i.st]+": "+i.title).join("\n");const c=CHAT[chatAI()];out.replaceChildren(outsideOffer({name:c.name,url:c.url,kind:"chat"},"I'm "+(myName||"a "+BR.co+" team member")+". My board today:\n"+ctx+"\n\nQuestion: "+q));return}
   if(!sample){out.textContent="Ask needs an AI connected. Connect Claude or ChatGPT in the setup steps.";return}
   out.textContent="Thinking...";
   let live=[];try{const w=q.replace(/[^\p{L}\p{N}@. ]/gu," ").split(/\s+/).filter(x=>x.length>2&&!/^(the|and|what|did|does|have|from|with|about|any|send|sent|email|emails|mail|today|this|that|who|when|where|why|how)$/i.test(x)).slice(0,4);
     if(w.length){const r=await mcp.callTool("Gmail","search_threads",{query:"("+w.join(" OR ")+") newer_than:90d",pageSize:12},{cache:false});const ts=((r.payload&&r.payload.threads)||[]).map(slimThread);ts.forEach(t=>{if(!tById(t.id))found.push(t)});live=ts.map(t=>({ref:t.id,from:nameOf(t.from)||t.from,subject:t.subject,when:t.date,latest:t.snippet,lastFromMe:t.lastFromMe}))}}catch(e){}
   const ctx={liveMailSearch:live,today:new Date().toString(),board:(board&&board.items||[]).map(i=>({status:ST[i.st],urgency:UR[i.g],title:i.title,summary:i.summary,from:nameOf((tById(i.id)||{}).from)})),calendar:(events||[]).map(e=>({when:e.start&&(e.start.dateTime||e.start.date),what:e.summary}))};
-  try{const r=await sample("You help "+(myName||"a WYZ Rent team member")+" run their day. Answer briefly and plainly, no em dashes. Their board, calendar and a live search of their mail for this question (liveMailSearch, newest mail included, last 90 days) (JSON):\n"+JSON.stringify(ctx)+"\n\nQuestion: "+q+"\n\nAt the very end, on its own line, write USED: followed by the ref values of the liveMailSearch emails your answer relies on, separated by commas, or USED: none.",{cache:false,onText:u=>{out.textContent=String(u.text||"").split(/\n?USED:/)[0]}});
+  try{const r=await sample("You help "+(myName||"a "+BR.co+" team member")+" run their day. Answer briefly and plainly, no em dashes. Their board, calendar and a live search of their mail for this question (liveMailSearch, newest mail included, last 90 days) (JSON):\n"+JSON.stringify(ctx)+"\n\nQuestion: "+q+"\n\nAt the very end, on its own line, write USED: followed by the ref values of the liveMailSearch emails your answer relies on, separated by commas, or USED: none.",{cache:false,onText:u=>{out.textContent=String(u.text||"").split(/\n?USED:/)[0]}});
     const parts=String(r.text||"").split(/\n?USED:/),refs=(parts[1]||"").split(",").map(x=>x.trim()).filter(x=>live.some(l=>l.ref===x));
     out.replaceChildren(document.createTextNode(parts[0].trim()));
     if(refs.length){const a=el("div","acts");a.append(el("span","status","From these emails:"));refs.slice(0,6).forEach(id=>{const l=live.find(x=>x.ref===id);const b=el("button","btn small ghost",clip(l.from+": "+l.subject,60));b.type="button";b.onclick=()=>openThread(id);a.append(b)});out.append(a)}}
@@ -1938,7 +1953,7 @@ async function followups(force){
   if(!force&&research.fu&&research.fu.sig===sig)return;
   if(!sample){return}
   $("resHead").replaceChildren(el("span","spin"),"Finding follow-ups in your research...");
-  const prompt="You help "+(myName||"a WYZ Rent team member")+" at WYZ Rent (Dubai holiday home management) pick up research they started in Claude and ChatGPT. Today is "+new Date().toDateString()+".\n\nTheir recent conversations (JSON, newest first; asks are their own questions):\n"+JSON.stringify(convs.map(c=>({key:c.src+":"+c.id,src:c.src,title:c.title,date:new Date(c.at).toDateString(),asks:c.asks,summary:c.summary||undefined})))+
+  const prompt="You help "+(myName||"a "+BR.co+" team member")+" at "+BR.co+" ("+BR.desc+") pick up research they started in Claude and ChatGPT. Today is "+new Date().toDateString()+".\n\nTheir recent conversations (JSON, newest first; asks are their own questions):\n"+JSON.stringify(convs.map(c=>({key:c.src+":"+c.id,src:c.src,title:c.title,date:new Date(c.at).toDateString(),asks:c.asks,summary:c.summary||undefined})))+
     "\n\nReturn JSON only: {\"headline\": one plain sentence on the main threads of their research, \"items\": [{\"key\": the key, \"topic\": 3-6 word topic, \"where\": one sentence on where they left it, \"next\": one concrete next step to finish or act on it, \"prompt\": a ready-to-send follow-up question they could ask next, \"g\": priority 1-3 (3 = act this week)}]}. "+
     "Include only conversations with real unfinished work or a decision to make, up to 10, highest priority first. Skip small talk and finished one-off questions. Plain words, no em dashes.";
   try{const r=await sample.json(prompt,{modelTier:"default",cache:false});
@@ -2144,7 +2159,7 @@ async function runFileAI(){
       out.replaceChildren(p);go.disabled=false;return;
     }
     out.replaceChildren(el("p","status","Reading..."));
-    const ask="You are the personal assistant of "+(myName||"a manager")+" at WYZ Rent, a Dubai holiday home management company. Today is "+new Date().toDateString()+".\nThe file is called \""+fileAI.name+"\".\nTheir question: "+q+"\n\nAnswer in plain, simple words. Use short lines or a short list. No em dashes. If the file doesn't say, say so. Don't guess.";
+    const ask="You are the personal assistant of "+(myName||"a manager")+" at "+BR.co+", "+BR.desc+". Today is "+new Date().toDateString()+".\nThe file is called \""+fileAI.name+"\".\nTheir question: "+q+"\n\nAnswer in plain, simple words. Use short lines or a short list. No em dashes. If the file doesn't say, say so. Don't guess.";
     /* the file goes with the first question, later questions follow on from the earlier answers */
     const q1=fileAI.hist.length?fileAI.hist[0].q:q,ask1=ask.replace("Their question: "+q,"Their question: "+q1);
     const content=blocks?[{type:f.mime==="application/pdf"?"document":"image",source:{type:"base64",media_type:f.mime,data:f.data}},{type:"text",text:ask1}]:ask1+"\n\nFile text:\n"+String(f.text).slice(0,60000);
@@ -2219,7 +2234,7 @@ async function saveToDrive(m,f,btn){
     if(Math.floor(raw.length*3/4)>15*1024*1024)throw new Error("That file is over 15 MB. Open it in Gmail.");
     const day=String(m.date||"").slice(0,10)||todayKey(),who=safeFile(nameOf(m.sender)||"sender").slice(0,40);
     const name=day+" "+who+" - "+safeFile(f.name||"attachment");
-    const folder=(state.driveFolder&&state.driveFolder.trim())||"WYZ Rent Attachments";
+    const folder=(state.driveFolder&&state.driveFolder.trim())||""+BR.co+" Attachments";
     state.driveFolderIds=state.driveFolderIds||{};
     const r=await mcp.callTool("Google Drive","save_file",{name,mime:f.type||"application/octet-stream",data:raw,folder,folderId:state.driveFolderIds[folder]||""},{cache:false});
     const p=r.payload||{};if(p.folderId){state.driveFolderIds[folder]=p.folderId;persist()}
@@ -2636,7 +2651,7 @@ function openInvite(){
     if(!armed){armed=1;send.textContent="Confirm: send to "+addr;st.className="status";st.textContent="Check the message, then press Confirm.";return}
     armed=0;send.disabled=true;send.textContent="Sending...";
     try{
-      await mcp.callTool("Gmail","send_message",{to:[addr],cc:[],subject:"Your WYZ Rent Execution Page",body:ta.value.trim()+(sigText()?"\n\n"+sigText():""),attachments:[]});
+      await mcp.callTool("Gmail","send_message",{to:[addr],cc:[],subject:"Your "+BR.co+" "+BR.app+"",body:ta.value.trim()+(sigText()?"\n\n"+sigText():""),attachments:[]});
       state.invites=state.invites||[];state.invites.unshift({to:addr,name:nm.value.trim(),at:Date.now()});state.invites=state.invites.slice(0,30);persist();
       send.textContent="Sent";st.className="status";st.textContent="Sent to "+addr+". If you limit the AI to certain people in Vercel, add this address to ALLOWED_EMAILS so Claude and ChatGPT work for them.";drawList();
       setTimeout(()=>{send.disabled=false;send.textContent="Send by email"},2500);
@@ -2662,7 +2677,7 @@ async function weeklyReview(){
   if(!sample){host.append(el("p","status","Add Claude in the setup steps to get a written review with advice for next week."));return}
   const wait=el("p","status","Writing your review...");host.append(wait);
   try{
-    const r=await sample("Write a short weekly review for "+(myName||"the reader")+" at WYZ Rent, in plain words, no em dashes, 4 to 6 lines. Say what got finished, what is still open and the top two things to do first next week.\n\nFinished items: "+(log.map(x=>x.t).slice(-25).join("; ")||"none recorded")+"\nStill to reply: "+open.filter(i=>i.st==="reply").map(i=>i.title).slice(0,10).join("; ")+"\nStill to chase: "+open.filter(i=>i.st==="follow").map(i=>i.title).slice(0,10).join("; "),{cache:false});
+    const r=await sample("Write a short weekly review for "+(myName||"the reader")+" at "+BR.co+", in plain words, no em dashes, 4 to 6 lines. Say what got finished, what is still open and the top two things to do first next week.\n\nFinished items: "+(log.map(x=>x.t).slice(-25).join("; ")||"none recorded")+"\nStill to reply: "+open.filter(i=>i.st==="reply").map(i=>i.title).slice(0,10).join("; ")+"\nStill to chase: "+open.filter(i=>i.st==="follow").map(i=>i.title).slice(0,10).join("; "),{cache:false});
     wait.replaceWith(el("div","ans",r.text));
   }catch(e){wait.textContent="Couldn't write the review ("+clip((e&&e.message)||"unknown reason",90)+")."}
 }
@@ -2905,7 +2920,7 @@ function plainReport(kind,d){
   return L.join("\n");
 }
 async function aiReport(kind,d){
-  const r=await sample((kind==="plan"?"Write a plan for today for ":"Write an end-of-day wrap for ")+(myName||"the reader")+" at WYZ Rent, a Dubai holiday home management company. Plain text only, no markdown, no em dashes, short lines, max 18 lines. "+(kind==="plan"?"Put meetings in time order, then the order to tackle emails and tasks with a few words on why each comes first. Finish with one line on what to protect time for.":"Say what got done, what is still open and the top three things to do first tomorrow, using tomorrow's meetings.")+"\n\nData (JSON):\n"+JSON.stringify(d),{cache:false});
+  const r=await sample((kind==="plan"?"Write a plan for today for ":"Write an end-of-day wrap for ")+(myName||"the reader")+" at "+BR.co+", "+BR.desc+". Plain text only, no markdown, no em dashes, short lines, max 18 lines. "+(kind==="plan"?"Put meetings in time order, then the order to tackle emails and tasks with a few words on why each comes first. Finish with one line on what to protect time for.":"Say what got done, what is still open and the top three things to do first tomorrow, using tomorrow's meetings.")+"\n\nData (JSON):\n"+JSON.stringify(d),{cache:false});
   return r.text.trim();
 }
 let repText="";
@@ -2948,7 +2963,7 @@ async function composeDraft(){
   st.className="status";st.textContent="Writing it...";
   try{
     const tone=await toneExamples(),first=(myName||"").split(" ")[0];
-    const r=await creditFallback(prov=>sample.json("Write an email for "+(myName||"me")+" at WYZ Rent, a Dubai holiday home management company.\nIt is to: "+($("thrTo").value.trim()||"someone")+".\nWhat it should say: "+brief+"\n\nPlain text, "+(sigText()?"no sign-off and no name, because the signature is added automatically":"signed with the first name"+(first?" "+first:""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return JSON only: {\"subject\": a short subject line, \"body\": the email body}."+(tone?"\n\n"+tone:""),{cache:false,provider:prov}));
+    const r=await creditFallback(prov=>sample.json("Write an email for "+(myName||"me")+" at "+BR.co+", "+BR.desc+".\nIt is to: "+($("thrTo").value.trim()||"someone")+".\nWhat it should say: "+brief+"\n\nPlain text, "+(sigText()?"no sign-off and no name, because the signature is added automatically":"signed with the first name"+(first?" "+first:""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return JSON only: {\"subject\": a short subject line, \"body\": the email body}."+(tone?"\n\n"+tone:""),{cache:false,provider:prov}));
     ta.value=String(r.body||"").trim();if(!$("thrSubj").value.trim())$("thrSubj").value=String(r.subject||"").trim();
     st.textContent="Edit it, then send it or save it as a draft."
   }catch(e){st.className="status err";st.textContent="Couldn't write it ("+clip((e&&e.message)||"unknown reason",110)+")."+(isCreditErr(e)?" You can still use a free chat below, or write your own here.":" Write your own here.");if(isCreditErr(e))showFree()}
@@ -3053,7 +3068,7 @@ async function pickTop3(force){
   top3Busy=true;
   try{
     const list=cand.map((x,i)=>"c"+i+" ["+x.kind+"] "+x.title+(x.why?" - "+x.why:"")).join("\n");
-    const r=await creditFallback(prov=>sample.json("You are the chief of staff of "+(myName||"a manager")+" at WYZ Rent, a Dubai holiday home management company. Today is "+new Date().toDateString()+", the time is "+new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})+".\nChoose the "+N+" things "+(myName||"they")+" should do first today, in order, from this list. Prefer things that block other people, owners or guests, money, and anything with a deadline. Give each a reason in 12 words or fewer. No em dashes.\n\n"+list+"\n\nReturn JSON only: {\"picks\":[{\"id\":\"c0\",\"why\":\"reason\"}]} with exactly "+N+" picks, best first.",{cache:false,provider:prov}));
+    const r=await creditFallback(prov=>sample.json("You are the chief of staff of "+(myName||"a manager")+" at "+BR.co+", "+BR.desc+". Today is "+new Date().toDateString()+", the time is "+new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})+".\nChoose the "+N+" things "+(myName||"they")+" should do first today, in order, from this list. Prefer things that block other people, owners or guests, money, and anything with a deadline. Give each a reason in 12 words or fewer. No em dashes.\n\n"+list+"\n\nReturn JSON only: {\"picks\":[{\"id\":\"c0\",\"why\":\"reason\"}]} with exactly "+N+" picks, best first.",{cache:false,provider:prov}));
     const picks=(r.picks||[]).map(p=>({x:cand[+String(p.id||"").replace(/\D/g,"")],why:String(p.why||"")})).filter(p=>p.x).slice(0,N);
     state.top3={day:todayKey(),at:Date.now(),n:N,picks:picks.map(p=>({kind:p.x.kind,ref:p.x.ref,why:p.why}))};persist();
   }catch(e){top3Fail=Date.now()}
@@ -3160,7 +3175,7 @@ async function openBrief(ev){
         try{const full=await mcp.callTool("Gmail","get_thread",{threadId:t.id,messageFormat:"PLAIN_TEXT"},{cache:false});const ms=((full.payload&&full.payload.messages)||[]).slice(-2);
           mail+="Thread: "+t.subject+"\n"+ms.map(m=>"From: "+m.sender+" ("+(m.date||"").slice(0,10)+")\n"+String(m.plaintextBody||m.snippet||"").slice(0,1200)).join("\n---\n")+"\n\n"}catch(e){}
       }
-      const r=await creditFallback(prov=>sample("Prepare "+(myName||"me")+" for a meeting at WYZ Rent, a Dubai holiday home management company.\nMeeting: "+(ev.summary||"")+"\nWhen: "+when+"\nWho: "+people.map(p=>p.name||p.email).join(", ")+"\nNotes in the invite: "+(ev.description||"none")+"\n\nRecent emails with these people:\n"+(mail||"none found")+"\nFiles that may be related: "+(files.map(f=>f.title).join(", ")||"none")+"\n\nWrite a short brief in plain words with these headings: Context, What was agreed, Open points, Questions worth asking. Use short lines. Only use facts from the emails and invite. If something is unknown say so. No em dashes.",{cache:false,provider:prov}));
+      const r=await creditFallback(prov=>sample("Prepare "+(myName||"me")+" for a meeting at "+BR.co+", "+BR.desc+".\nMeeting: "+(ev.summary||"")+"\nWhen: "+when+"\nWho: "+people.map(p=>p.name||p.email).join(", ")+"\nNotes in the invite: "+(ev.description||"none")+"\n\nRecent emails with these people:\n"+(mail||"none found")+"\nFiles that may be related: "+(files.map(f=>f.title).join(", ")||"none")+"\n\nWrite a short brief in plain words with these headings: Context, What was agreed, Open points, Questions worth asking. Use short lines. Only use facts from the emails and invite. If something is unknown say so. No em dashes.",{cache:false,provider:prov}));
       text=String(r.text||"").trim();
     }catch(e){out.replaceChildren(el("p","status err","Couldn't write the brief ("+clip((e&&e.message)||"unknown reason",100)+"). The related emails and files are below."))}
   }
@@ -3206,7 +3221,7 @@ async function openPerson(raw,nameIn){
     b.onclick=async()=>{
       b.disabled=true;b.textContent="Writing...";await Promise.allSettled(jobs);
       try{
-        const r=await creditFallback(prov=>sample("Summarise "+(myName||"my")+" working relationship with "+name+" ("+addr+") at WYZ Rent, in 5 short lines. Say what we work on, what is open, and what I should do next. Use only the facts below. No em dashes.\n\nRecent emails (newest first):\n"+mails.slice(0,8).map(t=>"- "+t.subject+" ("+(t.date||"").slice(0,10)+"): "+t.snippet).join("\n")+"\n\nMeetings:\n"+evs.map(x=>"- "+(x.summary||"")+" ("+String((x.start||{}).dateTime||(x.start||{}).date||"").slice(0,10)+")").join("\n")+"\n\nFiles:\n"+files.map(f=>"- "+f.title).join("\n")+"\n\nWaiting on them:\n"+wait.map(w=>"- "+w.title+" ("+w.kind+")").join("\n"),{cache:false,provider:prov}));
+        const r=await creditFallback(prov=>sample("Summarise "+(myName||"my")+" working relationship with "+name+" ("+addr+") at "+BR.co+", in 5 short lines. Say what we work on, what is open, and what I should do next. Use only the facts below. No em dashes.\n\nRecent emails (newest first):\n"+mails.slice(0,8).map(t=>"- "+t.subject+" ("+(t.date||"").slice(0,10)+"): "+t.snippet).join("\n")+"\n\nMeetings:\n"+evs.map(x=>"- "+(x.summary||"")+" ("+String((x.start||{}).dateTime||(x.start||{}).date||"").slice(0,10)+")").join("\n")+"\n\nFiles:\n"+files.map(f=>"- "+f.title).join("\n")+"\n\nWaiting on them:\n"+wait.map(w=>"- "+w.title+" ("+w.kind+")").join("\n"),{cache:false,provider:prov}));
         const t=el("div","mailtext");t.textContent=String(r.text||"").trim();ss.replaceChildren(el("h3","","Summary"),t);
       }catch(e){b.disabled=false;b.textContent="Summarise our history";ss.append(el("p","status err","Couldn't write it ("+clip((e&&e.message)||"unknown reason",90)+")."))}
     };
@@ -3351,7 +3366,7 @@ function drawTools(){
   const cb=el("button","btn small","📅 Add to calendar");cb.type="button";cb.onclick=()=>toolCalendar(box);
   const tb=el("button","btn small","✅ Make it a task");tb.type="button";tb.onclick=()=>toolTask(box);
   const dg=el("button","btn small","👥 Delegate");dg.type="button";dg.title="Send it to a team member with your note, and see when they answer";dg.onclick=()=>openHandoff();
-  host.append(pb,cb,tb,dg);
+  host.append(pb,cb,tb,dg);if(window.ccButton)host.append(window.ccButton());
   phonesIn(thr.msgs).forEach(p=>{
     const intl=p.plus?p.n:"971"+p.n.replace(/^0/,"");
     const c=el("a","btn small","📞 Call"+(p.who?" "+p.who:""));c.href="tel:"+(p.plus?"+":"")+p.n;c.title=p.raw;
@@ -3510,7 +3525,7 @@ function openNotes(ev){
     const txt=ta.value.trim();if(!txt){ta.focus();return}
     fu.disabled=true;st.className="status";st.textContent="Writing it...";let body="";
     try{
-      if(sample){const tone=await toneExamples().catch(()=>"");const r=await sample("Write a short follow-up email from "+(myName||"me")+" at WYZ Rent after the meeting \""+title+"\", to the people who attended. Thank them in one line, then list what was agreed and who does what by when, from the notes. Plain text, use contractions, no em dashes, no semicolons, "+(sigText()?"no sign-off, the signature is added automatically":"signed with the first name")+". Return only the email body.\n\nNotes:\n"+txt+(tone?"\n\n"+tone:""),{cache:false});body=String(r.text||"").trim()}
+      if(sample){const tone=await toneExamples().catch(()=>"");const r=await sample("Write a short follow-up email from "+(myName||"me")+" at "+BR.co+" after the meeting \""+title+"\", to the people who attended. Thank them in one line, then list what was agreed and who does what by when, from the notes. Plain text, use contractions, no em dashes, no semicolons, "+(sigText()?"no sign-off, the signature is added automatically":"signed with the first name")+". Return only the email body.\n\nNotes:\n"+txt+(tone?"\n\n"+tone:""),{cache:false});body=String(r.text||"").trim()}
     }catch(e){}
     if(!body)body="Thanks for your time today. Here's what we agreed:\n\n"+txt;
     fu.disabled=false;infoClose();openCompose({to:people.join(", "),subject:"Follow-up: "+title,body});
