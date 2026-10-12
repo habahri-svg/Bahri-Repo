@@ -67,6 +67,11 @@
     },
     {
       "version": "3.52",
+      "path": "previous/v3.52/",
+      "label": "Monthly Revenue Comparison: this year against last year from Hostaway"
+    },
+    {
+      "version": "3.53",
       "path": "",
       "label": "Current"
     }
