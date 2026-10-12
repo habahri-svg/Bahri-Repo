@@ -52,7 +52,7 @@
     var ok = await confirmBox("Remove " + plural(files.length, "document") + " from this list?", [nameList(files), "They leave your Documents list and go to Removed, where you can restore them, or press Undo (↶). Nothing is deleted in Google Drive: this page can't delete Drive files. To delete one for real, open it in Drive."], "Remove from the list");
     if (!ok) return;
     var h = hidden(), now = Date.now();
-    files.forEach(function (f) { h[f.id] = { t: f.t, link: linkOf(f), mod: f.mod || "", mime: f.mime || "", ext: f.ext || "", by: f.by || "", at: now }; delete SEL[f.id]; });
+    files.forEach(function (f) { h[f.id] = { t: f.t, link: linkOf(f), mod: f.mod || "", mime: f.mime || "", ext: f.ext || "", by: f.by || "", size: f.size || 0, at: now }; delete SEL[f.id]; });
     persist(); renderDocs();
     try { toast(plural(files.length, "document") + " removed from the list."); } catch (e) {}
   }
@@ -96,7 +96,18 @@
       var acts = r.querySelector(".acts"); if (!acts) return;
       acts.append(B("Forward", function () { forward([{ title: f.t, link: linkOf(f) }]); }), B("Remove", function () { removeFiles([f]); }, "ghost"));
       var d = el("a", "btn small ghost", "Delete in Drive ↗"); d.href = linkOf(f); d.target = "_blank"; d.rel = "noopener"; d.title = "Opens the file in Drive, where you can delete it for good"; acts.append(d);
+      if (window.WYZ_IS_HTML && window.WYZ_IS_HTML(f.t, f.mime)) acts.insertBefore(B("Preview as a page", function (b) { previewDrive(f, b); }, "solid"), acts.firstChild);
     });
+  }
+  /* an HTML file in Drive is shown as the page it really is, not as code */
+  async function previewDrive(f, b) {
+    var old = b.textContent; b.disabled = true; b.textContent = "Opening...";
+    try {
+      var r = await mcp.callTool("Google Drive", "read_file", { fileId: f.id, mimeType: f.mime || "text/html" }, { cache: false });
+      var p = r.payload || {}; if (typeof p.text !== "string") throw new Error("That file couldn't be read as text.");
+      window.WYZ_PREVIEW(f.t, p.text);
+    } catch (e) { var h = infoOpen("Couldn't preview " + short(f.t, 40)); h.append(el("p", "status err", (e && e.message) || "Google Drive didn't give the file.")); h.append(el("p", "status", "You can still open it in Drive, or download it and open it in your browser.")); }
+    b.disabled = false; b.textContent = old;
   }
   function removedView(host) {
     var h = hidden(), ids = Object.keys(h).sort(function (a, b) { return h[b].at - h[a].at; });

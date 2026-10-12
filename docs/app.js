@@ -2140,11 +2140,13 @@ async function loadDrive(){
   if($("docsHead")&&drive.state==="ok")$("docsHead").textContent="Loading...";
   try{
     const r=await mcp.callTool(DRIVE,"list_files",{name,from:from?from.toISOString():"",to:to?to.toISOString():"",pageSize:k==="all"&&!name?25:60},{cache:false});
-    const p=r.payload||{};drive.files=(Array.isArray(p.files)?p.files:[]).map(f=>({id:String(f.id||""),t:String(f.title||f.name||"Untitled"),mod:f.modifiedTime||"",ext:String(f.fileExtension||"").toUpperCase(),mime:String(f.mimeType||""),link:String(f.link||""),by:String(f.by||"")})).filter(f=>f.id);
+    const p=r.payload||{};drive.files=(Array.isArray(p.files)?p.files:[]).map(f=>({id:String(f.id||""),t:String(f.title||f.name||"Untitled"),mod:f.modifiedTime||"",ext:String(f.fileExtension||"").toUpperCase(),mime:String(f.mimeType||""),link:String(f.link||""),by:String(f.by||""),size:Number(f.size)||0})).filter(f=>f.id);
     drive.state="ok";drive.at=Date.now();drive.rk=k;drive.name=name;
   }catch(e){const c=e&&e.code;drive.state=c==="server_not_connected"||c==="selection_required"?"missing":c==="needs_reauth"?"reauth":c==="not_in_manifest"||c==="consent_required"?"denied":"error";drive.files=[];drive.note=(e&&e.message)||""}
   renderDocs();renderSetup();
 }
+const fmtSize=n=>{n=Number(n)||0;if(n<=0)return "";if(n<1024)return n+" B";if(n<1048576)return (n<10240?(n/1024).toFixed(1):Math.round(n/1024))+" KB";return (n<10485760?(n/1048576).toFixed(1):Math.round(n/1048576))+" MB"};
+const sizeOfDoc=f=>f.size>0?fmtSize(f.size):(/google-apps\.(document|spreadsheet|presentation|drawing|form)/.test(f.mime)?"no fixed size (Google "+kindOf(f)+")":"");
 const kindOf=f=>/document/.test(f.mime)?"Doc":/spreadsheet/.test(f.mime)?"Sheet":/presentation/.test(f.mime)?"Slides":/folder/.test(f.mime)?"Folder":(f.ext||"File");
 let docResults=null;
 function renderDocs(){
@@ -2155,7 +2157,7 @@ function renderDocs(){
   $("docsHead").textContent=drive.files.length?drive.files.length+" file"+(drive.files.length>1?"s":"")+nm+" changed "+(lbl||"most recently")+", newest first. Updated "+fmtTime(new Date(drive.at||Date.now()).toISOString())+".":"No files"+nm+" changed "+(lbl||"yet")+".";
   (docResults||drive.files).forEach(f=>{
     const r=el("div","item");r.append(el("span","dot none"));const m=el("div","main");
-    m.append(el("span","t",f.t));m.append(el("span","m",kindOf(f)+(f.mod?" · Changed "+fmtWhen(f.mod):"")+(f.by?" by "+f.by:"")));
+    m.append(el("span","t",f.t));m.append(el("span","m",kindOf(f)+(sizeOfDoc(f)?" · "+sizeOfDoc(f):"")+(f.mod?" · Changed "+fmtWhen(f.mod):"")+(f.by?" by "+f.by:"")));
     const a=el("div","acts");const o=el("a","btn small","Open");o.href=f.link||"https://drive.google.com/file/d/"+encodeURIComponent(f.id.replace(/^a\d+~/,""))+"/view";o.target="_blank";o.rel="noopener";
     const at=el("button","btn small ghost","Add to tasks");at.type="button";at.onclick=()=>{addTask("Finish: "+f.t,"Google Drive");at.textContent="Added";at.disabled=true};
     a.append(o);

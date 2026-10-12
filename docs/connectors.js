@@ -514,9 +514,9 @@
         if (a.from) parts.push("modifiedTime >= '" + a.from + "'");
         if (a.to) parts.push("modifiedTime < '" + a.to + "'");
         var q = "pageSize=" + (a.pageSize || 50) + "&orderBy=" + encodeURIComponent("modifiedTime desc") + "&supportsAllDrives=true&includeItemsFromAllDrives=true" +
-          "&q=" + encodeURIComponent(parts.join(" and ")) + "&fields=" + encodeURIComponent("files(id,name,modifiedTime,mimeType,fileExtension,webViewLink,lastModifyingUser(displayName,me))");
+          "&q=" + encodeURIComponent(parts.join(" and ")) + "&fields=" + encodeURIComponent("files(id,name,modifiedTime,mimeType,fileExtension,size,webViewLink,lastModifyingUser(displayName,me))");
         var j = await gfetch("https://www.googleapis.com/drive/v3/files?" + q, null, SC.drive);
-        return { files: (j.files || []).map(function (f) { var u = f.lastModifyingUser || {}; return { id: f.id, title: f.name, modifiedTime: f.modifiedTime, mimeType: f.mimeType, fileExtension: f.fileExtension, link: f.webViewLink || "", by: u.me ? "you" : (u.displayName || "") }; }) };
+        return { files: (j.files || []).map(function (f) { var u = f.lastModifyingUser || {}; return { id: f.id, title: f.name, modifiedTime: f.modifiedTime, mimeType: f.mimeType, fileExtension: f.fileExtension, size: f.size ? Number(f.size) : 0, link: f.webViewLink || "", by: u.me ? "you" : (u.displayName || "") }; }) };
       },
       list_recent_files: async function (a) {
         var q = "pageSize=" + (a.pageSize || 10) + "&orderBy=" + encodeURIComponent("modifiedByMeTime desc") +

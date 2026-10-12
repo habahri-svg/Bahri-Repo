@@ -42,7 +42,8 @@
   var FILES = [
     { id: "f1", title: "November marketing plan (draft)", modifiedTime: iso(now - 5 * H), mimeType: "application/vnd.google-apps.document", fileExtension: "" },
     { id: "f2", title: "Owner income estimate - Marina Gate 2BR", modifiedTime: iso(now - D), mimeType: "application/vnd.google-apps.spreadsheet", fileExtension: "" },
-    { id: "f3", title: "Broker program one-pager.pdf", modifiedTime: iso(now - 3 * D), mimeType: "application/pdf", fileExtension: "pdf" }
+    { id: "f3", title: "Broker program one-pager.pdf", modifiedTime: iso(now - 3 * D), mimeType: "application/pdf", fileExtension: "pdf", size: 482304 },
+    { id: "f4", title: "WYZ_Daily_Command_Brief_Template.html", modifiedTime: iso(now - 2 * H), mimeType: "text/html", fileExtension: "html", size: 1536 }
   ];
   var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
   var DRV = {};
@@ -73,7 +74,7 @@
       list_recent_files: async function () { return { files: FILES }; },
       list_files: async function (a) { var n = String(a.name || "").toLowerCase(), f = a.from ? Date.parse(a.from) : 0, t = a.to ? Date.parse(a.to) : Infinity; return { files: FILES.filter(function (x) { var m = Date.parse(x.modifiedTime); return m >= f && m < t && (!n || x.title.toLowerCase().indexOf(n) >= 0); }).map(function (x) { return Object.assign({ by: "you" }, x); }) }; },
       search_files: async function (a) { var q = String(a.query || "").toLowerCase(); return { files: FILES.filter(function (f) { return !q || f.title.toLowerCase().indexOf(q.split(" ")[0]) >= 0; }) }; },
-      read_file: async function () { return { text: "Demo file. In the real page this is the file's text." }; }, save_file: pretend("Save to Drive"),
+      read_file: async function (a) { if (a && a.fileId === "f4") return { text: "<!doctype html><html><head><title>Brief</title><style>body{font-family:sans-serif;padding:20px}h1{color:#1c3b5a}</style></head><body><h1>Daily Command Brief</h1><p id=\"x\">Rendered page</p><script>document.getElementById(\"x\").textContent=\"Rendered page, script ran\";</script></body></html>" }; return { text: "Demo file. In the real page this is the file's text." }; }, save_file: pretend("Save to Drive"),
       get_text: async function (a) { var k = "demo-drive-" + a.name; return { id: DRV[k] ? k : "", text: DRV[k] || "", others: [] }; },
       put_text: async function (a) { var k = a.fileId || ("demo-drive-" + a.name); DRV[k] = String(a.text || ""); return { id: k, link: "#" }; }
     },

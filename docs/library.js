@@ -63,22 +63,56 @@
     if (tot + text.length > MAXCONV) return tot;
     list.push({ r: role, t: text, at: at || 0 }); return tot + text.length;
   }
-  /* every file ChatGPT knows of in one chat: canvas documents, files you shared, files it made. Looks at every branch, not only the visible one. */
+  /* ---------- file types and versions ---------- */
+  var VER_MAX = 25, VER_CHARS = 400000;
+  var utf8 = function (t) { try { return new TextEncoder().encode(t).length; } catch (e) { return t.length; } };
+  var fmtSize = function (n) { n = +n || 0; if (n <= 0) return ""; if (n < 1024) return n + " B"; if (n < 1048576) return (n < 10240 ? (n / 1024).toFixed(1) : Math.round(n / 1024)) + " KB"; return (n < 10485760 ? (n / 1048576).toFixed(1) : Math.round(n / 1048576)) + " MB"; };
+  /* size of a file: the real size when the export gives it, else the size of its text. Lovable projects have none. */
+  var sizeOf = function (f) { return f.src === "lovable" ? "" : fmtSize(f.bytes || (f.text ? utf8(f.text) : 0)) || "size not in export"; };
+  /* a file keeps every version it went through in its chat. Past 25 versions, the oldest middle ones are dropped (first and latest are kept). */
+  function pushVer(f, at, text, label) {
+    text = String(text || ""); if (!text) return; var bytes = utf8(text); text = text.slice(0, 120000);
+    f.versions = f.versions || []; var last = f.versions[f.versions.length - 1];
+    if (last && last.text === text) { return; }
+    f.versions.push({ at: at, text: text, label: label || "", bytes: bytes }); f.text = text; f.at = at; f.bytes = bytes;
+    var total = function () { return f.versions.reduce(function (n, v) { return n + v.text.length; }, 0); };
+    while ((f.versions.length > VER_MAX || total() > VER_CHARS) && f.versions.length > 2) f.versions.splice(1, 1);
+  }
+  var EXT = { pdf: "PDF", html: "HTML page", htm: "HTML page", pptx: "Presentation", ppt: "Presentation", key: "Presentation", xlsx: "Spreadsheet", xls: "Spreadsheet", csv: "Spreadsheet", numbers: "Spreadsheet", docx: "Document", doc: "Document", txt: "Document", md: "Document", rtf: "Document", pages: "Document", png: "Image", jpg: "Image", jpeg: "Image", gif: "Image", svg: "Image", webp: "Image", zip: "Archive", gz: "Archive", tar: "Archive", mmd: "Diagram", js: "Code", ts: "Code", tsx: "Code", jsx: "Code", py: "Code", json: "Code", css: "Code", java: "Code", sql: "Code", sh: "Code" };
+  var CT = { "text/html": "HTML page", "application/vnd.ant.react": "App", "image/svg+xml": "Image", "application/vnd.ant.mermaid": "Diagram", "text/markdown": "Document", "application/vnd.ant.code": "Code", "document": "Document", "code/html": "HTML page", "code/react": "App", "code/mermaid": "Diagram" };
+  /* what a file is, worked out when shown (so files imported earlier get a type too) */
+  function typeOf(f) {
+    if (f.src === "lovable") return "App";
+    var ext = (/\.([a-z0-9]+)$/i.exec(String(f.title || "")) || [])[1]; ext = ext ? ext.toLowerCase() : "";
+    if (f.ct && CT[f.ct]) return CT[f.ct]; if (f.ct && /^code\//.test(f.ct)) return "Code";
+    if (ext && EXT[ext]) return EXT[ext];
+    if (/^\s*(<!doctype html|<html)/i.test(String(f.text || "").slice(0, 200))) return "HTML page";
+    return f.kind === "Canvas document" || f.kind === "Artifact" ? "Document" : "Other";
+  }
+  var isHtml = function (f) { return typeOf(f) === "HTML page" && !!f.text; };
+  var isMade = function (f) { return f.kind !== "File you shared"; };
+  /* every file ChatGPT knows of in one chat: canvas documents (with their edits), files you shared, files it made. Looks at every branch, not only the visible one. */
   function gptFiles(c, id) {
     var out = [], seen = {}, url = id ? "https://chatgpt.com/c/" + id : "https://chatgpt.com/", chat = String(c.title || "Untitled").slice(0, 160);
     var list = Object.keys(c.mapping || {}).map(function (k) { return c.mapping[k] && c.mapping[k].message; }).filter(Boolean).sort(function (a, b) { return (a.create_time || 0) - (b.create_time || 0); });
     list.forEach(function (m) {
       var at = (m.create_time || c.update_time || c.create_time || 0) * 1000, ct = m.content || {}, parts = Array.isArray(ct.parts) ? ct.parts.filter(function (p) { return typeof p === "string"; }) : [];
-      var add = function (k, kind, title, text) { if (!title || seen[k]) return null; var f = { key: "chatgpt:" + id + ":" + k, src: "chatgpt", kind: kind, title: String(title).slice(0, 200), at: at, chat: chat, url: url, text: String(text || "").slice(0, 120000) }; seen[k] = f; out.push(f); return f; };
+      var add = function (k, kind, title, text, ctype) { if (!title || seen[k]) return null; var f = { key: "chatgpt:" + id + ":" + k, src: "chatgpt", kind: kind, title: String(title).slice(0, 200), at: at, chat: chat, url: url, text: "", versions: [], ct: ctype || "" }; if (text) pushVer(f, at, text, "Created"); f.at = at; seen[k] = f; out.push(f); return f; };
       var rc = String(m.recipient || "");
       if (/^canmore\.(create|update)_textdoc$/.test(rc)) {
         try {
           var j = JSON.parse(parts.join(""));
-          if (/create/.test(rc)) add("canvas:" + (j.name || ""), "Canvas document", j.name || "Canvas document", j.content);
-          else { var last = out.filter(function (f) { return f.kind === "Canvas document"; }).pop(); var u = (j.updates || [])[0]; if (last) { last.at = at; if (u && u.pattern === ".*" && u.replacement) last.text = String(u.replacement).slice(0, 120000); } }
+          if (/create/.test(rc)) add("canvas:" + (j.name || ""), "Canvas document", j.name || "Canvas document", j.content, j.type);
+          else {
+            var last = out.filter(function (f) { return f.kind === "Canvas document"; }).pop();
+            if (last) {
+              var txt = last.text; (j.updates || []).forEach(function (u) { try { if (u && typeof u.pattern === "string" && typeof u.replacement === "string") txt = txt.replace(new RegExp(u.pattern, u.multiple ? "gs" : "s"), function () { return u.replacement; }); } catch (e) {} });
+              pushVer(last, at, txt, "Edited"); last.at = at;
+            }
+          }
         } catch (e) {}
       }
-      ((m.metadata && m.metadata.attachments) || []).forEach(function (a) { if (a && a.name) add("att:" + a.name, "File you shared", a.name, ""); });
+      ((m.metadata && m.metadata.attachments) || []).forEach(function (a) { if (a && a.name) { var af = add("att:" + a.name, "File you shared", a.name, ""); if (af && +a.size > 0) af.bytes = +a.size; } });
       if (m.author && m.author.role === "assistant") parts.forEach(function (p) { (p.match(/sandbox:\/mnt\/data\/[^\s)\]"']+/g) || []).forEach(function (u) { var n; try { n = decodeURIComponent(u.split("/").pop()); } catch (e) { n = u.split("/").pop(); } add("made:" + n, "Made by ChatGPT", n, ""); }); });
     });
     return out;
@@ -87,9 +121,20 @@
     var out = [], seen = {}, url = id ? "https://claude.ai/chat/" + id : "https://claude.ai/", chat = String(c.name || "Untitled").slice(0, 160);
     (c.chat_messages || []).forEach(function (m) {
       var at = Date.parse(m.created_at || c.updated_at || c.created_at || "") || 0;
-      var add = function (k, kind, title, text) { if (!title) return null; var key = "claude:" + id + ":" + k, f = seen[key]; if (f) { f.at = at; if (text) f.text = String(text).slice(0, 120000); return f; } f = { key: key, src: "claude", kind: kind, title: String(title).slice(0, 200), at: at, chat: chat, url: url, text: String(text || "").slice(0, 120000) }; seen[key] = f; out.push(f); return f; };
-      (m.content || []).forEach(function (x) { if (x && x.type === "tool_use" && x.name === "artifacts" && x.input && (x.input.title || x.input.id)) add("art:" + (x.input.id || x.input.title), "Artifact", x.input.title || "Artifact", x.input.content); });
-      (m.attachments || []).concat(m.files || []).forEach(function (a) { var n = a && (a.file_name || a.name); if (n) add("att:" + n, "File you shared", n, a.extracted_content || ""); });
+      var add = function (k, kind, title, ctype) { if (!title) return null; var key = "claude:" + id + ":" + k, f = seen[key]; if (f) { f.at = at; if (ctype && !f.ct) f.ct = ctype; return f; } f = { key: key, src: "claude", kind: kind, title: String(title).slice(0, 200), at: at, chat: chat, url: url, text: "", versions: [], ct: ctype || "" }; seen[key] = f; out.push(f); return f; };
+      (m.content || []).forEach(function (x) {
+        if (!x || x.type !== "tool_use" || !x.input) return; var i = x.input;
+        if (x.name === "artifacts" && (i.title || i.id)) {
+          var f = add("art:" + (i.id || i.title), "Artifact", i.title || "Artifact", i.type);
+          var cmd = i.command || "create";
+          if (cmd === "update" && typeof i.old_str === "string" && typeof i.new_str === "string") { var at0 = f.text.indexOf(i.old_str); if (f.text && at0 >= 0) pushVer(f, at, f.text.slice(0, at0) + i.new_str + f.text.slice(at0 + i.old_str.length), "Edited"); }
+          else if (typeof i.new_str === "string" && cmd === "update" && !f.text) pushVer(f, at, i.new_str, "Edited");
+          else if (typeof (i.content || i.new_content) === "string") pushVer(f, at, i.content || i.new_content, f.versions.length ? (cmd === "rewrite" ? "Rewritten" : "Edited") : "Created");
+        } else if (x.name === "create_file" && i.path) {
+          var g = add("made:" + String(i.path).split("/").pop(), "Made by Claude", String(i.path).split("/").pop()); if (typeof i.file_text === "string") pushVer(g, at, i.file_text, g.versions.length ? "Edited" : "Created");
+        } else if (x.name === "present_files" && Array.isArray(i.filepaths)) i.filepaths.forEach(function (pth) { add("made:" + String(pth).split("/").pop(), "Made by Claude", String(pth).split("/").pop()); });
+      });
+      (m.attachments || []).concat(m.files || []).forEach(function (a) { var n = a && (a.file_name || a.name); if (n) { var f = add("att:" + n, "File you shared", n); if (a.extracted_content && !f.text) pushVer(f, at, a.extracted_content, "Shared"); if (+a.file_size > 0) f.bytes = +a.file_size; } });
     });
     return out;
   }
@@ -277,18 +322,25 @@
       .catch(function () { LOV = { projects: [], syncedAt: "" }; return LOV; });
   }
   var SRC_NAME = { chatgpt: "ChatGPT", claude: "Claude", lovable: "Lovable" };
-  function openFile(f) {
-    var h = infoOpen(f.title);
-    h.append(el("p", "status", SRC_NAME[f.src] + " · " + f.kind + " · " + fmtDate(f.at) + (f.chat ? " · " + (f.src === "lovable" ? f.chat : "in \"" + short(f.chat, 60) + "\"") : "")));
+  function download(name, text, mime) {
+    var url = URL.createObjectURL(new Blob([text], { type: mime || "text/plain" })), a = document.createElement("a"); a.href = url; a.download = name; document.body.append(a); a.click(); setTimeout(function () { a.remove(); URL.revokeObjectURL(url); }, 800);
+  }
+  var safeName = function (t) { return String(t || "file").replace(/[\\/:*?"<>|]+/g, " ").trim().slice(0, 100) || "file"; };
+  function openFile(f, v) {
+    if (v) f = Object.assign({}, f, { text: v.text, at: v.at, bytes: v.bytes || 0 });
+    var h = infoOpen(f.title + (v ? " (" + v.label.toLowerCase() + ", " + fmtDate(v.at) + ")" : ""));
+    h.append(el("p", "status", SRC_NAME[f.src] + " · " + typeOf(f) + (sizeOf(f) ? " · " + sizeOf(f) : "") + " · " + f.kind + " · " + fmtDate(f.at) + (f.chat ? " · " + (f.src === "lovable" ? f.chat : "in \"" + short(f.chat, 60) + "\"") : "")));
     var acts = el("div", "acts");
+    if (isHtml(f) && window.WYZ_PREVIEW) acts.append(B("Preview as a page", function () { window.WYZ_PREVIEW(f.title, f.text); }, "solid"));
     if (f.text) {
+      acts.append(B("Download", function () { download(safeName(f.title).replace(/\.(html?|md|txt)$/i, "") + (isHtml(f) ? ".html" : /\.[a-z0-9]{1,5}$/i.test(f.title) ? "" : ".txt"), f.text, isHtml(f) ? "text/html" : "text/plain"); }, "ghost"));
       acts.append(B("Copy the text", function (b) { navigator.clipboard.writeText(f.text).then(function () { b.textContent = "Copied"; }).catch(function () { b.textContent = "Select the text to copy"; }); }), B("Ask AI about it", function () { infoClose(); openFileAI(f.title, async function () { return { text: f.text.slice(0, 60000) }; }); }, "solid"));
     }
     var o = el("a", "btn small" + (f.text ? " ghost" : " solid"), f.src === "lovable" ? "Open in Lovable ↗" : "Open the original chat ↗"); o.href = f.url; o.target = "_blank"; o.rel = "noopener"; acts.append(o);
     if (f.preview) { var pv = el("a", "btn small ghost", "Open the app preview ↗"); pv.href = f.preview; pv.target = "_blank"; pv.rel = "noopener"; acts.append(pv); }
     h.append(acts);
     if (f.text) { var d = el("div", "out"); d.style.maxHeight = "55vh"; d.style.overflow = "auto"; d.textContent = f.text; h.append(d); }
-    else h.append(el("p", "status", f.src === "lovable" ? "" : "The export lists this file's name and date. The file itself is in your export .zip, or in the original chat."));
+    else h.append(el("p", "status", f.src === "lovable" ? "" : typeOf(f) === "PDF" ? "Your export lists this PDF's name, date and chat, but not the PDF itself. Open the original chat to download it again." : "The export lists this file's name and date. The file itself is in your export .zip, or in the original chat."));
   }
   /* Document manager: select, move to Trash (with a confirmation), restore, delete forever (with a stronger confirmation).
      This only removes files from your Library on this device. Nothing is deleted in ChatGPT, Claude, Lovable or Drive.
@@ -319,9 +371,9 @@
     lov.projects.forEach(function (p) { var k = "lovable:" + p.id; if (!inTrash[k]) all.push({ key: k, src: "lovable", kind: "App project", title: p.name, at: Date.parse(p.edited) || 0, chat: p.workspace, url: p.editor, preview: p.preview, text: p.description || "", published: p.published }); });
     var head = el("p", "sub"), note = el("p", "status");
     pad.append(head, note);
-    var F = { src: "", kind: "", range: "all", from: "", to: "", q: "", shown: 120, trash: false }, SEL = {};
+    var F = { src: "", kind: "", type: "", origin: "", group: "date", range: "all", from: "", to: "", q: "", shown: 120, trash: false }, SEL = {};
     var count = function (rows) { var n = { chatgpt: 0, claude: 0, lovable: 0 }; rows.forEach(function (f) { n[f.src] = (n[f.src] || 0) + 1; }); return n; };
-    var bar = el("div", "chips"), kinds = el("select", "in"), rng = el("div", "chips"), q = el("input", "in"), custom = el("div", "ask"), tools = el("div", "acts"), list = el("div"); list.id = "libFiles";
+    var bar = el("div", "chips"), tbar = el("div", "chips"), origin = el("select", "in"), groupBy = el("select", "in"), kinds = el("select", "in"), rng = el("div", "chips"), q = el("input", "in"), custom = el("div", "ask"), tools = el("div", "acts"), list = el("div"); list.id = "libFiles";
     q.placeholder = "Search file names and text"; q.setAttribute("aria-label", "Search my files");
     var fromI = el("input", "in"), toI = el("input", "in");
     var rowsNow = function () { return F.trash ? trashRows : all; };
@@ -331,7 +383,7 @@
       else if (F.range !== "all") from = now - (+F.range) * day;
       var ts = F.q ? terms(F.q) : [];
       return rowsNow().filter(function (f) {
-        if (F.src && f.src !== F.src) return false; if (F.kind && f.kind !== F.kind) return false; if (f.at < from || f.at >= to) return false;
+        if (F.src && f.src !== F.src) return false; if (F.kind && f.kind !== F.kind) return false; if (F.type && typeOf(f) !== F.type) return false; if (F.origin && (F.origin === "made") !== isMade(f)) return false; if (f.at < from || f.at >= to) return false;
         if (F.q) { var hay = (f.title + " " + (f.chat || "") + " " + (f.text || "")).toLowerCase(); return ts.every(function (w) { return hay.indexOf(w) >= 0; }); }
         return true;
       }).sort(function (a, b) { return F.trash ? (b.trashedAt || 0) - (a.trashedAt || 0) : b.at - a.at; });
@@ -343,9 +395,15 @@
       chip(bar, "All sources (" + rowsNow().length + ")", !F.src, function () { F.src = ""; });
       ["chatgpt", "claude", "lovable"].forEach(function (k) { if (n[k]) chip(bar, SRC_NAME[k] + " (" + n[k] + ")", F.src === k, function () { F.src = k; }); });
       var ks = {}; rowsNow().forEach(function (f) { ks[f.kind] = 1; });
-      kinds.replaceChildren(new Option("All types", "")); Object.keys(ks).sort().forEach(function (k) { kinds.append(new Option(k, k)); }); kinds.value = F.kind && ks[F.kind] ? F.kind : ""; if (!ks[F.kind]) F.kind = "";
+      tbar.replaceChildren(); var tn = {}; rowsNow().forEach(function (f) { var t = typeOf(f); tn[t] = (tn[t] || 0) + 1; });
+      chip(tbar, "Every type", !F.type, function () { F.type = ""; });
+      Object.keys(tn).sort(function (a, b) { return tn[b] - tn[a]; }).forEach(function (t) { chip(tbar, t + " (" + tn[t] + ")", F.type === t, function () { F.type = t; }); });
+      if (F.type && !tn[F.type]) F.type = "";
+      kinds.replaceChildren(new Option("All kinds", "")); Object.keys(ks).sort().forEach(function (k) { kinds.append(new Option(k, k)); }); kinds.value = F.kind && ks[F.kind] ? F.kind : ""; if (!ks[F.kind]) F.kind = "";
     }
-    kinds.style.flex = "0 1 190px"; kinds.setAttribute("aria-label", "Type of file"); kinds.onchange = function () { F.kind = kinds.value; F.shown = 120; draw(); };
+    origin.setAttribute("aria-label", "Created or shared"); [["", "Created and shared"], ["made", "Created by the AI"], ["shared", "Shared by me"]].forEach(function (o) { origin.append(new Option(o[1], o[0])); }); origin.style.flex = "0 1 190px"; origin.onchange = function () { F.origin = origin.value; F.shown = 120; draw(); };
+    groupBy.setAttribute("aria-label", "Group files"); [["date", "Group by date"], ["chat", "Group by chat"], ["type", "Group by type"], ["file", "By file name"]].forEach(function (o) { groupBy.append(new Option(o[1], o[0])); }); groupBy.style.flex = "0 1 170px"; groupBy.onchange = function () { F.group = groupBy.value; F.shown = 120; draw(); };
+    kinds.style.flex = "0 1 190px"; kinds.setAttribute("aria-label", "Kind of file"); kinds.onchange = function () { F.kind = kinds.value; F.shown = 120; draw(); };
     [["all", "Any date"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["90", "Last 3 months"], ["365", "Last year"]].forEach(function (r, i) { chip(rng, r[1], i === 0, function () { F.range = r[0]; F.from = F.to = ""; fromI.value = toI.value = ""; }); });
     fromI.type = toI.type = "date"; fromI.style.flex = toI.style.flex = "0 1 160px"; fromI.setAttribute("aria-label", "From date"); toI.setAttribute("aria-label", "To date");
     var onDate = function () { F.from = fromI.value; F.to = toI.value; F.range = "custom"; [].forEach.call(rng.children, function (x) { x.setAttribute("aria-pressed", "false"); }); F.shown = 120; draw(); };
@@ -353,7 +411,9 @@
     custom.append(el("span", "status", "From"), fromI, el("span", "status", "to"), toI);
     var timer = 0; q.oninput = function () { clearTimeout(timer); timer = setTimeout(function () { F.q = q.value.trim().toLowerCase(); F.shown = 120; draw(); }, 200); };
     var top = el("div", "ask"); top.append(q, kinds);
-    pad.append(top, bar, rng, custom, tools, list);
+    var mid = el("div", "ask"); mid.append(origin, groupBy);
+    var openAll = el("div", "acts"); openAll.append(B("Expand all", function () { [].forEach.call(list.querySelectorAll("details"), function (d) { d.open = true; }); }, "ghost"), B("Collapse all", function () { [].forEach.call(list.querySelectorAll("details"), function (d) { d.open = false; }); }, "ghost"));
+    pad.append(top, bar, tbar, mid, rng, custom, tools, openAll, list);
 
     /* actions */
     async function toTrash(rows) {
@@ -400,6 +460,30 @@
       }
       var tg = B(F.trash ? "← Back to my files" : "Trash (" + trashRows.length + ")", function () { F.trash = !F.trash; F.src = F.kind = ""; SEL = {}; F.shown = 120; draw(); }, "ghost"); tools.append(tg);
     }
+    function rowFor(f) {
+      var r = el("div", "item"); r.style.gridTemplateColumns = "26px minmax(0,1fr)"; var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!SEL[f.key]; cb.setAttribute("aria-label", "Select " + f.title); cb.style.cssText = "width:20px;height:20px;margin-top:3px";
+      cb.onchange = function () { if (cb.checked) SEL[f.key] = 1; else delete SEL[f.key]; drawTools(); }; r.append(cb);
+      var nv = (f.versions || []).length, tp = typeOf(f);
+      var m = el("div", "main"); m.append(el("span", "t", f.title));
+      m.append(el("span", "m", SRC_NAME[f.src] + " · " + tp + (sizeOf(f) ? " · " + sizeOf(f) : "") + " · " + f.kind + " · " + fmtDate(f.at) + (nv > 1 ? " · " + nv + " versions" : "") + (f.src === "lovable" ? " · " + f.chat + (f.published ? " · Published" : " · Not published") : f.chat ? " · in \"" + short(f.chat, 50) + "\"" : "")));
+      var a = el("div", "acts"); a.append(B(f.text ? "Read" : "Details", function () { openFile(f); }, "solid"));
+      if (isHtml(f) && window.WYZ_PREVIEW) a.append(B("Preview", function () { window.WYZ_PREVIEW(f.title, f.text); }, "solid"));
+      var o = el("a", "btn small", f.src === "lovable" ? "Open in Lovable ↗" : "Open chat ↗"); o.href = f.url; o.target = "_blank"; o.rel = "noopener"; a.append(o);
+      a.append(F.trash ? B("Restore", function () { restore([f]); }, "ghost") : B("Delete", function () { toTrash([f]); }, "ghost"));
+      if (!F.trash) a.append(B("Forward", function () { if (window.WYZ_FORWARD) window.WYZ_FORWARD([{ title: f.title, link: f.url, text: f.text }]); }, "ghost"));
+      m.append(a);
+      if (nv > 1) {
+        var d = document.createElement("details"), sm = document.createElement("summary"); sm.textContent = "Versions (" + nv + "), newest first"; sm.style.cssText = "cursor:pointer;font-size:13px;margin-top:6px"; d.append(sm);
+        f.versions.slice().reverse().forEach(function (v, i) {
+          var no = nv - i, vr = el("div", "acts"); vr.style.alignItems = "center"; vr.append(el("span", "status", "Version " + no + " · " + (v.label || "Saved") + " · " + fmtDate(v.at) + " · " + fmtSize(v.bytes || utf8(v.text))));
+          vr.append(B("Read", function () { openFile(f, { text: v.text, at: v.at, label: "version " + no }); }, "ghost"));
+          if (/^\s*(<!doctype html|<html)/i.test(v.text.slice(0, 200)) && window.WYZ_PREVIEW) vr.append(B("Preview", function () { window.WYZ_PREVIEW(f.title + " (version " + no + ")", v.text); }, "ghost"));
+          d.append(vr);
+        });
+        m.append(d);
+      }
+      r.append(m); return r;
+    }
     function draw() {
       head.textContent = F.trash ? (trashRows.length ? plural(trashRows.length, "file") + " in Trash. Restore them, or delete them forever. Files stay here until you delete them." : "Trash is empty.") :
         (all.length ? plural(all.length, "file") + ": " + count(all).chatgpt.toLocaleString("en-GB") + " from ChatGPT, " + count(all).claude.toLocaleString("en-GB") + " from Claude, " + count(all).lovable.toLocaleString("en-GB") + " Lovable projects. Newest first." : "No files yet. Import your ChatGPT and Claude exports above and every canvas document, artifact and file in them is listed here by date.");
@@ -407,20 +491,17 @@
       drawBar(); drawTools();
       var rows = filtered(); list.replaceChildren();
       list.append(el("p", "status", rows.length ? plural(rows.length, "file") + (F.q || F.src || F.kind || F.range !== "all" ? " match." : ".") : (F.trash ? "" : "No files match. Widen the dates or clear the search.")));
-      var last = "";
-      rows.slice(0, F.shown).forEach(function (f) {
-        var when = F.trash ? f.trashedAt : f.at;
-        var dl = when ? new Date(when).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "long", year: "numeric" }) : "No date";
-        if (dl !== last) { last = dl; var hd = el("h3", "", (F.trash ? "Deleted " : "") + dl); hd.style.cssText = "margin:10px 0 2px;font-size:14px;color:var(--navy)"; list.append(hd); }
-        var r = el("div", "item"); r.style.gridTemplateColumns = "26px minmax(0,1fr)"; var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!SEL[f.key]; cb.setAttribute("aria-label", "Select " + f.title); cb.style.cssText = "width:20px;height:20px;margin-top:3px";
-        cb.onchange = function () { if (cb.checked) SEL[f.key] = 1; else delete SEL[f.key]; drawTools(); }; r.append(cb);
-        var m = el("div", "main"); m.append(el("span", "t", f.title));
-        m.append(el("span", "m", SRC_NAME[f.src] + " · " + f.kind + " · " + fmtDate(f.at) + (f.src === "lovable" ? " · " + f.chat + (f.published ? " · Published" : " · Not published") : f.chat ? " · in \"" + short(f.chat, 50) + "\"" : "")));
-        var a = el("div", "acts"); a.append(B(f.text ? "Read" : "Details", function () { openFile(f); }, "solid"));
-        var o = el("a", "btn small", f.src === "lovable" ? "Open in Lovable ↗" : "Open chat ↗"); o.href = f.url; o.target = "_blank"; o.rel = "noopener"; a.append(o);
-        a.append(F.trash ? B("Restore", function () { restore([f]); }, "ghost") : B("Delete", function () { toTrash([f]); }, "ghost"));
-        if (!F.trash) a.append(B("Forward", function () { if (window.WYZ_FORWARD) window.WYZ_FORWARD([{ title: f.title, link: f.url, text: f.text }]); }, "ghost"));
-        m.append(a); r.append(m); list.append(r);
+      var shownRows = rows.slice(0, F.shown), groups = [], gi = {};
+      var gkey = function (f) {
+        if (F.group === "chat") return f.chat || "No chat"; if (F.group === "type") return typeOf(f);
+        var when = F.trash ? f.trashedAt : f.at; return (F.trash ? "Deleted " : "") + (when ? new Date(when).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "long", year: "numeric" }) : "No date");
+      };
+      if (F.group === "file") { shownRows = shownRows.slice().sort(function (a, b) { return String(a.title).toLowerCase() < String(b.title).toLowerCase() ? -1 : 1; }); groups.push({ k: "", rows: shownRows }); }
+      else shownRows.forEach(function (f) { var k = gkey(f); if (gi[k] === undefined) { gi[k] = groups.length; groups.push({ k: k, rows: [] }); } groups[gi[k]].rows.push(f); });
+      groups.forEach(function (g) {
+        var host = list;
+        if (g.k) { var gd = document.createElement("details"); gd.open = true; var sm = document.createElement("summary"); sm.style.cssText = "margin:10px 0 2px;font-size:14px;font-weight:700;color:var(--navy);cursor:pointer"; sm.textContent = g.k + " (" + g.rows.length + ")"; gd.append(sm); list.append(gd); host = gd; }
+        g.rows.forEach(function (f) { host.append(rowFor(f)); });
       });
       if (rows.length > F.shown) list.append(B("Show more (" + (rows.length - F.shown) + " left)", function () { F.shown += 200; draw(); }, "ghost"));
     }
