@@ -45,6 +45,7 @@
     { id: "f3", title: "Broker program one-pager.pdf", modifiedTime: iso(now - 3 * D), mimeType: "application/pdf", fileExtension: "pdf" }
   ];
   var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+  var DRV = {};
   var pretend = function (what) { return function () { return wait(400).then(function () { note("Demo: \"" + what + "\" was not really done."); return { id: "demo", threadId: "demo", viewUrl: "#" }; }); }; };
   function inRange(e, a) { var s = Date.parse(e.start.dateTime); return s >= Date.parse(new Date(a.startTime).toISOString()) && s < Date.parse(new Date(a.endTime).toISOString()); }
   function search(a) {
@@ -72,7 +73,9 @@
       list_recent_files: async function () { return { files: FILES }; },
       list_files: async function (a) { var n = String(a.name || "").toLowerCase(), f = a.from ? Date.parse(a.from) : 0, t = a.to ? Date.parse(a.to) : Infinity; return { files: FILES.filter(function (x) { var m = Date.parse(x.modifiedTime); return m >= f && m < t && (!n || x.title.toLowerCase().indexOf(n) >= 0); }).map(function (x) { return Object.assign({ by: "you" }, x); }) }; },
       search_files: async function (a) { var q = String(a.query || "").toLowerCase(); return { files: FILES.filter(function (f) { return !q || f.title.toLowerCase().indexOf(q.split(" ")[0]) >= 0; }) }; },
-      read_file: async function () { return { text: "Demo file. In the real page this is the file's text." }; }, save_file: pretend("Save to Drive")
+      read_file: async function () { return { text: "Demo file. In the real page this is the file's text." }; }, save_file: pretend("Save to Drive"),
+      get_text: async function (a) { var k = "demo-drive-" + a.name; return { id: DRV[k] ? k : "", text: DRV[k] || "" }; },
+      put_text: async function (a) { var k = a.fileId || ("demo-drive-" + a.name); DRV[k] = String(a.text || ""); return { id: k, link: "#" }; }
     },
     "Todoist": { "find-tasks-by-date": async function () { if (!C.todoist.has()) { var e = new Error("Not connected to Todoist"); e.code = "server_not_connected"; throw e; } return { tasks: [] }; }, "complete-tasks": pretend("Complete task"), "add-tasks": pretend("Add task") }
   };

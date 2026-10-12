@@ -17,5 +17,13 @@ module.exports = async function handler(req, res) {
     const u = "wyz:u:" + who.email, now = Date.now();
     try { await S.redis([["SADD", "wyz:users", who.email], ["HSET", u, "last", now, "seen", now], ["HSETNX", u, "first", now]]); } catch (e) { /* ignore */ }
   }
-  return res.status(200).json({ ok: true, blocked: blocked });
+  /* 3.45: the owner's saved recipient groups. Kept here on the server, so the addresses never ship in the public page code.
+     OWNER_GROUPS in Vercel (JSON like {"Family":["a@x.com"]}) replaces this default when it's set. */
+  let groups = null;
+  const owners = S.list(process.env.OWNER_EMAILS).concat(["habahri@gmail.com"]);
+  if (owners.indexOf(who.email) >= 0) {
+    groups = S.safeParse(process.env.OWNER_GROUPS || "");
+    if (!groups || !Object.keys(groups).length) groups = { Family: ["hubahri@gmail.com", "hassanaalbahri@gmail.com", "yab@miragroupme.com", "fbahri@samoco.us", "danaabahri@gmail.com", "habahri@gmail.com"] };
+  }
+  return res.status(200).json({ ok: true, blocked: blocked, groups: groups });
 };

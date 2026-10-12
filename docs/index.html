@@ -307,6 +307,26 @@ body,.card,.btn,.chip,.tab,.hero{transition-property:background-color,border-col
 .lookm .lb{padding:7px 8px;display:flex;flex-direction:column;gap:5px}
 .lookm .lcard{height:16px;border-radius:5px}
 .lookm .lrow{display:flex;gap:5px}.lookm .lbtn{height:10px;width:34px;border-radius:4px}.lookm .ldot{height:10px;width:10px;border-radius:50%}
+
+/* 3.45 Work and Life switch, My Life page */
+.modesw{display:inline-flex;align-self:flex-start;padding:3px;border-radius:999px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);gap:2px}
+.modesw button{font:inherit;font-size:13px;font-weight:600;color:rgba(255,255,255,.85);background:none;border:0;border-radius:999px;padding:5px 12px;cursor:pointer;min-height:32px}
+.modesw button[aria-pressed="true"]{background:#fff;color:var(--hero2,#0e2238)}
+.lifesec h2{display:flex;align-items:center;gap:8px}
+.lifesec .lcount{margin-left:auto;font-size:13px;font-weight:600;color:var(--soft)}
+.litem{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:10px 0;border-top:1px solid var(--line)}
+.litem:first-child{border-top:0}
+.litem .lt{font-weight:600}.litem .lm{font-size:13px;color:var(--soft)}.litem .la{display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start}
+.litem .due{font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--sky);color:var(--navy);white-space:nowrap}
+.litem .due.soon{background:color-mix(in srgb,#e08a2e 18%,var(--panel));color:#a35a12}.litem .due.late{background:color-mix(in srgb,#d6453d 16%,var(--panel));color:#b3261e}
+.lform{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-top:10px;padding:12px;border:1px dashed var(--line);border-radius:12px}
+.lform label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--soft)}
+.lform .full{grid-column:1/-1}
+.lform input,.lform select,.lform textarea{font:inherit;font-size:14px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);min-height:38px}
+.syncline{font-size:13px;color:var(--soft)}
+@media (max-width:600px){.litem{grid-template-columns:1fr}.litem .la{justify-content:flex-start}}
+.litem .main{min-width:0;overflow-wrap:anywhere}
+#thrGroups{margin:2px 0 4px}#thrGroups:empty{display:none}
 </style>
 </head>
 <body>
@@ -322,6 +342,7 @@ body,.card,.btn,.chip,.tab,.hero{transition-property:background-color,border-col
         <button class="btn small" type="button" id="signOut">Sign out</button>
       </div>
     </div>
+    <div class="modesw" id="modeSw" role="group" aria-label="Work or Life"><button type="button" data-mode="work" aria-pressed="true">💼 Work</button><button type="button" data-mode="life" aria-pressed="false">🏡 Life</button></div>
     <h1 id="hello">Your execution page</h1>
     <p class="herodate" id="today"></p>
     <p class="herosum" id="heroSum"></p>
@@ -346,6 +367,7 @@ body,.card,.btn,.chip,.tab,.hero{transition-property:background-color,border-col
 
   <nav class="tabs" role="tablist" aria-label="Sections">
     <button class="tab" role="tab" id="t-today" aria-selected="true" aria-controls="p-today" type="button">Today</button>
+    <button class="tab" role="tab" id="t-life" aria-selected="false" aria-controls="p-life" type="button" hidden>My Life</button>
     <button class="tab" role="tab" id="t-conn" aria-selected="false" aria-controls="p-conn" type="button">Settings</button>
     <button class="tab" role="tab" id="t-inst" aria-selected="false" aria-controls="p-inst" type="button">Install on phone or computer</button>
   </nav>
@@ -525,6 +547,9 @@ body,.card,.btn,.chip,.tab,.hero{transition-property:background-color,border-col
   </section>
 
   <!-- CONNECTIONS -->
+  <!-- MY LIFE (3.45) -->
+  <section id="p-life" role="tabpanel" aria-labelledby="t-life" hidden class="wrap" style="gap:16px"><div id="lifeRoot" class="wrap" style="gap:16px"></div></section>
+
   <section id="p-conn" role="tabpanel" aria-labelledby="t-conn" hidden class="wrap" style="gap:16px">
     <div class="toolbar" role="toolbar" aria-label="Settings"><button class="btn ghost small" type="button" id="connExp">Expand all</button><button class="btn ghost small" type="button" id="connCol">Collapse all</button></div>
     <div class="card" id="srcCard"><div class="pad">
@@ -704,7 +729,7 @@ body,.card,.btn,.chip,.tab,.hero{transition-property:background-color,border-col
     <div id="thrReply" hidden>
       <h2>Reply</h2>
       <div id="thrFromWrap" hidden><span class="status">From</span><select class="in" id="thrFrom" aria-label="Send from"></select></div>
-      <span class="status">To</span><input class="in" id="thrTo" aria-label="To" autocomplete="off">
+      <span class="status">To</span><div class="chips" id="thrGroups" aria-label="Recipient groups"></div><input class="in" id="thrTo" aria-label="To" autocomplete="off">
       <div id="thrSubjWrap" hidden><span class="status">Subject</span><input class="in" id="thrSubj" aria-label="Subject" autocomplete="off"></div>
       <textarea id="thrBrief" aria-label="What should the email say" placeholder="Tell the AI what the email should say, for example: ask Sara for the revised pool quote by Thursday" style="min-height:70px" hidden></textarea>
       <div class="ask"><label class="status" for="thrAllSel">Reply to</label><select class="in" id="thrAllSel" style="flex:0 1 220px"><option value="sender">Sender only</option><option value="all">Everyone (reply all)</option></select><input type="checkbox" id="thrAll" hidden></div>
@@ -774,6 +799,7 @@ body,.card,.btn,.chip,.tab,.hero{transition-property:background-color,border-col
 <script src="demo.js"></script>
 <script src="app.js"></script>
 <script src="looks.js"></script>
+<script src="life.js"></script>
 <script src="fixbox.js"></script>
 <script src="business.js"></script>
 </body>

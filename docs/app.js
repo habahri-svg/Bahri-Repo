@@ -34,8 +34,8 @@ function persist(){
 function restore(snap){if(!snap)return;if(snap.board)board=snap.board;if(snap.state)state=Object.assign({done:{},snooze:{},tasks:[]},snap.state);try{renderBoard();renderLinks();renderTasks();applyOrder()}catch(e){}}
 
 /* ---------- tabs ---------- */
-const tabs=[["t-today","p-today"],["t-conn","p-conn"],["t-inst","p-inst"]];
-function show(tid){tabs.forEach(([t,p])=>{const on=t===tid;$(t).setAttribute("aria-selected",String(on));$(p).hidden=!on})}
+const tabs=[["t-today","p-today"],["t-life","p-life"],["t-conn","p-conn"],["t-inst","p-inst"]];
+function show(tid){tabs.forEach(([t,p])=>{const on=t===tid;$(t).setAttribute("aria-selected",String(on));$(p).hidden=!on});try{if(window.wyzOnTab)window.wyzOnTab(tid)}catch(e){}}
 tabs.forEach(([t])=>$(t).onclick=()=>show(t));
 
 /* ---------- install tab ---------- */
@@ -453,7 +453,7 @@ async function afterConnect(){
   LS="wyzcc-v1-"+uid;loadContactsCache();
   setTimeout(()=>{try{applyFocus();applySetOrder();sample=Connectors.makeSample();renderAI();renderSources();const r=document.querySelector('[data-sec="research"]');if(r)r.hidden=srcOff("research")}catch(e){}},0);
   $("welcome").hidden=true;renderHello();
-  try{G.token().then(t=>fetch("/api/seen",{method:"POST",headers:{Authorization:"Bearer "+t}})).catch(()=>{})}catch(e){}
+  try{G.token().then(t=>fetch("/api/seen",{method:"POST",headers:{Authorization:"Bearer "+t}})).then(r=>r&&r.ok?r.json():null).then(j=>{if(j&&j.groups&&window.wyzServerGroups)window.wyzServerGroups(j.groups)}).catch(()=>{})}catch(e){}
   const snap=lsGet();if(snap&&snap.state)restore(snap);
   await loadResearch();renderTasks();renderSetup();loadContacts();
   if(!state.onboarded)onbOpen();

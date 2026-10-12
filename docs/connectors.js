@@ -483,6 +483,30 @@
         var f = await gfetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink", { method: "POST", headers: { "Content-Type": "multipart/related; boundary=" + boundary }, body: body }, SC.driveFile);
         return { id: f.id, name: f.name, link: f.webViewLink || ("https://drive.google.com/file/d/" + f.id + "/view"), folderId: folderId, folder: name };
       },
+      /* 3.45 My Life: one small private text file in your own Drive, found by name, created or updated in place.
+         {name, folder, text, fileId?} returns {id, link}. get_text {name, folder} returns {id, text} or {id:""} when there's none. */
+      get_text: async function (a) {
+        var base = "https://www.googleapis.com/drive/v3/files", esc = function (v) { return String(v).replace(/\\/g, "\\\\").replace(/'/g, "\\'"); };
+        var id = String(a.fileId || "");
+        if (!id) {
+          var q = "trashed=false and name='" + esc(a.name) + "' and mimeType!='application/vnd.google-apps.folder'";
+          var f = await gfetch(base + "?pageSize=1&orderBy=" + encodeURIComponent("modifiedTime desc") + "&fields=files(id)&q=" + encodeURIComponent(q), null, SC.drive);
+          id = f.files && f.files[0] && f.files[0].id;
+          if (!id) return { id: "", text: "" };
+        }
+        var buf = await gfetch(base + "/" + encodeURIComponent(id) + "?alt=media", { as: "buffer" }, SC.drive);
+        return { id: id, text: new TextDecoder().decode(buf) };
+      },
+      put_text: async function (a) {
+        var text = String(a.text || ""), mime = a.mime || "application/json";
+        if (a.fileId) {
+          var u = await gfetch("https://www.googleapis.com/upload/drive/v3/files/" + encodeURIComponent(a.fileId) + "?uploadType=media&fields=id,webViewLink", { method: "PATCH", headers: { "Content-Type": mime + "; charset=UTF-8" }, body: text }, SC.drive);
+          return { id: u.id, link: u.webViewLink || "" };
+        }
+        var b64 = btoa(unescape(encodeURIComponent(text)));
+        var made = await TOOLS["Google Drive"].save_file({ name: a.name, mime: mime, data: b64, folder: a.folder, folderId: a.folderId || "" });
+        return { id: made.id, link: made.link, folderId: made.folderId };
+      },
       list_files: async function (a) {
         var parts = ["trashed=false", "mimeType != 'application/vnd.google-apps.folder'"];
         if (a.name) parts.push("name contains '" + String(a.name).replace(/\\/g, "\\\\").replace(/'/g, "\\'") + "'");
