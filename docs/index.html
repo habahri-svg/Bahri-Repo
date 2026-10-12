@@ -223,7 +223,7 @@ label.chk{display:flex;gap:6px;align-items:center}
 .cpick{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);cursor:pointer;font-size:13.5px}
 .cpick input{width:40px;height:32px;border:0;padding:0;background:none;cursor:pointer;flex:none}
 .solidchip{background:var(--sky);border-color:var(--navy);color:var(--navy);font-weight:600}
-body.focus #secs > [data-sec]:not([data-sec="inbox"]),body.focus #handoffCard,body.focus #filters,body.focus .card.group:not([data-col="g-reply"]){display:none!important}
+body.focus #secs > [data-sec]:not([data-sec="inbox"]),body.focus #handoffCard,body.focus #owedCard,body.focus #coFilters,body.focus #filters,body.focus .card.group:not([data-col="g-reply"]){display:none!important}
 #focusBtn[aria-pressed="true"]{background:var(--gold);color:#0e2238;border-color:var(--gold)}
 .bigmic{display:block;margin:14px auto;width:96px;height:96px;border-radius:50%;border:0;background:var(--navy);color:#fff;font-size:40px;cursor:pointer;box-shadow:0 6px 18px color-mix(in srgb,var(--navy) 35%,transparent)}
 .bigmic.on{background:#c0392b;animation:pulse 1.2s infinite}@keyframes pulse{50%{transform:scale(1.06)}}
@@ -368,6 +368,11 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       <span class="status">Emails you handed to a team member. They leave your board until they answer.</span>
       <div id="handoffList"></div>
     </div></div>
+    <div class="card note" id="owedCard" hidden><div class="pad">
+      <h2>Who owes me a reply</h2>
+      <span class="status">People you wrote to who haven't answered yet, longest wait first.</span>
+      <div id="owedList"></div>
+    </div></div>
     <div class="card note" id="allSearch"><div class="pad">
       <div class="ask"><input class="in" id="allQ" placeholder="Search everything: mail, files, meetings, tasks, people" aria-label="Search everything"><button class="btn solid" type="button" id="allGo">Search</button></div>
       <div id="allRes"></div>
@@ -390,10 +395,12 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
         <h2>Inbox, sorted by what it needs from you</h2>
         <p class="sub" id="headline">Your email shows here once Gmail is connected.</p>
         <div class="chips" id="filters"></div>
+        <div class="chips" id="coFilters" aria-label="Show one company" hidden></div>
         <div class="ask">
           <input class="in" id="mailQ" placeholder="Search your mail, for example from:ali or subject:invoice" aria-label="Search your mail">
           <button class="btn" type="button" id="mailGo">Search</button>
           <button class="btn ghost" type="button" id="weekGo">Weekly review</button>
+          <button class="btn ghost" type="button" id="noiseGo" title="Newsletters and notifications from the last day, summed up in a few lines">📰 Noise digest</button>
           <button class="btn solid" type="button" id="newMailBtn2">New email</button>
         </div>
         <div id="mailRes" class="found"></div>
@@ -570,6 +577,9 @@ code{font-family:var(--mono);font-size:13px;background:var(--sky);padding:1px 5p
       <input class="in" id="driveFolder" aria-label="Drive folder name" placeholder="WYZ Rent Attachments" autocomplete="off" maxlength="80">
       <span class="status">One-tap replies. The buttons under an email. Separate them with commas. Each one tells the AI what to say.</span>
       <input class="in" id="quickList" aria-label="One-tap replies" placeholder="Yes, Not now, Need more info, Call me, Thanks" autocomplete="off">
+      <label class="status chk"><input type="checkbox" id="quickArm" checked> After a one-tap reply is written, get it ready to send, so one more tap on Confirm sends it</label>
+      <span class="status">Company tabs. One line per company, the name, a colon, then words or addresses that point to it. Emails that match nothing go under Other.</span>
+      <textarea id="coRules" aria-label="Company tabs" style="min-height:80px" spellcheck="false"></textarea>
       <span class="status">Team. People you can hand an email to. They get it by email and you see when they answer.</span>
       <div id="teamList"></div>
       <div class="ask"><input class="in" id="teamName" placeholder="Name" aria-label="Team member name" style="flex:0 1 140px"><input class="in" id="teamEmail" placeholder="Email address" aria-label="Team member email"><button class="btn" type="button" id="teamAdd">Add</button></div>

@@ -9,7 +9,7 @@ const el = (t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=
 let LS = "wyzcc-v1";
 const state0={done:{},snooze:{},tasks:[]};
 let mcp=null, sample=null, db=null, perms=null, uid=null, myName="", email="", pic="";
-let threads=[], sent=[], events=null, board=null, state={done:{},snooze:{},tasks:[]}, flt=null, showOff=false;
+let threads=[], sent=[], events=null, board=null, state={done:{},snooze:{},tasks:[]}, flt=null, coFlt=null, showOff=false;
 let busy=false;
 
 /* ---------- dates ---------- */
@@ -435,6 +435,7 @@ function updateHero(){
   defs.forEach(([label,n,color,fn])=>{const b=el("button","hstat");b.type="button";b.append(el("b","",String(n)));const l=el("span");const dot=el("i");dot.style.background=color;l.append(dot,label);b.append(l);b.onclick=fn;b.setAttribute("aria-label",n+" "+label);box.append(b)});
 }
 function renderHello(){
+  try{$("coRules").value=state.coRules!=null?state.coRules:CO_DEFAULT;$("quickArm").checked=state.quickArm!==false}catch(e){}
   try{$("pageName").value=state.pageName||"";applyPageName();renderTeam();$("autoDraft").checked=!!state.autoDraft;$("undoSecs").value=String(undoSecs());if($("autoSum"))$("autoSum").checked=state.autoSum!==false;if($("badgeOn"))$("badgeOn").checked=!state.badgeOff;$("alertsOn").checked=!!state.alertsOn&&"Notification" in window&&Notification.permission==="granted";$("autoSuggest").checked=state.autoSuggest!==false;$("tidyOn").checked=!!state.tidy;$("weeklyOn").checked=!state.noWeekly;$("quickList").value=Array.isArray(state.quick)?state.quick.join(", "):"";$("driveFolder").value=state.driveFolder||""}catch(e){}
   const h=new Date().getHours();
   $("hello").textContent=myName?(h<12?"Good morning, ":h<18?"Good afternoon, ":"Good evening, ")+myName.split(" ")[0]:"Your execution page";
@@ -1114,7 +1115,7 @@ function drawQuick(){
         }
         if(thr.id!==idAtStart)return;
         if(!t)throw new Error("the AI sent back nothing");
-        if(!$("thrText").value.trim()){$("thrText").value=t;st.className="status";st.textContent="Edit it, then send it or save it as a draft.";$("thrText").focus()}
+        if(!$("thrText").value.trim()){$("thrText").value=t;st.className="status";st.textContent="Edit it, then send it or save it as a draft.";$("thrText").focus();if(state.quickArm!==false){thr.armed=0;try{await thrAct("send")}catch(e){}}}
         else{thr.sug={state:"ready",prov:Connectors.ai.active()||"claude",text:t,note:"One tap: "+label};drawSuggest();st.className="status";st.textContent="Your reply box already had text, so the answer is in the suggestion above."}
       }catch(e){st.className="status err";st.textContent="Couldn't write it ("+clip((e&&e.message)||"unknown reason",90)+")."+(isCreditErr(e)?" Use a free chat below.":"");if(isCreditErr(e))showFree()}
       all.forEach(x=>x.disabled=false);b.textContent=old;
@@ -1123,6 +1124,7 @@ function drawQuick(){
   });
   $("thrBody").append(q);
 }
+$("quickArm").onchange=()=>{state.quickArm=$("quickArm").checked;persist()};
 $("quickList").onchange=()=>{const v=$("quickList").value.split(",").map(x=>x.trim()).filter(Boolean).slice(0,8);state.quick=v.length?v:null;persist();if(!$("thr").hidden)drawQuick()};
 async function suggestReply(o){
   o=o||{};if(thr.mode!=="reply"||!thr.msgs.length)return;
@@ -1534,6 +1536,79 @@ function reminderItems(){
   });
   return out;
 }
+/* ---------- company tabs: WYZ Rent, SAMOCO, Personal, Other ---------- */
+const CO_DEFAULT="WYZ Rent: wyzrent.com, hostaway, airbnb, booking.com, guest, owner, check-in, listing, holiday home\nSAMOCO: samoco, spc, deir, concession, ueg, petroleum, oil field\nPersonal: gmail.com, hotmail.com, icloud.com, yahoo.com, outlook.com";
+function coRules(){return String(state.coRules!=null?state.coRules:CO_DEFAULT).split("\n").map(l=>{const m=l.match(/^\s*([^:]{1,30}):(.*)$/);return m?{name:m[1].trim(),keys:m[2].split(",").map(x=>x.trim().toLowerCase()).filter(Boolean)}:null}).filter(r=>r&&r.name&&r.keys.length).slice(0,6)}
+function coOf(i){const t=tById(i.id)||{};const h=[t.from,(t.lastTo||[]).join(" "),t.subject,t.snippet,i.title].join(" ").toLowerCase();for(const r of coRules()){if(r.keys.some(k=>h.indexOf(k)>=0))return r.name}return "Other"}
+function drawCoChips(items){
+  const f=$("coFilters");if(!f)return;f.replaceChildren();
+  const live=items.filter(i=>!isOff(i)),names=coRules().map(r=>r.name).concat("Other"),n={};live.forEach(i=>{const c=coOf(i);n[c]=(n[c]||0)+1});
+  if(coFlt&&!n[coFlt])coFlt=null;
+  const used=names.filter(x=>n[x]);f.hidden=used.length<2&&!coFlt;if(f.hidden)return;
+  const mk=(label,val,cnt)=>{const b=el("button","chip");b.type="button";b.append(el("span","",label));if(cnt!=null)b.append(el("b","",String(cnt)));b.setAttribute("aria-pressed",String(coFlt===val));b.onclick=()=>{coFlt=val;renderBoard()};f.append(b)};
+  mk("All companies",null,live.length);used.forEach(x=>mk(x,x,n[x]));
+}
+$("coRules").onchange=()=>{const v=$("coRules").value.trim();state.coRules=v===CO_DEFAULT.trim()?null:v;coFlt=null;persist();renderBoard()};
+/* ---------- who owes me a reply ---------- */
+function renderOwed(){
+  const c=$("owedCard"),h=$("owedList");if(!c||!h)return;h.replaceChildren();
+  const by={};
+  allItems().filter(i=>(i.st==="wait"||i.st==="follow")&&!isOff(i)).forEach(i=>{
+    const t=tById(i.id);if(!t||!t.lastFromMe)return;
+    const to=(t.lastTo||[])[0]||"",key=addrOf(to).toLowerCase()||to;if(!key)return;
+    const d=t.daysSinceLast==null?0:t.daysSinceLast;
+    (by[key]=by[key]||{name:nameOf(to)||key,max:0,list:[]}).list.push({i,t,d});by[key].max=Math.max(by[key].max,d);
+  });
+  const people=Object.values(by).sort((a,b)=>b.max-a.max).slice(0,12);
+  c.hidden=!people.length;if(!people.length)return;
+  people.forEach(p=>{
+    const row=el("div","item");row.append(el("span","dot "+(p.max>=3?"follow":"wait")));const m=el("div","main");
+    m.append(el("span","t",p.name+" · "+p.list.length+" email"+(p.list.length>1?"s":"")),el("span","m","Longest wait: "+(p.max===0?"since today":p.max+" day"+(p.max>1?"s":""))));
+    p.list.sort((a,b)=>b.d-a.d).forEach(x=>{
+      const a=el("div","acts");a.style.alignItems="center";
+      const s=el("span","s",(x.t.subject||x.i.title||"")+" · "+(x.d===0?"today":x.d+"d"));s.style.flex="1 1 200px";
+      const ch=el("button","btn small solid","Chase");ch.type="button";ch.onclick=()=>openThread(x.i.id,{item:x.i,draft:true});
+      const rd=el("button","btn small ghost","Read");rd.type="button";rd.onclick=()=>openThread(x.i.id,{item:x.i});
+      const dn=el("button","btn small ghost","Got it");dn.type="button";dn.title="They answered somewhere else, or it no longer matters";dn.onclick=()=>markDone(x.i);
+      a.append(s,ch,rd,dn);m.append(a);
+    });
+    row.append(m);h.append(row);
+  });
+}
+/* ---------- noise digest: newsletters and notifications from the last day, in a few lines ---------- */
+const NOISE_Q="in:inbox newer_than:1d (category:promotions OR category:updates OR category:social OR category:forums OR from:noreply OR from:no-reply OR from:notifications OR from:newsletter)";
+async function noiseDigest(){
+  const host=infoOpen("📰 Noise digest");
+  if(!mcp||G.mainType()==="ms"){host.append(el("p","status","This works with a Gmail account."));return}
+  const st=el("p","status","Reading the last day's newsletters and notifications...");host.append(st);
+  let list=[];
+  try{const r=await mcp.callTool("Gmail","search_threads",{query:NOISE_Q,pageSize:40,account:0},{cache:false});const vip=(state.rules&&state.rules.vip)||[];list=((r.payload&&r.payload.threads)||[]).map(slimThread).filter(t=>!ruleHit(vip,addrOf(t.from).toLowerCase()))}
+  catch(e){st.className="status err";st.textContent="Couldn't read Gmail just now ("+clip((e&&e.message)||"unknown reason",90)+").";return}
+  if(!list.length){st.textContent="Nothing. No newsletters or notifications in the last day.";return}
+  st.textContent=list.length+" newsletters and notifications in the last day.";
+  const sum=el("div","out","");host.append(sum);
+  if(sample){
+    sum.textContent="Summing them up...";
+    try{
+      const r=await creditFallback(prov=>sample("These are newsletters and automatic notifications from one person's inbox in the last day. The person works at WYZ Rent, a Dubai holiday home company. Write at most 6 short lines. First anything that needs action (a payment due, a security alert, a booking or account problem), each starting with \"Action:\". Then the few things worth knowing. Skip pure marketing. Plain English, no em dashes, no headings.\n\n"+JSON.stringify(list.map(t=>({from:nameOf(t.from),subject:t.subject,snippet:t.snippet.slice(0,200)}))),{cache:false,provider:prov}));
+      sum.textContent=String(r.text||"").trim()||"Nothing worth knowing.";
+    }catch(e){sum.textContent="Couldn't sum them up ("+clip((e&&e.message)||"unknown reason",80)+"). The list is below."}
+  }else sum.remove();
+  const d=document.createElement("details");d.append(el("summary","status","See all "+list.length));
+  list.forEach(t=>{const r=el("div","acts");r.style.alignItems="center";const s=el("span","s",nameOf(t.from)+": "+t.subject);s.style.flex="1 1 200px";r.append(s);if(t.url){const o=el("a","btn small ghost","Open");o.href=t.url;o.target="_blank";o.rel="noopener";r.append(o)}d.append(r)});
+  host.append(d);
+  const arch=el("button","btn small","Archive all "+list.length);arch.type="button";let armed=0;
+  arch.onclick=async()=>{
+    if(!armed){armed=1;arch.textContent="Confirm: archive "+list.length+" (not deleted)";return}
+    arch.disabled=true;const done=[];
+    for(const t of list){arch.textContent="Archiving "+(done.length+1)+" of "+list.length+"...";try{await mcp.callTool("Gmail","archive_thread",{threadId:t.id});done.push(t.id)}catch(e){if(e&&e.code==="consent_required")break}}
+    arch.textContent="Archived "+done.length;
+    toastUndo("Archived "+done.length+" newsletters and notifications.",async()=>{for(const id of done){try{await mcp.callTool("Gmail","modify_thread",{threadId:id,add:["INBOX"]})}catch(e){}}toast("Put back in your inbox.");refreshAll(true)});
+    refreshAll(true);
+  };
+  const a=el("div","acts");a.append(arch);host.append(a);
+}
+$("noiseGo").onclick=()=>{if(!G.connected()){showWelcome();return}noiseDigest()};
 const ruleAddr=t=>t?addrOf(t.lastFromMe?(t.lastTo||[])[0]:t.from).toLowerCase():"";
 const ruleHit=(list,a)=>!!a&&(list||[]).some(r=>r===a||(r.charAt(0)==="@"&&a.endsWith(r)));
 function applyRules(items){
@@ -1552,7 +1627,9 @@ function renderBoard(){
   const host=$("board");host.replaceChildren();
   if(!board){return}
   $("headline").textContent=board.headline||"";
-  const items=allItems().slice().sort((a,b)=>ORDER.indexOf(a.st)-ORDER.indexOf(b.st)||backFirst(b)-backFirst(a)||b.g-a.g);
+  const itemsAll=allItems().slice().sort((a,b)=>ORDER.indexOf(a.st)-ORDER.indexOf(b.st)||backFirst(b)-backFirst(a)||b.g-a.g);
+  try{drawCoChips(itemsAll)}catch(e){}
+  const items=coFlt?itemsAll.filter(i=>coOf(i)===coFlt):itemsAll;
   const vis=items.filter(i=>showOff||!isOff(i));
   // filters
   const f=$("filters");f.replaceChildren();
@@ -1567,11 +1644,11 @@ function renderBoard(){
   });
   if(!vis.length&&(board.items||[]).length)host.append(el("p","sub","All clear. Everything is done or snoozed."));
   applyCol();updateBadge();
-  try{renderTop3();renderHandoffs()}catch(e){}
+  try{renderTop3();renderHandoffs();renderOwed()}catch(e){}
 }
 /* select several emails and act on them together */
 let selOn=false;const sel=new Set();
-function visibleIds(){return allItems().filter(i=>showOff||!isOff(i)).filter(i=>!flt||i.st===flt).map(i=>i.id)}
+function visibleIds(){return allItems().filter(i=>showOff||!isOff(i)).filter(i=>!flt||i.st===flt).filter(i=>!coFlt||coOf(i)===coFlt).map(i=>i.id)}
 async function bulkArchive(btn){
   const ids=[...sel];let ok=0,bad=0,first=null;btn.disabled=true;
   for(let n=0;n<ids.length;n++){
@@ -3212,7 +3289,8 @@ function drawTools(){
   pb.onclick=()=>{togglePin(thr.id);drawTools();thrNote(isPinned(thr.id)?"Pinned. It stays at the top of your board and Top for today until it's done.":"Unpinned.")};
   const cb=el("button","btn small","📅 Add to calendar");cb.type="button";cb.onclick=()=>toolCalendar(box);
   const tb=el("button","btn small","✅ Make it a task");tb.type="button";tb.onclick=()=>toolTask(box);
-  host.append(pb,cb,tb);
+  const dg=el("button","btn small","👥 Delegate");dg.type="button";dg.title="Send it to a team member with your note, and see when they answer";dg.onclick=()=>openHandoff();
+  host.append(pb,cb,tb,dg);
   phonesIn(thr.msgs).forEach(p=>{
     const intl=p.plus?p.n:"971"+p.n.replace(/^0/,"");
     const c=el("a","btn small","📞 Call"+(p.who?" "+p.who:""));c.href="tel:"+(p.plus?"+":"")+p.n;c.title=p.raw;
