@@ -108,7 +108,7 @@ async function handler(req, res) {
   try { who = await S.verify(token0); } catch (e) { return res.status(502).json({ error: "Couldn't check your Google sign-in." }); }
   if (!who) return res.status(401).json({ error: "Your Google sign-in isn't valid for this site." });
   const owners = S.list(process.env.OWNER_EMAILS), viewers = owners.concat(S.list(process.env.REVENUE_VIEWERS));
-  if (viewers.indexOf(who.email) < 0) return res.status(200).json({ viewer: false, email: who.email });
+  if (viewers.indexOf(who.email) < 0) return res.status(200).json({ viewer: false, email: who.email, listed: { owners: owners.length, viewers: viewers.length - owners.length } });
   const isOwner = owners.indexOf(who.email) >= 0;
   const missing = ["HOSTAWAY_ACCOUNT_ID", "HOSTAWAY_API_KEY"].filter(function (k) { return !String(process.env[k] || "").trim(); });
   if (missing.length) return res.status(200).json({ viewer: true, owner: isOwner, ready: false, missing: missing });

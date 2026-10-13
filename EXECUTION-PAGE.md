@@ -262,3 +262,5 @@ Every line on Today (tasks, emails, meetings, documents, files) has a small **In
 Each instruction you start is kept under **Instructions I've sent** (Done, Remind them, Remove). On a task line it shows who you asked, and it disappears when the task is done.
 
 The Graphs window now also says which email the server saw ("The server saw you as ...") when it refuses, so a wrong-account sign-in is obvious (3.62).
+
+Graphs refusal also shows how many addresses the server's lists hold (never the addresses), so zero means the variable isn't reaching the site and more than zero means a typo (3.63).
