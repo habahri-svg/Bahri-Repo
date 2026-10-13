@@ -122,6 +122,11 @@
     },
     {
       "version": "3.63",
+      "path": "previous/v3.63/",
+      "label": "Graphs: says how many addresses the server list holds, to tell a missing variable from a typo"
+    },
+    {
+      "version": "3.64",
       "path": "",
       "label": "Current"
     }
