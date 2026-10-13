@@ -574,9 +574,8 @@
     mp.append(el("p", "status", "ChatGPT's saved memories are not included in its export, so copy them in once. Fastest: send ChatGPT the request below, then paste its answer here. Or open Settings, Personalization, Manage memories, and copy the list. Do the same in Claude if you use its memory."));
     var ra = el("div", "acts");
     ra.append(B("Copy the request", function (b) { navigator.clipboard.writeText(MEMORY_ASK).then(function () { b.textContent = "Copied"; }).catch(function () { b.textContent = "Select the text to copy"; }); }));
-    var o1 = el("a", "btn small", "Ask ChatGPT ↗"); o1.href = "https://chatgpt.com/?q=" + encodeURIComponent(MEMORY_ASK); o1.target = "_blank"; o1.rel = "noopener";
-    var o2 = el("a", "btn small", "Ask Claude ↗"); o2.href = "https://claude.ai/new?q=" + encodeURIComponent(MEMORY_ASK); o2.target = "_blank"; o2.rel = "noopener";
-    ra.append(o1, o2); mp.append(ra);
+        var o2 = el("a", "btn small", "Ask Claude ↗"); o2.href = "https://claude.ai/new?q=" + encodeURIComponent(MEMORY_ASK); o2.target = "_blank"; o2.rel = "noopener";
+    ra.append(o2); mp.append(ra);
     var mt = el("textarea", "in"); mt.rows = 6; mt.placeholder = "Paste what ChatGPT or Claude remembers about you"; mt.setAttribute("aria-label", "Memory profile"); mt.style.minHeight = "120px";
     var ms = el("select", "in"); [["chatgpt", "From ChatGPT"], ["claude", "From Claude"], ["other", "Other"]].forEach(function (o) { ms.append(new Option(o[1], o[0])); }); ms.style.flex = "0 1 160px";
     var msave = B("Save to my library", async function (b) {

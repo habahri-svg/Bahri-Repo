@@ -205,7 +205,7 @@
     add("On WhatsApp\u2026", function () { open(itemOf(row), null, "wa"); });
     hd("Ask in the apps");
     var it = itemOf(row), q = encodeURIComponent(("Help me with this: " + it.title + (it.meta ? " (" + it.meta + ")" : "") + ". What should I do and in what order?").slice(0, 1500));
-    [["Claude (new chat)", "https://claude.ai/new?q=" + q], ["ChatGPT (new chat)", "https://chatgpt.com/?q=" + q]].forEach(function (x) { var a = document.createElement("a"); a.textContent = x[0]; a.href = x[1]; a.target = "_blank"; a.rel = "noopener"; a.onclick = function () { d.open = false; }; m.append(a); });
+    [["Claude (new chat)", "https://claude.ai/new?q=" + q]].forEach(function (x) { var a = document.createElement("a"); a.textContent = x[0]; a.href = x[1]; a.target = "_blank"; a.rel = "noopener"; a.onclick = function () { d.open = false; }; m.append(a); });
     d.append(m); return d;
   }
   function itemOf(row) {
