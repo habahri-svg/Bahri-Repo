@@ -132,6 +132,11 @@
     },
     {
       "version": "3.65",
+      "path": "previous/v3.65/",
+      "label": "Instruct someone: type a name and the WhatsApp number fills in from Google Contacts"
+    },
+    {
+      "version": "3.66",
       "path": "",
       "label": "Current"
     }
