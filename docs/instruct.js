@@ -2,6 +2,7 @@
    Choose what to do: have the AI summarise it, plan it, write the instruction or check it for risks, or tell a team member to do it by email or WhatsApp.
    The person window: pick the person, say what you want done, add a deadline, then Write the email or open WhatsApp.
    Nothing is ever sent for you. The email opens in the usual writing window and you press Send. WhatsApp opens with the message ready.
+   3.64: WhatsApp can go from your personal number (opens WhatsApp with the message ready, you press Send there) or from the WYZ Business number (sent by /api/whatsapp after you press Confirm). Your choice is remembered.
    Each instruction is kept under "Instructions I've sent" so you can mark it done or remind them. On a task line it shows who you asked. */
 (function () {
   "use strict";
@@ -82,8 +83,61 @@
     }, "solid"));
     var wa = el("a", "btn small solid", "Open WhatsApp"); wa.href = "#"; wa.target = "_blank"; wa.rel = "noopener";
     wa.onclick = function (e) { var w = need("wa"); if (!w) { e.preventDefault(); return; } wa.href = "https://wa.me/" + (w.phone || "") + "?text=" + encodeURIComponent(text(true).slice(0, 1700)); record("whatsapp", w); setTimeout(function () { st.className = "status"; st.textContent = w.phone ? "WhatsApp opened with the message ready. Press Send there." : "WhatsApp opened. Choose who to send it to, then press Send."; }, 50); };
-    acts.append(wa, B("Copy the message", function (b) { var w = need(""); if (!w) return; navigator.clipboard.writeText(text(false)).then(function () { b.textContent = "Copied"; setTimeout(function () { b.textContent = "Copy the message"; }, 1500); }).catch(function () { b.textContent = "Select the text to copy"; }); }, "ghost"));
-    h.append(acts, st);
+    /* Business WhatsApp: sent from the WYZ Business number through the server, only after a Confirm press. */
+    var bzArmed = 0;
+    function bizCall(method, body) {
+      return G.token().then(function (t) {
+        return fetch("/api/whatsapp", { method: method, headers: { Authorization: "Bearer " + t, "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+      }).then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (j) {
+          if (!r.ok && !j.viewer && !j.owner) throw new Error(j.error || ("The server answered " + r.status + "."));
+          return j;
+        });
+      });
+    }
+    var bz = B("Send from Business", function (b) {
+      var w = need("wa"); if (!w) return;
+      if (!w.phone) { st.className = "status err"; st.textContent = "Business WhatsApp needs their number with the country code."; phoneI.focus(); return; }
+      if (!bzArmed) { bzArmed = 1; b.textContent = "Confirm: send to " + (w.name || w.phone); st.className = "status"; st.textContent = "Check the message, then press Confirm. It goes out from the WYZ Business number."; return; }
+      bzArmed = 0; b.disabled = true; b.textContent = "Sending...";
+      bizCall("POST", { to: w.phone, text: text(true).slice(0, 3900) }).then(function (j) {
+        if (j && j.error) throw new Error(j.error);
+        if (j && j.ready === false) throw new Error("Business WhatsApp isn't set up yet. Missing: " + (j.missing || []).join(", ") + ".");
+        if (j && j.viewer === false) throw new Error("Your Google account isn't allowed to use Business WhatsApp.");
+        record("whatsapp-business", w); b.textContent = "Sent";
+        st.className = "status"; st.textContent = "Sent from the WYZ Business number to " + (w.name || w.phone) + ".";
+        setTimeout(function () { b.disabled = false; b.textContent = "Send from Business"; }, 2500);
+      }).catch(function (e) {
+        b.disabled = false; b.textContent = "Send from Business";
+        st.className = "status err"; st.textContent = "Couldn't send it. " + short((e && e.message) || "Unknown reason.", 200);
+      });
+    }, "solid");
+    [phoneI, note].forEach(function (i) { i.addEventListener("input", function () { if (bzArmed) { bzArmed = 0; bz.textContent = "Send from Business"; } }); });
+    var fromRow = el("div", "chips"), bzNote = el("p", "status"); bzNote.setAttribute("aria-live", "polite");
+    var waFrom = state.waFrom === "business" ? "business" : "personal";
+    function drawFrom() {
+      [].forEach.call(fromRow.children, function (c) { c.setAttribute("aria-pressed", String(c.dataset.k === waFrom)); });
+      wa.style.display = waFrom === "personal" ? "" : "none"; bz.style.display = waFrom === "business" ? "" : "none";
+      bzNote.textContent = waFrom === "personal" ? "Opens WhatsApp on your own number with the message ready. You press Send there." : "Sends from the WYZ Business number after you press Confirm.";
+      bzNote.className = "status";
+      if (waFrom === "business") {
+        bzNote.textContent = "Checking Business WhatsApp...";
+        bizCall("GET").then(function (j) {
+          if (waFrom !== "business") return;
+          if (j && j.viewer === false) { bzNote.className = "status err"; bzNote.textContent = "Your Google account isn't allowed to use Business WhatsApp. Ask the owner to add it to WHATSAPP_VIEWERS."; }
+          else if (j && j.ready === false) { bzNote.className = "status err"; bzNote.textContent = "Business WhatsApp isn't set up yet. Still missing: " + (j.missing || []).join(", ") + ". Use your personal WhatsApp for now."; }
+          else { bzNote.className = "status"; bzNote.textContent = "Sends from the WYZ Business number after you press Confirm. Free only within 24 hours of their last message, otherwise WhatsApp needs an approved template."; }
+        }).catch(function () { if (waFrom === "business") { bzNote.className = "status err"; bzNote.textContent = "Couldn't check Business WhatsApp. Sign in with Google first, or use your personal WhatsApp."; } });
+      }
+    }
+    [["personal", "\uD83D\uDCF1 My personal WhatsApp"], ["business", "\uD83D\uDCBC WYZ Business WhatsApp"]].forEach(function (o) {
+      var c = el("button", "chip", o[1]); c.type = "button"; c.dataset.k = o[0];
+      c.onclick = function () { waFrom = o[0]; state.waFrom = o[0]; bzArmed = 0; bz.textContent = "Send from Business"; try { persist(); } catch (e) {} drawFrom(); };
+      fromRow.append(c);
+    });
+    drawFrom();
+    acts.append(wa, bz, B("Copy the message", function (b) { var w = need(""); if (!w) return; navigator.clipboard.writeText(text(false)).then(function () { b.textContent = "Copied"; setTimeout(function () { b.textContent = "Copy the message"; }, 1500); }).catch(function () { b.textContent = "Select the text to copy"; }); }, "ghost"));
+    h.append(el("span", "status", "Send WhatsApp from"), fromRow, bzNote, acts, st);
     if (again) { setPerson({ name: again.name, email: again.email, phone: again.phone }); if (again.due) due.value = again.due; }
     else if (chips.children.length === 1) chips.firstChild.click();
     (mode === "wa" && !again ? phoneI : again ? note : nameI.value ? note : nameI).focus();
@@ -154,7 +208,7 @@
     p.append(el("h2", "", "Instructions I've sent (" + list.length + ")"), el("span", "status", "What you asked people to do. Mark it done when they have, or remind them."));
     list.forEach(function (x) {
       var r = el("div", "item"); r.append(el("span", "dot follow")); var m = el("div", "main"); m.dataset.noinstr = "1";
-      m.append(el("span", "t", x.title), el("span", "m", (x.name || x.email || x.phone) + " · by " + (x.via === "whatsapp" ? "WhatsApp" : "email") + " · " + new Date(x.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) + (x.due ? " · due " + niceD(x.due) : "") + (x.note ? " · \"" + short(x.note, 70) + "\"" : "")));
+      m.append(el("span", "t", x.title), el("span", "m", (x.name || x.email || x.phone) + " · by " + (x.via === "whatsapp-business" ? "WhatsApp Business" : x.via === "whatsapp" ? "WhatsApp" : "email") + " · " + new Date(x.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) + (x.due ? " · due " + niceD(x.due) : "") + (x.note ? " · \"" + short(x.note, 70) + "\"" : "")));
       var a = el("div", "acts");
       a.append(B("Done", function () { x.done = 1; persist(); renderInstr(); try { renderTasks(); } catch (e) {} }, "solid"), B("Remind them", function () { open({ title: x.title, meta: x.meta, link: x.link, key: x.key }, x) }, "ghost"), B("Remove", function () { state.instructions = (state.instructions || []).filter(function (y) { return y.id !== x.id; }); persist(); renderInstr(); try { renderTasks(); } catch (e) {} }, "ghost"));
       m.append(a); r.append(m); p.append(r); r.dataset.instr = "1";

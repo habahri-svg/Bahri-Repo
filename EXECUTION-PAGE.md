@@ -264,3 +264,9 @@ Each instruction you start is kept under **Instructions I've sent** (Done, Remin
 The Graphs window now also says which email the server saw ("The server saw you as ...") when it refuses, so a wrong-account sign-in is obvious (3.62).
 
 Graphs refusal also shows how many addresses the server's lists hold (never the addresses), so zero means the variable isn't reaching the site and more than zero means a typo (3.63).
+
+## WhatsApp from your personal or the Business number (3.64)
+In the "Instruct someone" window (the Instruct menu on any line, then On WhatsApp), a switch under "Send WhatsApp from" picks the number. Your choice is remembered.
+- **My personal WhatsApp:** opens WhatsApp on your own number with the message ready. You press Send there. Nothing needs setting up.
+- **WYZ Business WhatsApp:** sends from the Business number through `/api/whatsapp` after you press Confirm. It needs the Business setup from the section above (WHATSAPP_TOKEN, WHATSAPP_PHONE_ID, WHATSAPP_VERIFY_TOKEN, Upstash Redis) and your Google account in OWNER_EMAILS or WHATSAPP_VIEWERS. If something is missing the window says exactly what, and nothing is sent. Free only within 24 hours of their last message, otherwise WhatsApp needs an approved template.
+Nothing is ever sent without a Confirm press. Sent instructions are listed under "Instructions I've sent" with "WhatsApp" or "WhatsApp Business". Code: `docs/instruct.js`.
