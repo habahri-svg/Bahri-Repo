@@ -137,6 +137,11 @@
     },
     {
       "version": "3.66",
+      "path": "previous/v3.66/",
+      "label": "Two buttons at the top: open the WYZ dashboard and open it in Lovable"
+    },
+    {
+      "version": "3.67",
       "path": "",
       "label": "Current"
     }
