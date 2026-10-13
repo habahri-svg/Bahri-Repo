@@ -419,21 +419,23 @@
       list_contacts: async function () {
         var people = [], pick = function (p) {
           var e = (p.emailAddresses || []).map(function (x) { return x.value; }).filter(Boolean);
+          var ph = (p.phoneNumbers || []).map(function (x) { return String(x.canonicalForm || x.value || "").trim(); }).filter(Boolean);
           var n = (p.names && p.names[0] && p.names[0].displayName) || "";
-          e.forEach(function (a) { people.push({ name: n, email: String(a).toLowerCase() }); });
+          e.forEach(function (a) { people.push({ name: n, email: String(a).toLowerCase(), phones: ph }); });
+          if (!e.length && ph.length && n) people.push({ name: n, email: "", phones: ph });
         };
         var have = { c: false, o: false }, err = null;
         try {
           var tok = "";
           for (var i = 0; i < 3; i++) {
-            var j = await gfetch("https://people.googleapis.com/v1/people/me/connections?personFields=names,emailAddresses&sortOrder=LAST_MODIFIED_DESCENDING&pageSize=1000" + (tok ? "&pageToken=" + encodeURIComponent(tok) : ""), null, SC.contacts);
+            var j = await gfetch("https://people.googleapis.com/v1/people/me/connections?personFields=names,emailAddresses,phoneNumbers&sortOrder=LAST_MODIFIED_DESCENDING&pageSize=1000" + (tok ? "&pageToken=" + encodeURIComponent(tok) : ""), null, SC.contacts);
             (j.connections || []).forEach(pick); have.c = true; tok = j.nextPageToken; if (!tok) break;
           }
         } catch (e) { err = e; }
         try {
           var tok2 = "";
           for (var k = 0; k < 3; k++) {
-            var o = await gfetch("https://people.googleapis.com/v1/otherContacts?readMask=names,emailAddresses&pageSize=1000" + (tok2 ? "&pageToken=" + encodeURIComponent(tok2) : ""), null, SC.otherContacts);
+            var o = await gfetch("https://people.googleapis.com/v1/otherContacts?readMask=names,emailAddresses,phoneNumbers&pageSize=1000" + (tok2 ? "&pageToken=" + encodeURIComponent(tok2) : ""), null, SC.otherContacts);
             (o.otherContacts || []).forEach(pick); have.o = true; tok2 = o.nextPageToken; if (!tok2) break;
           }
         } catch (e2) { err = err || e2; }
