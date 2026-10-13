@@ -112,6 +112,11 @@
     },
     {
       "version": "3.61",
+      "path": "previous/v3.61/",
+      "label": "Instruct menu on every line: ask the AI, or tell someone by email or WhatsApp"
+    },
+    {
+      "version": "3.62",
       "path": "",
       "label": "Current"
     }
