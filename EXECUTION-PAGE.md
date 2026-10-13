@@ -273,3 +273,6 @@ Nothing is ever sent without a Confirm press. Sent instructions are listed under
 
 ## Name to WhatsApp number from Google Contacts (3.65)
 In the Instruct window, typing a name in the Name box shows matching Google Contacts that have a phone number. Picking one fills the name, email (if any) and the WhatsApp number. Numbers starting with a single 0 get 971 (UAE) added and the page says so. The contacts list now also reads phone numbers (People API `phoneNumbers`), and the saved contacts list refreshes once so the numbers load.
+
+## Dashboard buttons (3.66)
+Two buttons sit in the top button row: "WYZ Dashboard" opens the live Lovable dashboard and "Dashboard in Lovable" opens its editor. Both open in a new tab. To point them elsewhere, change the two links in docs/index.html (ids dashLive and dashBuild).
