@@ -564,7 +564,7 @@ function applyPageName(){
   bar.title="You are using version "+v.version+(when?", updated "+when:"")+". If it looks old, refresh the page.";
 })();
 /* colour palette and light/dark look, saved per device and applied before first paint by a tiny script in index.html */
-const PAL_META={ocean:"#104b70",ivory:"#16324e",marina:"#0f6466",dune:"#7a3a22",graphite:"#1f2633"};
+const PAL_META={ocean:"#104b70",ivory:"#16324e",marina:"#0f6466",dune:"#7a3a22",graphite:"#1f2633",rose:"#b35a85",lavender:"#7761bd",mint:"#3a9877",peach:"#b95a30",skyblue:"#3b7fc0",butter:"#9a8014"};
 function lookNow(){try{return JSON.parse(localStorage.getItem("wyz-look")||"{}")}catch(e){return {}}}
 function applyLook(l){
   const r=document.documentElement,p=PAL_META[l.p]?l.p:"ocean";

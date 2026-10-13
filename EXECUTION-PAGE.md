@@ -248,3 +248,8 @@ Before, the **📊 Graphs** button hid itself when the server answered "not foun
 - **Phone execution:** a narrow column, bigger buttons, and a bottom bar (Inbox, Calendar, Tasks, Files, More) that shows one section at a time.
 
 It is only the look (`docs/layout.js`, CSS keyed on `html[data-layout]`). Nothing is moved or removed, so every button works in every layout. Settings and Install look the same in all of them. Choose later which one to keep as your own default.
+
+## Pastel looks and My looks (3.60)
+**🎨 Colours** (header) and **Settings > Personalise** now offer eleven looks. Six are new pastels: Rose, Lavender, Mint, Peach, Sky and Butter. Backgrounds and cards are soft pastel, while the header and buttons use a deeper shade of the same colour so white text stays readable. Each has a dark version too.
+
+**My looks:** change any colour (header, buttons, accent, background, cards, text), type a name and tap **Save current colours as a new look**. There is no limit. Tap a saved look to use it, **Update** to replace it with the colours you have now, **Delete** to remove it (asks first). Saved on this device only (`wyz-mylooks`), so a phone and a laptop keep their own lists. Built-in looks are never changed.
