@@ -102,6 +102,11 @@
     },
     {
       "version": "3.59",
+      "path": "previous/v3.59/",
+      "label": "Choose how Today looks in Settings: Bento squares, Four panes or Phone execution"
+    },
+    {
+      "version": "3.60",
       "path": "",
       "label": "Current"
     }
