@@ -260,3 +260,5 @@ Every line on Today (tasks, emails, meetings, documents, files) has a small **In
 - **Tell someone to do it:** by email or on WhatsApp. Pick a team member (or type a name, email, WhatsApp number), write what you want done, add a deadline, mark it urgent. **Write the email** opens the usual writing window and **Open WhatsApp** opens WhatsApp with the message ready. Nothing is ever sent for you. Numbers are remembered per person.
 - **Ask in the apps:** a new Claude or ChatGPT chat about the line.
 Each instruction you start is kept under **Instructions I've sent** (Done, Remind them, Remove). On a task line it shows who you asked, and it disappears when the task is done.
+
+The Graphs window now also says which email the server saw ("The server saw you as ...") when it refuses, so a wrong-account sign-in is obvious (3.62).
