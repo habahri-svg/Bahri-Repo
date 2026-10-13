@@ -107,6 +107,11 @@
     },
     {
       "version": "3.60",
+      "path": "previous/v3.60/",
+      "label": "Six pastel looks, and save as many of your own colour looks as you like"
+    },
+    {
+      "version": "3.61",
       "path": "",
       "label": "Current"
     }
