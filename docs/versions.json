@@ -142,6 +142,11 @@
     },
     {
       "version": "3.67",
+      "path": "previous/v3.67/",
+      "label": "WhatsApp Business: delivery status, failure reports, phone-app messages and a connection check"
+    },
+    {
+      "version": "3.68",
       "path": "",
       "label": "Current"
     }
