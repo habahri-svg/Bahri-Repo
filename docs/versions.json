@@ -127,6 +127,11 @@
     },
     {
       "version": "3.64",
+      "path": "previous/v3.64/",
+      "label": "WhatsApp: choose your personal or the WYZ Business number when you instruct someone"
+    },
+    {
+      "version": "3.65",
       "path": "",
       "label": "Current"
     }
