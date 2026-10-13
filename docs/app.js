@@ -130,8 +130,8 @@ $("micBtn").onclick=()=>{if(!G.connected()){showWelcome();return}openMic()};
 $("srcBtn").onclick=()=>{show("t-conn");renderSources();const c=$("srcCard");c.classList.remove("collapsed");try{collapsed.delete(c.dataset.col);saveCol();applyCol()}catch(e){}c.scrollIntoView({behavior:"smooth",block:"start"})};
 /* ---------- more connections: a second Google account, AI through your own chat account, apps, list import ---------- */
 const CHAT={chatgpt:{name:"ChatGPT",url:"https://chatgpt.com/?q={prompt}",home:"https://chatgpt.com/"},claude:{name:"Claude",url:"https://claude.ai/new?q={prompt}",home:"https://claude.ai/"}};
-const chatAI=()=>CHAT[state.chatAI]?state.chatAI:"";
-function useChat(id){state.chatAI=id;state.skipAi=0;persist();window.open(CHAT[id].home,"_blank","noopener");renderSetup();try{setAIButton()}catch(e){}}
+const chatAI=()=>CHAT[state.chatAI]?"claude":"";
+function useChat(id){id="claude";state.chatAI=id;state.skipAi=0;persist();window.open(CHAT[id].home,"_blank","noopener");renderSetup();try{setAIButton()}catch(e){}}
 function askInChat(text){const c=CHAT[chatAI()];if(!c)return "";return openOutside({url:c.url,name:c.name},text)}
 async function addAccount(type){
   if(type==="ms"&&!G.msConfigured()){toast("Microsoft accounts aren't switched on yet. Ask the person who invited you.");return}
@@ -508,7 +508,7 @@ function removeAiKey(p){p==="chatgpt"?Connectors.ai.clearOpenAI():Connectors.ai.
 /* every AI the person can pick, and what picking it does */
 function aiOptions(){
   const A=Connectors.ai,out=[];
-  [["claude","Claude","https://claude.ai/new?q={prompt}"],["chatgpt","ChatGPT","https://chatgpt.com/?q={prompt}"]].forEach(([id,name,url])=>{const ready=A.avail(id);out.push({id,name,kind:"builtin",ready,url,label:name+(ready?" (answers here)":" (opens in a new tab)")})});
+  [["claude","Claude","https://claude.ai/new?q={prompt}"]].forEach(([id,name,url])=>{const ready=A.avail(id);out.push({id,name,kind:"builtin",ready,url,label:name+(ready?" (answers here)":" (opens in a new tab)")})});
   A.links().forEach(l=>out.push({id:"link:"+l.id,name:l.name,kind:"link",ready:false,url:l.url,label:l.name+" (opens in a new tab)"}));
   return out;
 }
@@ -1225,7 +1225,7 @@ function openFree(url,name){
   $("thrPaste").focus();
 }
 $("thrFreeBtn").onclick=showFree;
-$("thrFreeGPT").onclick=()=>openFree("https://chatgpt.com/?q={prompt}","ChatGPT");
+$("thrFreeGPT").hidden=true;$("thrFreeGPT").style.display="none";
 $("thrFreeClaude").onclick=()=>openFree("https://claude.ai/new?q={prompt}","Claude");
 $("thrPasteUse").onclick=()=>{
   const v=$("thrPaste").value.trim();if(!v){$("thrPaste").focus();return}
@@ -2017,7 +2017,7 @@ function renderResearch(keepHead){
       if(sample){const ans=el("div","out");ans.hidden=true;const here=el("button","btn small solid","Answer here");here.type="button";
         here.onclick=async()=>{here.disabled=true;ans.hidden=false;ans.textContent="Thinking...";try{const x=await sample(f.prompt+"\n\nAnswer plainly and briefly. No em dashes.",{cache:false,onText:u=>{ans.textContent=u.text}});ans.textContent=String(x.text||"").trim()}catch(e){ans.textContent="Couldn't answer just now ("+clip((e&&e.message)||"unknown reason",80)+")."}here.disabled=false};
         a.append(here);r.append(ans)}
-      const ask=el("a","btn small"+(sample?" ghost":" solid"),(c.src==="claude"?"Continue in Claude":"Continue in ChatGPT")+" ↗");ask.href=c.src==="claude"?"https://claude.ai/new?q="+q:"https://chatgpt.com/?q="+q;ask.target="_blank";ask.rel="noopener";a.append(ask);
+      const ask=el("a","btn small"+(sample?" ghost":" solid"),"Continue in Claude ↗");ask.href="https://claude.ai/new?q="+q;ask.target="_blank";ask.rel="noopener";a.append(ask);
       const cp=el("button","btn small ghost","Copy question");cp.type="button";cp.onclick=()=>navigator.clipboard.writeText(f.prompt).then(()=>cp.textContent="Copied").catch(()=>cp.textContent="Select the text to copy");a.append(cp);
     }
     a.append(askDrop(f&&f.prompt?f.prompt:"I was researching: "+c.title+". "+((c.asks||[]).join(" ")).slice(0,600)+" Help me pick this up again and tell me the next step."));
@@ -2106,9 +2106,9 @@ $("taskIn").addEventListener("keydown",e=>{if(e.key==="Enter")$("taskAdd").click
 function waLink(text){return "https://wa.me/?text="+encodeURIComponent(String(text||"").slice(0,1800))}
 function askDrop(prompt,waText){
   const q=encodeURIComponent(String(prompt||"").slice(0,1500));
-  const d=el("details","askdd");const sm=el("summary","","Ask \u25BE");sm.title="Ask Claude or ChatGPT, or share on WhatsApp";sm.setAttribute("aria-label","Ask Claude or ChatGPT about this");d.append(sm);
+  const d=el("details","askdd");const sm=el("summary","","Ask \u25BE");sm.title="Ask Claude, or share on WhatsApp";sm.setAttribute("aria-label","Ask Claude about this");d.append(sm);
   const m=el("div","askmenu");
-  [["Ask Claude","https://claude.ai/new?q="+q],["Ask ChatGPT","https://chatgpt.com/?q="+q]].concat(waText?[["Share on WhatsApp",waLink(waText)]]:[]).forEach(([t,u])=>{const a=el("a","",t);a.href=u;a.target="_blank";a.rel="noopener";a.onclick=()=>{d.open=false};m.append(a)});
+  [["Ask Claude","https://claude.ai/new?q="+q]].concat(waText?[["Share on WhatsApp",waLink(waText)]]:[]).forEach(([t,u])=>{const a=el("a","",t);a.href=u;a.target="_blank";a.rel="noopener";a.onclick=()=>{d.open=false};m.append(a)});
   d.append(m);return d;
 }
 document.addEventListener("click",e=>{document.querySelectorAll("details.askdd[open]").forEach(d=>{if(e.target.isConnected&&!d.contains(e.target))d.open=false})});
