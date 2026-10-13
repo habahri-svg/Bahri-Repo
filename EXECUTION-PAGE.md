@@ -276,3 +276,9 @@ In the Instruct window, typing a name in the Name box shows matching Google Cont
 
 ## Dashboard buttons (3.66)
 Two buttons sit in the top button row: "WYZ Dashboard" opens the live Lovable dashboard and "Dashboard in Lovable" opens its editor. Both open in a new tab. To point them elsewhere, change the two links in docs/index.html (ids dashLive and dashBuild).
+
+## WhatsApp Business: delivery status and connection check (3.67)
+- Every message you send now shows its state in the chat: sent, delivered, read, or not delivered with Meta's reason. A late "sent" never replaces "delivered".
+- Messages you send from the WhatsApp Business phone app (Coexistence) appear in the chat marked "sent from the phone app". In Meta, Configuration, Webhooks, subscribe to `messages` and `smb_message_echoes`.
+- The owner gets a **Check connection** button on the 💬 WhatsApp Business card. It asks Meta which number the token belongs to (read only, nothing is sent) and shows when Meta last reached the page.
+- Sending still needs two presses (Send, then Confirm). Nothing goes out on its own.

@@ -160,7 +160,7 @@
       var ol = el("ol", "status"); ol.style.margin = "0"; ol.style.paddingLeft = "18px";
       ["In Meta for Developers, create an app of type Business and add WhatsApp.", "In WhatsApp, API Setup, copy the Phone number ID. Create a permanent token for a System user in Business settings.",
         "In Vercel add WHATSAPP_TOKEN, WHATSAPP_PHONE_ID, WHATSAPP_VERIFY_TOKEN (any secret word) and WHATSAPP_APP_SECRET (Meta app, Settings, Basic). Storage (Upstash Redis) must be on. Redeploy.",
-        "In WhatsApp, Configuration, set the webhook address to " + hook + " with the same verify word, and subscribe to messages."].forEach(function (t) { ol.append(el("li", "", t)); });
+        "In WhatsApp, Configuration, set the webhook address to " + hook + " with the same verify word, and subscribe to messages. To see what you send from the WhatsApp Business phone app too (Coexistence), also subscribe to smb_message_echoes."].forEach(function (t) { ol.append(el("li", "", t)); });
       pad.append(ol);
       var a = el("div", "acts");
       a.append(link("1. Meta apps", "https://developers.facebook.com/apps", "solid"), link("2. System users", "https://business.facebook.com/settings/system-users"), link("3. Vercel settings", VENV), link("🗄️ Upstash Redis", "https://vercel.com/marketplace/upstash"));
@@ -170,6 +170,20 @@
     }
     waData = j.chats || [];
     var rf = el("button", "btn small ghost", "Refresh"); rf.type = "button"; rf.onclick = function () { rf.disabled = true; loadWA(); }; head.append(rf);
+    var ck = el("button", "btn small ghost", "Check connection"); ck.type = "button"; var ckOut = el("p", "status", "");
+    ck.onclick = async function () {
+      ck.disabled = true; ckOut.className = "status"; ckOut.textContent = "Checking with Meta...";
+      try {
+        var r = await call("/api/whatsapp?check=1"); var c = r && r.check;
+        if (!c) throw new Error((r && r.error) || "no answer");
+        var hook = r.hookAt ? "Meta last reached this page " + fmtWhen(r.hookAt) + "." : "Meta has not reached this page yet, so check the webhook address and the subscribed fields.";
+        if (c.ok) ckOut.textContent = "Connected to " + (c.number || "your number") + (c.name ? " (" + c.name + ")" : "") + (c.quality ? ", quality " + c.quality : "") + ". " + hook;
+        else { ckOut.className = "status err"; ckOut.textContent = "Meta refused the token or number (" + c.error + "). " + hook; }
+      } catch (e) { ckOut.className = "status err"; ckOut.textContent = "Couldn't check it (" + clip((e && e.message) || "unknown reason", 100) + ")."; }
+      ck.disabled = false;
+    };
+    if (j.owner) head.append(ck);
+    if (j.owner) pad.append(ckOut);
     if (!waData.length) { pad.append(el("p", "status", "No WhatsApp messages yet. New ones show here as they arrive.")); return; }
     waData.slice(0, 8).forEach(function (c) {
       var r = el("div", "item"); var unans = c.last && c.last.dir === "in";
@@ -180,12 +194,20 @@
       r.append(m); pad.append(r);
     });
   }
+  function waState(m) {
+    if (m.by === "phone app") return " · sent from the phone app";
+    var x = m.st && m.st.s;
+    if (x === "failed") return " · not delivered" + (m.st.err ? " (" + clip(m.st.err, 160) + ")" : "");
+    if (x === "read") return " · read";
+    if (x === "delivered") return " · delivered";
+    return " · sent, waiting for delivery";
+  }
   function openWA(c) {
     var host = infoOpen("💬 " + (c.name || "+" + c.wa));
     var list = el("div"); list.style.cssText = "display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow:auto";
     c.msgs.forEach(function (m) {
       var b = el("div", "", m.text); b.style.cssText = "padding:8px 10px;border-radius:10px;max-width:85%;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;" + (m.dir === "out" ? "align-self:flex-end;background:var(--sky);" : "align-self:flex-start;border:1px solid var(--line);");
-      var t = el("div", "status", fmtWhen(m.at)); t.style.fontSize = "11px"; b.append(t); list.append(b);
+      var t = el("div", "status", fmtWhen(m.at) + (m.dir === "out" ? waState(m) : "")); t.style.fontSize = "11px"; if (m.dir === "out" && m.st && m.st.s === "failed") t.className = "status err"; b.append(t); list.append(b);
     });
     host.append(list); setTimeout(function () { list.scrollTop = list.scrollHeight; }, 0);
     var st = el("p", "status", "");
