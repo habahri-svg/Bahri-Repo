@@ -3014,16 +3014,29 @@ $("newMailBtn2").onclick=()=>{if(!G.connected()){showWelcome();return}openCompos
 
 /* ---------- people suggestions: Google Contacts, people you have emailed, and your recent mail ---------- */
 let contacts=[],contactsAt=0,contactsErr="";
-function loadContactsCache(){try{const c=JSON.parse(localStorage.getItem(LS+"-contacts")||"null");if(c&&Array.isArray(c.people)){contacts=c.people;contactsAt=c.at||0}}catch(e){}}
+function loadContactsCache(){try{const c=JSON.parse(localStorage.getItem(LS+"-contacts")||"null");if(c&&Array.isArray(c.people)){contacts=c.people;contactsAt=c.v===2?(c.at||0):0}}catch(e){}}
 async function loadContacts(force){
   if(!G.connected())return;
   if(!force&&contacts.length&&Date.now()-contactsAt<6*3600e3)return;
   try{
     const r=await mcp.callTool("Google Contacts","list_contacts",{});
     contacts=(r.payload&&r.payload.people)||[];contactsAt=Date.now();contactsErr="";
-    try{localStorage.setItem(LS+"-contacts",JSON.stringify({at:contactsAt,people:contacts.slice(0,3000)}))}catch(e){}
+    try{localStorage.setItem(LS+"-contacts",JSON.stringify({v:2,at:contactsAt,people:contacts.slice(0,3000)}))}catch(e){}
   }catch(e){contactsErr=e&&e.code==="api_disabled"?"people_api":e&&e.code==="consent_required"?"consent":(clip((e&&e.message)||"unknown reason",90)||"error")}
 }
+/* people from Google Contacts that have a phone number, matched by name (used by the Instruct window) */
+function phoneBook(q){
+  q=String(q||"").trim().toLowerCase();if(!q)return [];
+  const seen=new Set(),out=[];
+  contacts.forEach(c=>{
+    const ph=(c.phones||[])[0];if(!ph||!c.name)return;
+    const nm=c.name.toLowerCase();if(!(nm.startsWith(q)||nm.includes(" "+q)||nm.includes(q)))return;
+    const key=nm+"|"+ph.replace(/\D/g,"");if(seen.has(key))return;seen.add(key);
+    out.push({name:c.name,email:c.email||"",phone:ph,s:nm.startsWith(q)?0:1});
+  });
+  return out.sort((a,b)=>a.s-b.s||a.name.localeCompare(b.name)).slice(0,8);
+}
+function contactsStatus(){return {n:contacts.filter(c=>(c.phones||[]).length).length,err:contactsErr,total:contacts.length}}
 function contactPool(){
   const m=new Map();
   const add=(name,addr,w)=>{addr=String(addr||"").trim().toLowerCase();if(!/^\S+@\S+\.\S+$/.test(addr)||addr===myAddr())return;const e=m.get(addr)||{email:addr,name:"",w:0};if(name&&!e.name)e.name=String(name).trim();e.w+=w;m.set(addr,e)};

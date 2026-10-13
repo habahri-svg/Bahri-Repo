@@ -28,12 +28,47 @@
     var nameI = el("input", "in"); nameI.placeholder = "Name"; nameI.setAttribute("aria-label", "Name"); nameI.autocomplete = "off";
     var emailI = el("input", "in"); emailI.placeholder = "Email: name@company.com"; emailI.setAttribute("aria-label", "Their email"); emailI.autocomplete = "off";
     try { if (typeof attachAutocomplete === "function") attachAutocomplete(emailI, false); } catch (e) {}
+    var fullNumber = function (raw) { var d = String(raw || "").replace(/[^\d+]/g, ""), plus = d.charAt(0) === "+"; d = digits(d); if (!plus && /^0\d/.test(d)) return { num: "971" + d.replace(/^0+/, ""), assumed: true }; return { num: d, assumed: false }; };
+    var acBox = el("div", "acbox"); acBox.hidden = true; var acHits = [], acSel = -1, acNote = el("span", "status");
+    var acClose = function () { acBox.hidden = true; acSel = -1; };
+    var acPick = function (h) {
+      var f = fullNumber(h.phone); nameI.value = h.name; if (h.email) emailI.value = h.email; phoneI.value = f.num; acClose();
+      acNote.className = "status ok"; acNote.textContent = f.assumed ? "Filled " + f.num + " from Google Contacts. It had no country code, so I assumed UAE (971). Check it." : "Filled " + f.num + " from Google Contacts.";
+      [].forEach.call(chips.children, function (c) { c.setAttribute("aria-pressed", "false"); }); note.focus();
+    };
+    var acDraw = function () {
+      var q = nameI.value.trim(); acNote.textContent = ""; acNote.className = "status";
+      var book = (typeof phoneBook === "function" ? phoneBook(q) : []), seen = {};
+      book.forEach(function (b) { seen[b.name.toLowerCase()] = 1; });
+      var low = q.toLowerCase();
+      team().forEach(function (p) { var ph = p.phone || phones()[String(p.email || "").toLowerCase()]; if (ph && low && String(p.name || "").toLowerCase().indexOf(low) > -1 && !seen[String(p.name).toLowerCase()]) book.push({ name: p.name, email: p.email || "", phone: ph }); });
+      acHits = book.slice(0, 8); acBox.replaceChildren(); acSel = acHits.length ? 0 : -1;
+      acHits.forEach(function (h, i) { var b = el("button", i === 0 ? "on" : ""); b.type = "button"; b.append(el("b", "", h.name), el("span", "", fullNumber(h.phone).num + (h.email ? " · " + h.email : ""))); b.onmousedown = function (e) { e.preventDefault(); acPick(h); }; acBox.append(b); });
+      acBox.hidden = !acHits.length;
+      if (q.length > 1 && !acHits.length && typeof contactsStatus === "function") {
+        var cs = contactsStatus();
+        if (cs.err === "consent") { acNote.className = "status err"; acNote.textContent = "Google Contacts is not allowed yet. Use Settings > Connect Google and allow contacts."; }
+        else if (cs.err === "people_api") { acNote.className = "status err"; acNote.textContent = "The People API is off in your Google Cloud project, so contact numbers cannot load."; }
+        else if (!cs.n) { acNote.textContent = "No phone numbers loaded from Google Contacts yet. Reconnect Google once if this stays empty."; }
+      }
+    };
+    var nameWrap = el("div", "acwrap"); nameWrap.append(nameI, acBox);
+    nameI.addEventListener("input", acDraw);
+    nameI.addEventListener("focus", function () { try { if (typeof loadContacts === "function") loadContacts(); } catch (e) {} acDraw(); });
+    nameI.addEventListener("blur", function () { setTimeout(acClose, 120); });
+    nameI.addEventListener("keydown", function (e) {
+      if (acBox.hidden) return;
+      if (e.key === "ArrowDown") { e.preventDefault(); acSel = Math.min(acSel + 1, acHits.length - 1); [].forEach.call(acBox.children, function (b, i) { b.classList.toggle("on", i === acSel); }); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); acSel = Math.max(acSel - 1, 0); [].forEach.call(acBox.children, function (b, i) { b.classList.toggle("on", i === acSel); }); }
+      else if ((e.key === "Enter" || e.key === "Tab") && acSel >= 0) { e.preventDefault(); acPick(acHits[acSel]); }
+      else if (e.key === "Escape") { e.stopPropagation(); acClose(); }
+    });
     var phoneI = el("input", "in"); phoneI.placeholder = "WhatsApp number with country code, e.g. 971501234567"; phoneI.setAttribute("aria-label", "Their WhatsApp number"); phoneI.inputMode = "tel"; phoneI.autocomplete = "off";
     var remember = el("label", "status"); remember.style.cssText = "display:flex;gap:8px;align-items:center"; var rcb = document.createElement("input"); rcb.type = "checkbox"; rcb.checked = true; remember.append(rcb, document.createTextNode(" Remember this number for them"));
     var setPerson = function (p) { nameI.value = p.name || ""; emailI.value = p.email || ""; phoneI.value = p.phone || phones()[String(p.email || "").toLowerCase()] || ""; [].forEach.call(chips.children, function (c) { c.setAttribute("aria-pressed", String(c.dataset.email === (p.email || "") && !!p.email)); }); };
     team().forEach(function (p) { var c = el("button", "chip", p.name); c.type = "button"; c.dataset.email = p.email; c.setAttribute("aria-pressed", "false"); c.onclick = function () { setPerson(p); }; chips.append(c); });
     if (chips.children.length) h.append(chips);
-    var row = el("div", "ask"); row.append(nameI, emailI); h.append(row, phoneI, remember);
+    var row = el("div", "ask"); row.append(nameWrap, emailI); h.append(row, phoneI, acNote, remember); try { if (typeof loadContacts === "function") loadContacts(); } catch (e) {}
 
     h.append(el("span", "status", "What you want them to do"));
     var qs = el("div", "chips"); QUICK.forEach(function (q) { var c = el("button", "chip", q); c.type = "button"; c.onclick = function () { note.value = (note.value.trim() ? note.value.trim() + " " : "") + q; note.focus(); }; qs.append(c); }); h.append(qs);

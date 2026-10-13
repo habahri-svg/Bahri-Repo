@@ -270,3 +270,6 @@ In the "Instruct someone" window (the Instruct menu on any line, then On WhatsAp
 - **My personal WhatsApp:** opens WhatsApp on your own number with the message ready. You press Send there. Nothing needs setting up.
 - **WYZ Business WhatsApp:** sends from the Business number through `/api/whatsapp` after you press Confirm. It needs the Business setup from the section above (WHATSAPP_TOKEN, WHATSAPP_PHONE_ID, WHATSAPP_VERIFY_TOKEN, Upstash Redis) and your Google account in OWNER_EMAILS or WHATSAPP_VIEWERS. If something is missing the window says exactly what, and nothing is sent. Free only within 24 hours of their last message, otherwise WhatsApp needs an approved template.
 Nothing is ever sent without a Confirm press. Sent instructions are listed under "Instructions I've sent" with "WhatsApp" or "WhatsApp Business". Code: `docs/instruct.js`.
+
+## Name to WhatsApp number from Google Contacts (3.65)
+In the Instruct window, typing a name in the Name box shows matching Google Contacts that have a phone number. Picking one fills the name, email (if any) and the WhatsApp number. Numbers starting with a single 0 get 971 (UAE) added and the page says so. The contacts list now also reads phone numbers (People API `phoneNumbers`), and the saved contacts list refreshes once so the numbers load.
