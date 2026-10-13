@@ -9,7 +9,7 @@
 (function () {
   "use strict";
   if (typeof state === "undefined" || typeof persist !== "function") return;
-  var KEYS = ["tasks", "snooze", "pin", "links", "rules", "team", "tpls", "sig", "repeat", "meetNotes", "coRules", "quick", "driveFolder", "styleNote", "order", "setOrder", "connOrder", "off", "docHidden"];
+  var KEYS = ["tasks", "snooze", "pin", "links", "rules", "team", "tpls", "sig", "repeat", "meetNotes", "coRules", "quick", "driveFolder", "styleNote", "order", "setOrder", "connOrder", "off", "docHidden", "instructions", "teamPhones"];
   var MAX = 100;
   var U = { undo: [], redo: [], last: null, replay: false, ready: false };
   var groups = [];

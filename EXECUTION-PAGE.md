@@ -253,3 +253,10 @@ It is only the look (`docs/layout.js`, CSS keyed on `html[data-layout]`). Nothin
 **🎨 Colours** (header) and **Settings > Personalise** now offer eleven looks. Six are new pastels: Rose, Lavender, Mint, Peach, Sky and Butter. Backgrounds and cards are soft pastel, while the header and buttons use a deeper shade of the same colour so white text stays readable. Each has a dark version too.
 
 **My looks:** change any colour (header, buttons, accent, background, cards, text), type a name and tap **Save current colours as a new look**. There is no limit. Tap a saved look to use it, **Update** to replace it with the colours you have now, **Delete** to remove it (asks first). Saved on this device only (`wyz-mylooks`), so a phone and a laptop keep their own lists. Built-in looks are never changed.
+
+## Instruct menu on every line (3.61)
+Every line on Today (tasks, emails, meetings, documents, files) has a small **Instruct ▾** menu (`docs/instruct.js`):
+- **Ask the AI here:** Tell the AI what to do (type your own instruction), Summarise it, What should I do first?, Make a plan, Write the instruction for my team, Check it for risks. It opens the same AI window as "Ask AI about it". On an email line the AI reads the whole conversation.
+- **Tell someone to do it:** by email or on WhatsApp. Pick a team member (or type a name, email, WhatsApp number), write what you want done, add a deadline, mark it urgent. **Write the email** opens the usual writing window and **Open WhatsApp** opens WhatsApp with the message ready. Nothing is ever sent for you. Numbers are remembered per person.
+- **Ask in the apps:** a new Claude or ChatGPT chat about the line.
+Each instruction you start is kept under **Instructions I've sent** (Done, Remind them, Remove). On a task line it shows who you asked, and it disappears when the task is done.

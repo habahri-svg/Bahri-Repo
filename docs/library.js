@@ -412,7 +412,7 @@
     var timer = 0; q.oninput = function () { clearTimeout(timer); timer = setTimeout(function () { F.q = q.value.trim().toLowerCase(); F.shown = 120; draw(); }, 200); };
     var top = el("div", "ask"); top.append(q, kinds);
     var mid = el("div", "ask"); mid.append(origin, groupBy);
-    var openAll = el("div", "acts"); openAll.append(B("Expand all", function () { [].forEach.call(list.querySelectorAll("details"), function (d) { d.open = true; }); }, "ghost"), B("Collapse all", function () { [].forEach.call(list.querySelectorAll("details"), function (d) { d.open = false; }); }, "ghost"));
+    var openAll = el("div", "acts"); openAll.append(B("Expand all", function () { [].forEach.call(list.querySelectorAll("details:not(.askdd)"), function (d) { d.open = true; }); }, "ghost"), B("Collapse all", function () { [].forEach.call(list.querySelectorAll("details:not(.askdd)"), function (d) { d.open = false; }); }, "ghost"));
     pad.append(top, bar, tbar, mid, rng, custom, tools, openAll, list);
 
     /* actions */

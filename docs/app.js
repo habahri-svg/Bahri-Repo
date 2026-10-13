@@ -1821,7 +1821,7 @@ async function draftAll(auto){
 }
 $("draftAll").onclick=()=>draftAll(false);
 function itemRow(i){
-  const t=tById(i.id)||{};const row=el("div","item");if(isOff(i))row.style.opacity=".55";
+  const t=tById(i.id)||{};const row=el("div","item");row.dataset.thr=i.id;if(isOff(i))row.style.opacity=".55";
   row.append(el("span","dot "+i.st));const m=el("div","main");
   {const ttl=el("span","t");if(selOn){const cb=el("input","selbox");cb.type="checkbox";cb.checked=sel.has(i.id);cb.setAttribute("aria-label","Select this email");cb.onchange=()=>{cb.checked?sel.add(i.id):sel.delete(i.id);bulkBar()};ttl.append(cb)}ttl.append(document.createTextNode(i.title||t.subject||""));m.append(ttl)}
   if(i.summary)m.append(el("span","s",i.summary));
@@ -2089,9 +2089,9 @@ function renderTasks(){
   rows.sort((a,b)=>dueOf(a)<dueOf(b)?-1:dueOf(a)>dueOf(b)?1:priOf(b)-priOf(a));
   if(!rows.length){const e=el("p","sub","No open tasks. Add one above, or tap Add to tasks on any email or research follow-up.");e.style.padding="0 14px 14px";host.append(e)}
   rows.forEach(({k,t})=>{
-    const r=el("div","item");r.append(el("span","dot "+(k==="td"?"work":"follow")));const m=el("div","main");
+    const r=el("div","item");r.dataset.tkey=k+":"+(t.id||t.t);r.append(el("span","dot "+(k==="td"?"work":"follow")));const m=el("div","main");
     m.append(el("span","t",t.t));
-    const dd=dueOf({t});const over=dd!=="9999-99-99"&&dd<todayKey();const meta=[k==="td"?"Todoist":"My list",priOf({k,t})>1?"High priority":"",t.src||"",dd!=="9999-99-99"?(over?"Overdue, was due ":"Due ")+niceDay(dd):""].filter(Boolean).join(" · ");const mm=el("span","m",meta);if(over)mm.style.color="var(--d-reply)";m.append(mm);
+    const dd=dueOf({t});const over=dd!=="9999-99-99"&&dd<todayKey();const ins=(state.instructions||[]).filter(x=>!x.done&&x.key===k+":"+(t.id||t.t)).pop();const meta=[k==="td"?"Todoist":"My list",priOf({k,t})>1?"High priority":"",t.src||"",ins?"Instructed "+ins.name+" "+niceDay(new Date(ins.at).toISOString().slice(0,10)):"",dd!=="9999-99-99"?(over?"Overdue, was due ":"Due ")+niceDay(dd):""].filter(Boolean).join(" · ");const mm=el("span","m",meta);if(over)mm.style.color="var(--d-reply)";m.append(mm);
     const a=el("div","acts");const b=el("button","btn small ghost","Mark done");b.type="button";
     b.onclick=k==="td"?()=>completeTodoist(t,b):()=>{t.done=1;persist();renderTasks()};
     a.append(askDrop("Help me get this task done: "+t.t+(t.due?" (due "+t.due+")":"")+". Break it into concrete steps and tell me what to do first.","Task: "+t.t+(t.due?" (due "+t.due+")":"")),b);m.append(a);r.append(m);host.append(r);
