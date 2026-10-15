@@ -147,6 +147,11 @@
     },
     {
       "version": "3.68",
+      "path": "previous/v3.68/",
+      "label": "Every AI button now opens Claude, ChatGPT launch links removed"
+    },
+    {
+      "version": "3.69",
       "path": "",
       "label": "Current"
     }
