@@ -285,3 +285,6 @@ Two buttons sit in the top button row: "WYZ Dashboard" opens the live Lovable da
 
 ## Spam and Delete on every email line (3.69)
 Every email line (Today board, search results, person and thread lists) has **🚫 Spam** and **🗑 Delete**. Each needs a second press (Confirm) and then shows Undo. Delete moves the conversation to the Gmail bin and Spam moves it to the Gmail spam folder, so nothing is erased for good. Open threads also have "Send to spam" in the More menu. Uses the existing Gmail modify permission.
+
+## Colourful Today board (3.70)
+Each group on the Today board (Reply today red, Follow up orange, Work on blue, Waiting on others yellow, FYI green, Pinned gold) now has a coloured edge, a tinted header with a coloured count badge, coloured line titles and dots, and buttons in its own colour. The counters at the top (Reply today, Follow up, Meetings, Tasks) are coloured tiles. It is styling only, nothing else changed, and it follows light and dark mode. The colours come from the `--d-reply`, `--d-follow`, `--d-work`, `--d-wait`, `--d-fyi` values in docs/index.html. The block is marked "3.70" near the end of the style section.
