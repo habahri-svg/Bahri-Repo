@@ -3128,7 +3128,9 @@ function top3Candidates(){
   const out=[],today=todayKey(),in2=(()=>{const d=new Date();d.setDate(d.getDate()+2);return ymd(d)})();
   allItems().filter(i=>!isOff(i)&&["reply","follow","work","wait"].includes(i.st)).forEach(i=>{
     const t=tById(i.id)||{};
-    out.push({kind:"mail",ref:i.id,title:i.title||t.subject||"(No subject)",why:(i.st==="wait"?"Waiting on them. ":"")+(i.summary||""),score:(i.g||1)*10+(i.st==="reply"?6:i.st==="follow"?4:i.st==="work"?2:-4)+(i.vip?8:0)+backFirst(i)*5,item:i});
+    const age=t.daysSinceLast!=null?t.daysSinceLast:null,maxAge=topAge();
+    if(maxAge&&age!=null&&age>maxAge&&!isPinned(i.id))return;
+    out.push({kind:"mail",ref:i.id,title:i.title||t.subject||"(No subject)",why:(i.st==="wait"?"Waiting on them. ":"")+(i.summary||""),score:(i.g||1)*10+(i.st==="reply"?6:i.st==="follow"?4:i.st==="work"?2:-4)+(i.vip?8:0)+backFirst(i)*5-(age>3?Math.min(age-3,14)*2:0),item:i,age:age});
   });
   (state.tasks||[]).filter(t=>!t.done).forEach(t=>{
     let sc=(t.p||1)*4,why="";
@@ -3144,6 +3146,8 @@ function top3Candidates(){
   return out.filter(x=>!hide.includes(x.kind+":"+x.ref)&&!(zz[x.kind+":"+x.ref]>nowT)).sort((a,b)=>b.score-a.score);
 }
 let top3Busy=false,top3Fail=0;
+const topAge=()=>{const n=state.topAge;return n===0?0:[3,7,14,30].includes(+n)?+n:14};
+const ageText=d=>d==null?"":d<=0?"today":d===1?"yesterday":d+" days ago";
 const topN=()=>{const n=+state.topN;return Number.isInteger(n)&&n>=1&&n<=10?n:10};
 async function pickTop3(force){
   if(top3Busy||!sample||(!force&&Date.now()-top3Fail<600000))return;
@@ -3182,6 +3186,7 @@ function renderTop3(){
   rows.forEach((x,i)=>{
     const r=el("div","t3row");r.append(el("span","t3n",String(i+1)));const m=el("div","main");
     m.append(el("span","t",(x.kind==="mail"&&isPinned(x.ref)?"📌 ":"")+x.title));if(x.why)m.append(el("span","s",x.why));
+    if(x.kind==="mail"&&x.age!=null){const ag=el("span","s","📅 Last message "+ageText(x.age));ag.style.fontWeight="600";ag.style.color=x.age>=7?"var(--d-reply)":x.age>=3?"var(--d-follow)":"var(--soft)";m.append(ag)}
     const a=el("div","acts");
     a.append(onbBtn("✓ Done",()=>topDone(x),"small solid"),topSnoozeDrop(x),topDelBtn(x));
     if(x.kind==="mail"){a.append(onbBtn("Read thread",()=>openThread(x.ref,{item:x.item}),"small"),onbBtn("Draft a reply",()=>openThread(x.ref,{item:x.item,draft:true}),"small solid"))}
@@ -3226,6 +3231,7 @@ function topDelBtn(x){
   return b;
 }
 $("top3Tog").onclick=()=>{state.top3Col=state.top3Col?0:1;persist();renderTop3()};
+$("top3Age").value=String(topAge());$("top3Age").onchange=()=>{state.topAge=+$("top3Age").value;state.top3Col=0;persist();renderTop3()};
 $("top3N").onchange=()=>{state.topN=+$("top3N").value;state.top3Col=0;persist();renderTop3()};
 $("top3Refresh").onclick=()=>{if(!sample){$("top3Refresh").textContent="Connect an AI first";return}$("top3Refresh").textContent="Choosing...";pickTop3(true).then(()=>{$("top3Refresh").textContent="Pick again"})};
 
