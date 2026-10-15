@@ -294,3 +294,6 @@ Each email in the Top list shows "Last message 6 days ago" (grey under 3 days, o
 
 ## Files: Expand all and Collapse all (3.72)
 The Files list has **Expand all** and **Collapse all** next to "Select all" and "Clear selection". They open or close every date, chat or type group at once. A group you open or close by hand stays that way while you search or select files. The buttons appear when there is more than one group.
+
+## Library collapses, and Collapse all reaches everything (3.73)
+The Library card (ChatGPT and Claude chats, All my files) now has the same arrow as the other sections, so it can be folded away. The page-level **Collapse all** and **Expand all** buttons in the top toolbar now also close or open every group inside it: the date groups in All my files, "How to get the files" and the memory profile. The Files list keeps its own Expand all and Collapse all next to Select all.
