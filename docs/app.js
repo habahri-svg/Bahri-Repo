@@ -2581,10 +2581,10 @@ function makeCollapsible(card,key,hdr){card.dataset.col=key;hdr.classList.add("h
   const t=()=>{collapsed.has(key)?collapsed.delete(key):collapsed.add(key);saveCol();applyCol()};
   hdr.onclick=t;hdr.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();t()}}}
 ["setupCard","c-links","c-cal","c-tasks","c-inbox","c-res","c-docs"].forEach(id=>{const c=$(id);const h=c&&c.querySelector(".pad > h2");if(h)makeCollapsible(c,id,h)});
-$("colAll").onclick=()=>{state.top3Col=1;persist();try{renderTop3()}catch(e){}document.querySelectorAll("section:not([hidden]) [data-col]").forEach(c=>collapsed.add(c.dataset.col));if(!$("p-today").hidden)ORDER.forEach(k=>collapsed.add("g-"+k));saveCol();applyCol()};
+$("colAll").onclick=()=>{try{document.dispatchEvent(new CustomEvent("wyz-col",{detail:{open:false}}))}catch(e){}state.top3Col=1;persist();try{renderTop3()}catch(e){}document.querySelectorAll("section:not([hidden]) [data-col]").forEach(c=>collapsed.add(c.dataset.col));if(!$("p-today").hidden)ORDER.forEach(k=>collapsed.add("g-"+k));saveCol();applyCol()};
 $("connCol").onclick=()=>{$("p-conn").querySelectorAll("[data-col]").forEach(c=>collapsed.add(c.dataset.col));saveCol();applyCol()};
 $("connExp").onclick=()=>{$("p-conn").querySelectorAll("[data-col]").forEach(c=>collapsed.delete(c.dataset.col));saveCol();applyCol()};
-$("expAll").onclick=()=>{state.top3Col=0;persist();try{renderTop3()}catch(e){}collapsed.clear();saveCol();applyCol()};
+$("expAll").onclick=()=>{try{document.dispatchEvent(new CustomEvent("wyz-col",{detail:{open:true}}))}catch(e){}state.top3Col=0;persist();try{renderTop3()}catch(e){}collapsed.clear();saveCol();applyCol()};
 /* every other card on every tab gets the same tap-the-heading collapse */
 document.querySelectorAll(".card").forEach(c=>{
   if(c.dataset.col||c.classList.contains("group")||c.closest(".onb,.thr,#report"))return;

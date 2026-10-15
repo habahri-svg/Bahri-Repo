@@ -552,7 +552,8 @@
     var scrollY = window.scrollY;
     var keepQ = $("libQ") ? $("libQ").value : "", keepAsk = $("libAskQ") ? $("libAskQ").value : "";
     card.replaceChildren(); var pad = el("div", "pad"); card.append(pad);
-    pad.append(el("h2", "", "Library: all your ChatGPT and Claude chats"));
+    var libH = el("h2", "", "Library: all your ChatGPT and Claude chats"); pad.append(libH);
+    try { if (typeof makeCollapsible === "function") { makeCollapsible(card, "c-lib", libH); if (typeof applyCol === "function") applyCol(); } } catch (e) {}
     var s; try { s = await loadStats(); } catch (e) { pad.append(el("p", "status err", "This browser would not open its storage, so the library can't be used here (" + short(e && e.message, 80) + ").")); return; }
     pad.append(el("p", "sub", s.total ? plural(s.total, "conversation") + " (" + (s.by.chatgpt || 0).toLocaleString("en-GB") + " ChatGPT, " + (s.by.claude || 0).toLocaleString("en-GB") + " Claude), " + plural(s.msgs, "message") + ", from " + fmtDate(s.oldest) + " to " + fmtDate(s.newest) + ". Kept on this device only." : "Import your full ChatGPT and Claude history once. Then search it, read any chat, and ask questions of it whenever you need. It is kept on this device only and nothing is sent anywhere until you ask a question."));
     var status = el("p", "status"); status.setAttribute("role", "status");
@@ -670,6 +671,9 @@
     };
     window.searchAll = wrapped; go.onclick = wrapped;
   }
+
+  /* the page-level Expand all and Collapse all also open or close every group inside the Library */
+  document.addEventListener("wyz-col", function (e) { var c = $("libCard"); if (!c) return; var open = !!(e.detail && e.detail.open); [].forEach.call(c.querySelectorAll("details"), function (d) { d.open = open; }); });
 
   var tries = 0;
   function tidy() { var a = $("aiDocs"); if (a) a.hidden = true; }
