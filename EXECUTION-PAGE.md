@@ -282,3 +282,6 @@ Two buttons sit in the top button row: "WYZ Dashboard" opens the live Lovable da
 - Messages you send from the WhatsApp Business phone app (Coexistence) appear in the chat marked "sent from the phone app". In Meta, Configuration, Webhooks, subscribe to `messages` and `smb_message_echoes`.
 - The owner gets a **Check connection** button on the 💬 WhatsApp Business card. It asks Meta which number the token belongs to (read only, nothing is sent) and shows when Meta last reached the page.
 - Sending still needs two presses (Send, then Confirm). Nothing goes out on its own.
+
+## Spam and Delete on every email line (3.69)
+Every email line (Today board, search results, person and thread lists) has **🚫 Spam** and **🗑 Delete**. Each needs a second press (Confirm) and then shows Undo. Delete moves the conversation to the Gmail bin and Spam moves it to the Gmail spam folder, so nothing is erased for good. Open threads also have "Send to spam" in the More menu. Uses the existing Gmail modify permission.

@@ -362,6 +362,11 @@
         await gfetch(GM + "/threads/" + encodeURIComponent(a.threadId) + "/trash", { method: "POST" }, SC.gmailModify);
         return {};
       },
+      untrash_thread: async function (a) {
+        await profile();
+        await gfetch(GM + "/threads/" + encodeURIComponent(a.threadId) + "/untrash", { method: "POST" }, SC.gmailModify);
+        return {};
+      },
       list_labels: async function () {
         await profile();
         var j = await gfetch(GM + "/labels", null, SC.gmailRead);

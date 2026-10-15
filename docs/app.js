@@ -1502,6 +1502,10 @@ function thrMore(){
   });
   add("About this person",async()=>{const l=lastMsg(),mine=addrOf(l.sender).toLowerCase()===myAddr();const who=mine?(l.toRecipients||[])[0]:l.sender;openPerson(who)});
   add("Hand off to a team member...",async()=>openHandoff());
+  add("Send to spam",async()=>{
+    if(!confirm("Send this whole conversation to spam in Gmail?"))return;
+    await mcp.callTool("Gmail","modify_thread",{threadId:thr.id,add:["SPAM"],remove:["INBOX"]});setDone(thr.id);logDone(thr.item,"spam");persist();renderBoard();thrNote("Sent to spam.");setTimeout(thrClose,600);
+  });
   add("Move to bin",async()=>{
     if(!confirm("Move this whole conversation to the bin in Gmail?"))return;
     await mcp.callTool("Gmail","trash_thread",{threadId:thr.id});setDone(thr.id);logDone(thr.item,"binned");persist();renderBoard();thrNote("Moved to the bin.");setTimeout(thrClose,600);
@@ -1836,7 +1840,7 @@ function itemRow(i){
   const pn=el("button","btn small ghost",isPinned(i.id)?"Unpin":"📌 Pin");pn.type="button";pn.title="Keep it at the top until it's done";pn.onclick=()=>togglePin(i.id);
   const sz=snoozeDrop(i.id);const ib=el("div","instr");const ins=el("button","btn small ghost","Instruct AI");ins.type="button";ins.onclick=()=>toggleInstruct(i,ib);
   const at=el("button","btn small ghost","Add to tasks");at.type="button";at.onclick=()=>{addTask(i.title||t.subject,"Email from "+nameOf(t.from));at.textContent="Added";at.disabled=true};
-  a.append(askDrop("I need help with an email. From: "+(t.lastFromMe?"me, to "+((t.lastTo||[]).join(", ")):(t.from||""))+". Subject: "+(t.subject||"")+". What it's about: "+(i.summary||t.snippet||"")+" What's the best way to handle it? If a reply or chaser is needed, draft one I can edit.",(i.title||t.subject||"")+(i.summary?"\n"+i.summary:"")),dn,sz,pn,at,ins);m.append(a,ib);row.append(m);return row;
+  a.append(askDrop("I need help with an email. From: "+(t.lastFromMe?"me, to "+((t.lastTo||[]).join(", ")):(t.from||""))+". Subject: "+(t.subject||"")+". What it's about: "+(i.summary||t.snippet||"")+" What's the best way to handle it? If a reply or chaser is needed, draft one I can edit.",(i.title||t.subject||"")+(i.summary?"\n"+i.summary:"")),dn,sz,pn,at,ins);mailTidy(t,i,a).forEach(x=>a.append(x));m.append(a,ib);row.append(m);return row;
 }
 async function draftFor(i,host,btn){
   btn.disabled=true;btn.textContent="Reading the thread";
@@ -3081,10 +3085,37 @@ const infoClose=()=>{$("info").hidden=true;try{speechSynthesis.cancel()}catch(e)
 $("infoClose").onclick=infoClose;
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("info").hidden)infoClose()});
 function infoSection(host,title){const d=el("div","infosec");d.append(el("h3","",title));const body=el("div");d.append(body);host.append(d);return body}
+/* Delete (move to the bin) and Spam on any email line (3.69). Each needs a second press, then offers Undo. Nothing is erased for good. */
+function mailTidy(t,item,host){
+  const mk=(label,confirmLabel,kind,text,run,undoRun)=>{
+    const b=el("button","btn small ghost",label);b.type="button";let armed=0,tm=0;
+    b.onclick=async()=>{
+      if(!armed){armed=1;b.textContent=confirmLabel;clearTimeout(tm);tm=setTimeout(()=>{armed=0;b.textContent=label},4000);return}
+      clearTimeout(tm);b.disabled=true;b.textContent="Working...";
+      try{
+        await run();setDone(t.id);logDone(item||{id:t.id,title:t.subject},kind);persist();renderBoard();
+        const line=el("p","status",text+" ");const u=el("button","btn small","Undo");u.type="button";
+        u.onclick=async()=>{u.disabled=true;try{await undoRun();undoDone(t.id);line.textContent="Put back in your inbox."}catch(e){u.disabled=false;line.className="status err";line.textContent="Couldn't undo it ("+clip((e&&e.message)||"unknown reason",90)+")."}};
+        line.append(u);host.replaceChildren(line);
+      }catch(e){
+        armed=0;b.disabled=false;b.textContent=label;
+        const m=el("span","status err"," ");
+        if(e&&e.code==="consent_required"){m.textContent=" Needs one more Google permission. ";const l=el("button","btn small solid","Allow");l.type="button";l.onclick=()=>connectGoogle(true);m.append(l)}
+        else m.textContent=" Couldn't do that ("+clip((e&&e.message)||"unknown reason",90)+").";
+        host.append(m);
+      }
+    };
+    return b;
+  };
+  return [
+    mk("🚫 Spam","Confirm: send to spam","spam","Sent to spam.",()=>mcp.callTool("Gmail","modify_thread",{threadId:t.id,add:["SPAM"],remove:["INBOX"]}),()=>mcp.callTool("Gmail","modify_thread",{threadId:t.id,add:["INBOX"],remove:["SPAM"]})),
+    mk("🗑 Delete","Confirm: move to bin","binned","Moved to the bin.",()=>mcp.callTool("Gmail","trash_thread",{threadId:t.id}),()=>mcp.callTool("Gmail","untrash_thread",{threadId:t.id}))
+  ];
+}
 function threadRow(t,after){
   const row=el("div","item");row.append(el("span","dot none"));const m=el("div","main");
   m.append(el("span","t",t.subject||"(No subject)"),el("span","m",(t.lastFromMe?"You wrote to "+(nameOf((t.lastTo||[])[0])||"them"):nameOf(t.from))+(t.date?" · "+fmtWhen(t.date):"")));
-  const a=el("div","acts");a.append(onbBtn("Read thread",()=>{if(after)after();openThread(t.id)},"small"));m.append(a);row.append(m);return row;
+  const a=el("div","acts");a.append(onbBtn("Read thread",()=>{if(after)after();openThread(t.id)},"small"));mailTidy(t,null,a).forEach(x=>a.append(x));m.append(a);row.append(m);return row;
 }
 const myEmailLc=()=>String(email||"").toLowerCase();
 async function gmailFind(q,n){
