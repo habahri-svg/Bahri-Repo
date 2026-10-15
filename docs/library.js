@@ -371,7 +371,7 @@
     lov.projects.forEach(function (p) { var k = "lovable:" + p.id; if (!inTrash[k]) all.push({ key: k, src: "lovable", kind: "App project", title: p.name, at: Date.parse(p.edited) || 0, chat: p.workspace, url: p.editor, preview: p.preview, text: p.description || "", published: p.published }); });
     var head = el("p", "sub"), note = el("p", "status");
     pad.append(head, note);
-    var F = { src: "", kind: "", type: "", origin: "", group: "date", range: "all", from: "", to: "", q: "", shown: 120, trash: false }, SEL = {};
+    var F = { src: "", kind: "", type: "", origin: "", group: "date", range: "all", from: "", to: "", q: "", shown: 120, trash: false }, SEL = {}; var shut = {}, groupKeys = [];
     var count = function (rows) { var n = { chatgpt: 0, claude: 0, lovable: 0 }; rows.forEach(function (f) { n[f.src] = (n[f.src] || 0) + 1; }); return n; };
     var bar = el("div", "chips"), tbar = el("div", "chips"), origin = el("select", "in"), groupBy = el("select", "in"), kinds = el("select", "in"), rng = el("div", "chips"), q = el("input", "in"), custom = el("div", "ask"), tools = el("div", "acts"), list = el("div"); list.id = "libFiles";
     q.placeholder = "Search file names and text"; q.setAttribute("aria-label", "Search my files");
@@ -449,6 +449,9 @@
       var all_ = B("Select all " + shown.length + (shown.length === 1 ? " file" : " files") + " shown", function () { shown.forEach(function (f) { SEL[f.key] = 1; }); draw(); }, "ghost"); all_.disabled = !shown.length;
       var none = B("Clear selection", function () { SEL = {}; draw(); }, "ghost"); none.disabled = !sel.length;
       tools.append(all_, none);
+      if (groupKeys.length > 1) {
+        tools.append(B("Expand all", function () { shut = {}; draw(); }, "ghost"), B("Collapse all", function () { shut = {}; groupKeys.forEach(function (k) { shut[k] = 1; }); draw(); }, "ghost"));
+      }
       if (!F.trash) {
         var del = B("Delete selected (" + sel.length + ")", function () { toTrash(sel); }, "solid"); del.disabled = !sel.length; tools.append(del);
         var fwd = B("Forward selected (" + sel.length + ")", function () { if (window.WYZ_FORWARD) window.WYZ_FORWARD(sel.map(function (f) { return { title: f.title, link: f.url, text: f.text }; })); }, "ghost"); fwd.disabled = !sel.length; tools.append(fwd);
@@ -498,9 +501,11 @@
       };
       if (F.group === "file") { shownRows = shownRows.slice().sort(function (a, b) { return String(a.title).toLowerCase() < String(b.title).toLowerCase() ? -1 : 1; }); groups.push({ k: "", rows: shownRows }); }
       else shownRows.forEach(function (f) { var k = gkey(f); if (gi[k] === undefined) { gi[k] = groups.length; groups.push({ k: k, rows: [] }); } groups[gi[k]].rows.push(f); });
+      groupKeys = groups.map(function (g) { return g.k; }).filter(Boolean);
+      drawTools();
       groups.forEach(function (g) {
         var host = list;
-        if (g.k) { var gd = document.createElement("details"); gd.open = true; var sm = document.createElement("summary"); sm.style.cssText = "margin:10px 0 2px;font-size:14px;font-weight:700;color:var(--navy);cursor:pointer"; sm.textContent = g.k + " (" + g.rows.length + ")"; gd.append(sm); list.append(gd); host = gd; }
+        if (g.k) { var gd = document.createElement("details"); gd.open = !shut[g.k]; (function (k, d) { d.addEventListener("toggle", function () { if (d.open) delete shut[k]; else shut[k] = 1; }); })(g.k, gd); var sm = document.createElement("summary"); sm.style.cssText = "margin:10px 0 2px;font-size:14px;font-weight:700;color:var(--navy);cursor:pointer"; sm.textContent = g.k + " (" + g.rows.length + ")"; gd.append(sm); list.append(gd); host = gd; }
         g.rows.forEach(function (f) { host.append(rowFor(f)); });
       });
       if (rows.length > F.shown) list.append(B("Show more (" + (rows.length - F.shown) + " left)", function () { F.shown += 200; draw(); }, "ghost"));

@@ -291,3 +291,6 @@ Each group on the Today board (Reply today red, Follow up orange, Work on blue, 
 
 ## Top list: age shown, old emails hidden (3.71)
 Each email in the Top list shows "Last message 6 days ago" (grey under 3 days, orange from 3, red from 7). Older emails also rank lower. A new choice "Emails newer than" (3, 7, 14, 30 days or Any age, default 14) hides emails whose last message is older than that. Pinned emails always stay. Tasks and meetings are not affected. The choice is saved with your other settings.
+
+## Files: Expand all and Collapse all (3.72)
+The Files list has **Expand all** and **Collapse all** next to "Select all" and "Clear selection". They open or close every date, chat or type group at once. A group you open or close by hand stays that way while you search or select files. The buttons appear when there is more than one group.
