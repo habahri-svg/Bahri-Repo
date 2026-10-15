@@ -348,6 +348,25 @@ body,.card,.btn,.chip,.tab,.hero{transition-property:background-color,border-col
 #thrGroups{margin:2px 0 4px}#thrGroups:empty{display:none}
 /* Life view: a quieter header, only the personal tools */
 html[data-mode="life"] #heroStats,html[data-mode="life"] #heroSum,html[data-mode="life"] .herorefresh > :not(#newMailBtn):not(#lookBtn):not(#micBtn):not(#refresh):not(#fresh){display:none!important}
+/* 3.70: a colourful, elegant Today board. Each group has its own colour, taken from the status dots. */
+.card.group{--gc:var(--d-off);border-left:6px solid var(--gc);overflow:hidden;background:linear-gradient(180deg,color-mix(in srgb,var(--gc) 8%,var(--panel)),var(--panel) 220px)}
+.card.group[data-col="g-reply"]{--gc:var(--d-reply)}.card.group[data-col="g-follow"]{--gc:var(--d-follow)}.card.group[data-col="g-work"]{--gc:var(--d-work)}
+.card.group[data-col="g-wait"]{--gc:var(--d-wait)}.card.group[data-col="g-fyi"]{--gc:var(--d-fyi)}.card.group[data-col="g-pin"]{--gc:var(--gold)}
+.group h3{background:linear-gradient(90deg,color-mix(in srgb,var(--gc) 26%,var(--panel)),color-mix(in srgb,var(--gc) 7%,var(--panel)));color:color-mix(in srgb,var(--gc) 62%,var(--fg));font-size:15px;font-weight:800;letter-spacing:.2px;border-bottom:1px solid color-mix(in srgb,var(--gc) 40%,var(--line))}
+.group h3 .dot{width:15px;height:15px;box-shadow:0 0 0 4px color-mix(in srgb,var(--gc) 28%,transparent)}
+.group h3 .n{background:var(--gc);color:#fff;border-radius:999px;padding:2px 12px;font-size:12px;font-weight:700}
+.card.group[data-col="g-wait"] h3 .n,.card.group[data-col="g-pin"] h3 .n{color:#3a2f00}
+.group .item{border-top:1px solid color-mix(in srgb,var(--gc) 18%,var(--line));transition:background-color .15s ease}
+.group .item:hover{background:color-mix(in srgb,var(--gc) 10%,transparent)}
+.group .item .dot{width:13px;height:13px;box-shadow:0 0 0 3px color-mix(in srgb,var(--gc) 22%,transparent)}
+.group .item .t{font-weight:700;color:color-mix(in srgb,var(--gc) 35%,var(--fg))}
+.group .btn{border-color:color-mix(in srgb,var(--gc) 55%,var(--line))}
+.group .btn:hover{background:color-mix(in srgb,var(--gc) 14%,var(--panel))}
+.group .btn.solid{background:var(--gc);border-color:var(--gc);color:#fff}
+.card.group[data-col="g-wait"] .btn.solid{color:#3a2f00}
+.hstat{--hc:#9cc9e8;border:1px solid color-mix(in srgb,var(--hc) 75%,transparent)!important;background:linear-gradient(135deg,color-mix(in srgb,var(--hc) 38%,transparent),color-mix(in srgb,var(--hc) 14%,transparent))!important;box-shadow:0 2px 8px color-mix(in srgb,var(--hc) 25%,transparent)}
+.hstat:hover,.hstat:focus-visible{filter:brightness(1.12)}
+.hstat:nth-child(1){--hc:#e5574f}.hstat:nth-child(2){--hc:#f0a03a}.hstat:nth-child(3){--hc:#5aaee6}.hstat:nth-child(4){--hc:#5cc15a}
 </style>
 </head>
 <body>
@@ -441,6 +460,7 @@ html[data-mode="life"] #heroStats,html[data-mode="life"] #heroSum,html[data-mode
     <div class="card note" id="top3" hidden><div class="pad">
       <div class="headrow"><button class="t3tog" type="button" id="top3Tog" aria-expanded="true" aria-controls="top3List"><h2 id="top3Title">Top 10 for today</h2><span aria-hidden="true">▾</span></button>
         <label class="status" for="top3N">Show</label><select class="in" id="top3N" style="flex:0 0 auto;width:auto;padding:4px 8px"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option></select>
+        <label class="status" for="top3Age">Emails newer than</label><select class="in" id="top3Age" style="flex:0 0 auto;width:auto;padding:4px 8px"><option value="3">3 days</option><option value="7">7 days</option><option value="14">14 days</option><option value="30">30 days</option><option value="0">Any age</option></select>
         <button class="btn small ghost" type="button" id="top3Refresh" title="Ask the AI to choose again">Pick again</button></div>
       <p class="status" id="top3Sum" hidden></p>
       <div id="top3List"></div>

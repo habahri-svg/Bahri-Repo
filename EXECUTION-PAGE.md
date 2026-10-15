@@ -285,3 +285,12 @@ Two buttons sit in the top button row: "WYZ Dashboard" opens the live Lovable da
 
 ## Spam and Delete on every email line (3.69)
 Every email line (Today board, search results, person and thread lists) has **🚫 Spam** and **🗑 Delete**. Each needs a second press (Confirm) and then shows Undo. Delete moves the conversation to the Gmail bin and Spam moves it to the Gmail spam folder, so nothing is erased for good. Open threads also have "Send to spam" in the More menu. Uses the existing Gmail modify permission.
+
+## Colourful Today board (3.70)
+Each group on the Today board (Reply today red, Follow up orange, Work on blue, Waiting on others yellow, FYI green, Pinned gold) now has a coloured edge, a tinted header with a coloured count badge, coloured line titles and dots, and buttons in its own colour. The counters at the top (Reply today, Follow up, Meetings, Tasks) are coloured tiles. It is styling only, nothing else changed, and it follows light and dark mode. The colours come from the `--d-reply`, `--d-follow`, `--d-work`, `--d-wait`, `--d-fyi` values in docs/index.html. The block is marked "3.70" near the end of the style section.
+
+## Top list: age shown, old emails hidden (3.71)
+Each email in the Top list shows "Last message 6 days ago" (grey under 3 days, orange from 3, red from 7). Older emails also rank lower. A new choice "Emails newer than" (3, 7, 14, 30 days or Any age, default 14) hides emails whose last message is older than that. Pinned emails always stay. Tasks and meetings are not affected. The choice is saved with your other settings.
+
+## Files: Expand all and Collapse all (3.72)
+The Files list has **Expand all** and **Collapse all** next to "Select all" and "Clear selection". They open or close every date, chat or type group at once. A group you open or close by hand stays that way while you search or select files. The buttons appear when there is more than one group.
