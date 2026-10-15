@@ -152,6 +152,11 @@
     },
     {
       "version": "3.69",
+      "path": "previous/v3.69/",
+      "label": "Spam and Delete buttons on every email line, with confirm and Undo"
+    },
+    {
+      "version": "3.72",
       "path": "",
       "label": "Current"
     }
