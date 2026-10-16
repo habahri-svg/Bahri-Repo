@@ -37,15 +37,21 @@
       b.onclick = open;
       var after = $("inviteBtn");
       if (after && after.parentNode) after.parentNode.insertBefore(b, after.nextSibling);
-      /* Download the app code from the main screen (owner only, same as the Fix box). */
-      if (!$("codeBtn")) {
-        var d = el("button", "btn", "\u2B07\uFE0F Download code"); d.type = "button"; d.id = "codeBtn"; d.title = "Download the full app code as a .zip";
-        d.onclick = function () { downloadZip(d); };
-        if (b.parentNode) b.parentNode.insertBefore(d, b.nextSibling);
-      }
     }).catch(function () { /* not the owner, or the function isn't there: no button */ });
   }
   setTimeout(look, 1500);
+
+  /* Download code button on the main screen. Shown to every signed-in person. The server only sends the full
+     code to the owner, anyone else gets just the page files this site already serves. */
+  function codeButton() {
+    if ($("codeBtn")) return;
+    var after = $("inviteBtn");
+    if (!after || !after.parentNode) { setTimeout(codeButton, 1500); return; }
+    var d = el("button", "btn", "\u2B07\uFE0F Download code"); d.type = "button"; d.id = "codeBtn"; d.title = "Download the app code as a .zip";
+    d.onclick = function () { downloadZip(d); };
+    after.parentNode.insertBefore(d, after.nextSibling);
+  }
+  setTimeout(codeButton, 800);
 
   /* ---------- the panel ---------- */
   function open() { host = infoOpen("🛠 Fix the app"); draw(); }
