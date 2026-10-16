@@ -192,6 +192,11 @@
     },
     {
       "version": "3.79",
+      "path": "previous/v3.79/",
+      "label": "Undo: Make it gold."
+    },
+    {
+      "version": "3.80",
       "path": "",
       "label": "Current"
     }
