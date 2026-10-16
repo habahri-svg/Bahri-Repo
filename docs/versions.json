@@ -187,6 +187,11 @@
     },
     {
       "version": "3.78",
+      "path": "previous/v3.78/",
+      "label": "Make it gold."
+    },
+    {
+      "version": "3.79",
       "path": "",
       "label": "Current"
     }

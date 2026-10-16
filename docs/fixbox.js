@@ -153,7 +153,6 @@
     var after = $("inviteBtn");
     if (!after || !after.parentNode) { setTimeout(codeButton, 1500); return; }
     var d = el("button", "btn", "\u2B07\uFE0F Download code"); d.type = "button"; d.id = "codeBtn"; d.title = "Download the app code as a .zip";
-    d.style.background = "var(--gold)"; d.style.borderColor = "var(--gold)"; d.style.color = "var(--onnavy)";
     d.onclick = function () { downloadZip(d); };
     after.parentNode.insertBefore(d, after.nextSibling);
   }
