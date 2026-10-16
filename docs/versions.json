@@ -172,6 +172,11 @@
     },
     {
       "version": "3.75",
+      "path": "previous/v3.75/",
+      "label": "Download code button on the main screen"
+    },
+    {
+      "version": "3.76",
       "path": "",
       "label": "Current"
     }
