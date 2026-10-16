@@ -182,6 +182,11 @@
     },
     {
       "version": "3.77",
+      "path": "previous/v3.77/",
+      "label": "Click to edit: click any part of the page and tell Claude what to change"
+    },
+    {
+      "version": "3.78",
       "path": "",
       "label": "Current"
     }
