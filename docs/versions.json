@@ -162,6 +162,11 @@
     },
     {
       "version": "3.73",
+      "path": "previous/v3.73/",
+      "label": "Library collapses like the other sections, and page Collapse all and Expand all reach the file groups"
+    },
+    {
+      "version": "3.74",
       "path": "",
       "label": "Current"
     }
