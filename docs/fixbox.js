@@ -1,13 +1,115 @@
 /* The owner's "Fix the app" box. Only the owner sees the button (the server decides, see api/fix.js).
    Type what should change. Claude reads the code, prepares the change and shows it. Nothing goes live until
-   you press Go live. Every publish gets a new version number, and the last one can be undone. */
+   you press Go live. Every publish gets a new version number, and the last one can be undone.
+   3.77: Click to edit. Press "Click to edit" (or "Pick something on the page" inside the box), point at any part
+   of the page, click it, then say what to change. The element you clicked is sent to Claude with your words, so it
+   changes that exact part. Everything else works as before: preview, Go live, versions and Undo. */
 (function () {
   "use strict";
   if (typeof $ !== "function" || typeof el !== "function" || typeof infoOpen !== "function") return;
   var KEY = "wyz-fixbox-last";
-  var S = null;        /* the fix in progress: {title, base, messages, edits, log, summary, done, busy, error, live, preview} */
+  var S = null;        /* the fix in progress: {title, target, base, messages, edits, log, summary, done, busy, error, live, preview} */
   var info = null;     /* what the server said about setup */
   var host = null;
+
+  /* ---------- click to edit (3.77) ---------- */
+  var SEL = null;      /* the part of the page the owner clicked: {label, selector, text, html, node} */
+  var DRAFT = "";      /* what was typed before they went off to pick something */
+  var picking = false;
+  var INSIDE = "[data-fixpick]";
+  var KINDS = { BUTTON: "button", A: "link", INPUT: "field", SELECT: "menu", TEXTAREA: "field", LABEL: "label", H1: "heading", H2: "heading", H3: "heading", H4: "heading", SUMMARY: "heading", IMG: "image", LI: "list item", P: "text", SECTION: "section", NAV: "menu bar", HEADER: "header", FOOTER: "footer" };
+  var clean = function (t) { return String(t || "").replace(/\s+/g, " ").trim(); };
+
+  /* The part of the page under the pointer. A tap on the words inside a button picks the whole button. */
+  function aim(t) {
+    if (!t || t.nodeType !== 1) return null;
+    var c = (t.closest && t.closest("button,a,input,select,textarea,label,h1,h2,h3,h4,summary,img")) || t;
+    if (!c || c === document.documentElement || c === document.body) return null;
+    if (c.closest && c.closest(INSIDE)) return null;
+    return c;
+  }
+  /* A short name a person understands, such as “Invite someone” button or “Inbox, sorted by what it needs from you” section. */
+  function nice(n) {
+    var kind = KINDS[n.tagName] || (n.classList && n.classList.contains("card") ? "card" : n.tagName.toLowerCase());
+    var txt = clean(n.getAttribute("aria-label") || n.getAttribute("title") || n.placeholder || n.innerText || n.textContent);
+    var big = n.children && n.children.length > 3 || txt.length > 120;
+    if (big) { var h = n.querySelector && n.querySelector("h1,h2,h3"); if (h) { txt = clean(h.textContent); if (kind === "card" || kind === "div") kind = "section"; } }
+    if (txt.length > 44) txt = txt.slice(0, 44) + "…";
+    return txt ? "“" + txt + "” " + kind : (n.id ? "#" + n.id + " " + kind : kind);
+  }
+  /* A selector Claude can search for: the nearest id, then tag, first class and position on the way down. */
+  function selectorOf(n) {
+    var parts = [], cur = n, depth = 0;
+    while (cur && cur.nodeType === 1 && cur !== document.body && depth < 5) {
+      if (cur.id) { parts.unshift("#" + cur.id); break; }
+      var s = cur.tagName.toLowerCase();
+      var c = typeof cur.className === "string" ? clean(cur.className).split(" ")[0] : "";
+      if (c) s += "." + c;
+      var sib = cur.parentNode ? Array.prototype.filter.call(cur.parentNode.children, function (x) { return x.tagName === cur.tagName; }) : [];
+      if (sib.length > 1) s += ":nth-of-type(" + (sib.indexOf(cur) + 1) + ")";
+      parts.unshift(s); cur = cur.parentNode; depth++;
+    }
+    return parts.join(" > ");
+  }
+  function describe(n) {
+    var html = n.outerHTML || ""; if (html.length > 700) html = html.slice(0, 700) + "…";
+    return { label: nice(n), selector: selectorOf(n), text: clean(n.innerText || n.textContent).slice(0, 200), html: html, node: n };
+  }
+  function elementContext(s) {
+    return "THE OWNER CLICKED AN ELEMENT ON THE PAGE. Apply the change to this element only, unless they say otherwise.\n" +
+      "Element: " + s.label + "\nCSS selector: " + s.selector + "\nVisible text: " + (s.text || "(none)") + "\nHTML as it is on the page now:\n" + s.html + "\n\n" +
+      "To find it in the code, search docs/index.html, docs/app.js and the other docs/*.js files for its id, its class names or its visible text. Parts built by the scripts are made with el(...) calls, so look for the same words there.";
+  }
+
+  /* Hover to see an outline and a name, click to choose, Escape or Cancel to leave. The page underneath does nothing
+     while this is on, so a click never presses a real button. */
+  function startPick() {
+    if (picking) return; picking = true;
+    var ta = host && host.querySelector && host.querySelector("textarea"); if (ta && ta.value) DRAFT = ta.value;
+    var panel = $("info"); if (panel) panel.hidden = true;
+    var box = document.createElement("div"); box.setAttribute("data-fixpick", "1");
+    box.style.cssText = "position:fixed;z-index:2147483000;pointer-events:none;display:none;box-sizing:border-box;border:2px solid #6a5cff;background:rgba(106,92,255,.14);border-radius:6px";
+    var tag = document.createElement("div");
+    tag.style.cssText = "position:absolute;left:-2px;background:#6a5cff;color:#fff;font:600 12px/1 system-ui,sans-serif;padding:6px 9px;border-radius:6px;white-space:nowrap;max-width:70vw;overflow:hidden;text-overflow:ellipsis";
+    box.append(tag);
+    var bar = document.createElement("div"); bar.setAttribute("data-fixpick", "1"); bar.setAttribute("role", "status");
+    bar.style.cssText = "position:fixed;z-index:2147483001;left:50%;top:12px;transform:translateX(-50%);max-width:calc(100vw - 24px);box-sizing:border-box;display:flex;align-items:center;gap:12px;background:#0e2238;color:#fff;border:2px solid #6a5cff;border-radius:999px;padding:8px 8px 8px 20px;font:600 14px/1.3 system-ui,sans-serif;box-shadow:0 12px 40px rgba(0,0,0,.35)";
+    var msg = document.createElement("span"); msg.textContent = (window.matchMedia && matchMedia("(hover:none)").matches ? "Tap" : "Click") + " the part you want to change";
+    var cancel = document.createElement("button"); cancel.type = "button"; cancel.textContent = "Cancel";
+    cancel.style.cssText = "min-height:40px;padding:0 18px;border:0;border-radius:999px;background:#fff;color:#0e2238;font:700 13px system-ui,sans-serif;cursor:pointer";
+    bar.append(msg, cancel); document.body.append(box, bar);
+
+    var hot = null;
+    var place = function (n) {
+      var r = n.getBoundingClientRect(); box.style.display = "block";
+      box.style.left = r.left + "px"; box.style.top = r.top + "px"; box.style.width = r.width + "px"; box.style.height = r.height + "px";
+      tag.textContent = nice(n);
+      if (r.top < 34) { tag.style.top = "100%"; tag.style.bottom = "auto"; tag.style.marginTop = "4px"; } else { tag.style.bottom = "100%"; tag.style.top = "auto"; tag.style.marginTop = "0"; tag.style.marginBottom = "4px"; }
+    };
+    var onBar = function (e) { return e.target && e.target.closest && e.target.closest(INSIDE); };
+    var move = function (e) { if (onBar(e)) return; var n = aim(e.target); if (!n) { box.style.display = "none"; hot = null; return; } hot = n; place(n); };
+    var block = function (e) { if (onBar(e)) return; e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation(); };
+    var click = function (e) { if (onBar(e)) return; block(e); var n = aim(e.target); if (n) finish(describe(n)); };
+    var key = function (e) { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); finish(null); } };
+    var scroll = function () { if (hot && hot.isConnected) place(hot); };
+    var on = [["pointermove", move], ["mouseover", move], ["pointerdown", block], ["mousedown", block], ["mouseup", block], ["click", click], ["keydown", key]];
+    on.forEach(function (x) { document.addEventListener(x[0], x[1], true); });
+    window.addEventListener("scroll", scroll, true);
+    cancel.onclick = function () { finish(null); };
+    function finish(s) {
+      on.forEach(function (x) { document.removeEventListener(x[0], x[1], true); });
+      window.removeEventListener("scroll", scroll, true);
+      box.remove(); bar.remove(); picking = false;
+      if (s) SEL = s;
+      open();
+    }
+  }
+  /* "Pick the part around it": one step up from what was clicked. */
+  function climb() {
+    var n = SEL && SEL.node, up = n && n.isConnected && n.parentElement;
+    if (!up || up === document.body || up === document.documentElement || (up.closest && up.closest(INSIDE))) { toast("That is the biggest part."); return; }
+    SEL = describe(up); draw();
+  }
 
   var dubai = function (iso) {
     try { return new Date(iso).toLocaleString("en-GB", { timeZone: "Asia/Dubai", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) + " Dubai time"; } catch (e) { return iso; }
@@ -37,6 +139,9 @@
       b.onclick = open;
       var after = $("inviteBtn");
       if (after && after.parentNode) after.parentNode.insertBefore(b, after.nextSibling);
+      var pb = el("button", "btn", "🎯 Click to edit"); pb.type = "button"; pb.id = "pickBtn"; pb.title = "Click any part of the page, then tell Claude what to change";
+      pb.onclick = function () { host = null; startPick(); };
+      if (b.parentNode) b.parentNode.insertBefore(pb, b.nextSibling);
     }).catch(function () { /* not the owner, or the function isn't there: no button */ });
   }
   setTimeout(look, 1500);
@@ -144,10 +249,32 @@
     var go = btn("Start", "solid", function () {
       var t = ta.value.trim();
       if (t.length < 8) { st.className = "status err"; st.textContent = "Describe the change in a sentence first."; ta.focus(); return; }
-      S = { title: t.replace(/\s+/g, " ").slice(0, 70), base: "", messages: [{ role: "user", content: shot ? [shot, { type: "text", text: t }] : t }], edits: [], log: [], summary: "", done: false, busy: false, error: "", steps: 0 };
+      var said = SEL ? elementContext(SEL) + "\n\nWHAT THE OWNER WANTS: " + t : t;
+      S = { title: t.replace(/\s+/g, " ").slice(0, 70), target: SEL ? SEL.label : "", base: "", messages: [{ role: "user", content: shot ? [shot, { type: "text", text: said }] : said }], edits: [], log: [], summary: "", done: false, busy: false, error: "", steps: 0 };
+      SEL = null; DRAFT = "";
       run();
     });
-    var a = el("div", "acts"); a.append(go, pick, file); host.append(ta, a, st);
+    if (DRAFT) { ta.value = DRAFT; DRAFT = ""; }
+    var a = el("div", "acts"); a.append(go, pick, file);
+
+    /* click to edit */
+    var cb = el("div", "infosec"); cb.append(el("h3", "", "Click to edit"));
+    var ca = el("div", "acts");
+    if (SEL) {
+      cb.append(p("", "Editing: " + SEL.label));
+      cb.append(p("status", SEL.selector));
+      ca.append(btn("🎯 Pick something else", "solid", startPick), btn("↑ Pick the part around it", "ghost", climb), btn("Clear", "ghost", function () { SEL = null; draw(); }));
+      cb.append(ca);
+      var chips = el("div", "acts");
+      ["Make it gold", "Make it bigger", "Change the wording", "Hide it", "Move it to the top of the page"].forEach(function (x) {
+        chips.append(btn(x, "ghost", function () { ta.value = x + "."; ta.focus(); }));
+      });
+      cb.append(chips);
+    } else {
+      cb.append(p("status", "Point at the part of the page you want to change, click it, then say what to do with it."));
+      ca.append(btn("🎯 Pick something on the page", "solid", startPick)); cb.append(ca);
+    }
+    host.append(cb, ta, a, st);
     var last = lastLive();
     if (last) {
       var box = el("div", "infosec"); box.append(el("h3", "", "Last fix"));
@@ -190,6 +317,7 @@
 
   function drawRun() {
     host.append(p("", "“" + S.title + "”"));
+    if (S.target) host.append(p("status", "On: " + S.target));
     if (S.log.length) {
       var d = document.createElement("details"); d.open = !S.done;
       d.append(el("summary", "status", S.done ? "What Claude did (" + S.log.length + " steps)" : "Working..."));
