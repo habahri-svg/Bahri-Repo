@@ -37,6 +37,12 @@
       b.onclick = open;
       var after = $("inviteBtn");
       if (after && after.parentNode) after.parentNode.insertBefore(b, after.nextSibling);
+      /* Download the app code from the main screen (owner only, same as the Fix box). */
+      if (!$("codeBtn")) {
+        var d = el("button", "btn", "\u2B07\uFE0F Download code"); d.type = "button"; d.id = "codeBtn"; d.title = "Download the full app code as a .zip";
+        d.onclick = function () { downloadZip(d); };
+        if (b.parentNode) b.parentNode.insertBefore(d, b.nextSibling);
+      }
     }).catch(function () { /* not the owner, or the function isn't there: no button */ });
   }
   setTimeout(look, 1500);
