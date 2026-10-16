@@ -177,6 +177,11 @@
     },
     {
       "version": "3.76",
+      "path": "previous/v3.76/",
+      "label": "Download code button always visible on the main screen"
+    },
+    {
+      "version": "3.77",
       "path": "",
       "label": "Current"
     }
