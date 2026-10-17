@@ -202,6 +202,11 @@
     },
     {
       "version": "3.81",
+      "path": "previous/v3.81/",
+      "label": "No Claude credit? The page switches to the free chat by itself"
+    },
+    {
+      "version": "3.82",
       "path": "",
       "label": "Current"
     }
