@@ -207,6 +207,11 @@
     },
     {
       "version": "3.82",
+      "path": "previous/v3.82/",
+      "label": "AI usage meter: Claude and ChatGPT in percent, alerts at 25, 50 and 75"
+    },
+    {
+      "version": "3.83",
       "path": "",
       "label": "Current"
     }
