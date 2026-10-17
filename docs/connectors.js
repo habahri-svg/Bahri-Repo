@@ -831,10 +831,12 @@
     var sample = async function (input, opts) {
       var r = await call(input, opts);
       if (opts && opts.onText) opts.onText({ text: r.text, delta: r.text });
+      try { if (window.WYZ_USAGE) setTimeout(function () { window.WYZ_USAGE.refresh(false); }, 2500); } catch (e) {}   /* update the usage meter */
       return r;
     };
     sample.json = async function (input, opts) {
       var r = await call(String(input) + "\n\nReturn valid JSON only. No code fences and no commentary.", opts);
+      try { if (window.WYZ_USAGE) setTimeout(function () { window.WYZ_USAGE.refresh(false); }, 2500); } catch (e) {}
       return parseJson(r.text);
     };
     return sample;

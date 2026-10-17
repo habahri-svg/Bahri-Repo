@@ -47,6 +47,7 @@ async function redis(cmds) {
   return (await r.json()).map(function (x) { return x && x.result; });
 }
 const today = function () { return new Date().toISOString().slice(0, 10); };
+const month = function () { return new Date(Date.now() + 4 * 3600000).toISOString().slice(0, 7); };
 
 function makeLimiter(name) {
   return async function overLimit(email) {
@@ -78,6 +79,10 @@ async function record(email, provider, usage) {
     await redis([["SADD", "wyz:users", email], ["HINCRBY", u, "calls", 1], ["HINCRBY", u, "calls_" + provider, 1],
       ["HINCRBY", u, "tokens_in", Math.max(0, +(usage && usage.in) || 0)], ["HINCRBY", u, "tokens_out", Math.max(0, +(usage && usage.out) || 0)],
       ["HSET", u, "last", now], ["HSETNX", u, "first", now]]);
+    /* Monthly totals per AI (Dubai calendar month), used by the usage meter on the Today page. */
+    const m = "wyz:m:" + month();
+    await redis([["HINCRBY", m, provider + "_calls", 1], ["HINCRBY", m, provider + "_in", Math.max(0, +(usage && usage.in) || 0)],
+      ["HINCRBY", m, provider + "_out", Math.max(0, +(usage && usage.out) || 0)], ["EXPIRE", m, 100 * 86400]]);
   } catch (e) { /* ignore */ }
 }
 
@@ -127,4 +132,4 @@ function missingFor(keyName) {
   return m;
 }
 
-module.exports = { missingFor, list, safeParse, verify, allowed, makeLimiter, gate, store, redis, today, record, isBlocked };
+module.exports = { missingFor, list, safeParse, verify, allowed, makeLimiter, gate, store, redis, today, month, record, isBlocked };
