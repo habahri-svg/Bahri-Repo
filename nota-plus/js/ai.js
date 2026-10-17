@@ -55,6 +55,8 @@ export class BadReply extends Error {
 }
 
 export function friendlyError(err, t) {
+  const ver = typeof window !== 'undefined' && window.NOTA_VERSION ? ` [Nota+ ${window.NOTA_VERSION}]` : '';
+  if (err instanceof AiError && isModelError(err)) return `${t('errModel')} (${err.message})${ver}`;
   if (err instanceof AiError) {
     if (err.status === 401 || err.status === 403) return err.message && err.message !== 'No API key' ? `${t('errKey')} (${err.message})` : t('errKey');
     if (err.status === 429) return t('errRate');
@@ -62,7 +64,7 @@ export function friendlyError(err, t) {
   }
   if (err && err.name === 'BadReply') return t('errBadReply');
   if (err && (err.name === 'AbortError' || (err.name === 'TypeError' && /fetch|network|load failed|failed to/i.test(err.message || '')))) return t('errNet');
-  return (err && err.message) || t('errGeneric');
+  return ((err && err.message) || t('errGeneric')) + ver;
 }
 
 // ---------- model auto-detection (providers rename and retire models) ----------
@@ -73,6 +75,12 @@ const CHAT_PREF = [
   'openai/gpt-oss-120b', 'openai/gpt-oss-20b'
 ];
 const NOT_CHAT = /whisper|guard|tts|embed|playai|orpheus|safeguard|distil/i;
+// Tried when the provider's own model list is empty or unavailable.
+const CHAT_FALLBACK = [
+  'llama-3.1-8b-instant', 'openai/gpt-oss-20b', 'openai/gpt-oss-120b', 'meta-llama/llama-4-scout-17b-16e-instruct',
+  'meta-llama/llama-4-maverick-17b-128e-instruct', 'qwen/qwen3-32b', 'moonshotai/kimi-k2-instruct', 'gemma2-9b-it', 'llama3-70b-8192', 'llama3-8b-8192'
+];
+const STT_FALLBACK = ['whisper-large-v3-turbo', 'whisper-large-v3'];
 
 async function listModels(cfg) {
   const res = await call(cfg, '/models', {}, 15000);
@@ -116,8 +124,15 @@ async function withModel(cfg, field, run, preferred) {
     return await attempt(cfg[field]);
   } catch (e) {
     if (!isModelError(e)) throw e;
-    const ids = await listModels(cfg);
-    const list = field === 'sttModel' ? sttCandidates(ids) : chatCandidates(ids);
+    let ids = [];
+    try {
+      ids = await listModels(cfg);
+    } catch (le) {
+      if (le instanceof AiError && (le.status === 401 || le.status === 403)) throw le; // the key itself is the problem
+    }
+    const known = field === 'sttModel' ? sttCandidates(ids) : chatCandidates(ids);
+    const extra = (field === 'sttModel' ? STT_FALLBACK : CHAT_FALLBACK).filter((m) => !known.includes(m));
+    const list = [...known, ...extra];
     let last = e;
     for (const m of list) {
       if (tried.has(m)) continue;
@@ -129,7 +144,7 @@ async function withModel(cfg, field, run, preferred) {
       } catch (err) {
         if (!isModelError(err)) throw err;
         last = err;
-        if (tried.size >= 8) break;
+        if (tried.size >= 12) break;
       }
     }
     throw last;

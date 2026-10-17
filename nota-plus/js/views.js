@@ -493,6 +493,10 @@ export function settingsView() {
       <section class="card stack tight"><h3>${t('selfCheck')}</h3>
         <button class="btn small" data-action="run-checks">${t('runChecks')}</button>
         <div id="checks">${checksHtml()}</div></section>
+      <section class="card stack tight"><h3>${t('version')}</h3>
+        <p class="muted" id="app-version" dir="ltr">Nota+ ${window.NOTA_VERSION || ''}</p>
+        <div class="row gap wrap"><button class="btn small" data-action="check-update">${t('checkUpdate')}</button><button class="btn small ghost" data-action="force-refresh">${t('forceRefresh')}</button></div>
+        <p class="hint">${t('forceRefreshHint')}</p></section>
       <section class="card stack tight"><h3>${t('privacy')}</h3><p class="muted">${t('privacyBody')}</p></section>
     </div>
     ${nav('settings')}

@@ -11,6 +11,9 @@ import { noteToText, noteToSrt, printHtml } from './export.js';
 
 const app = $('#app');
 const paint = (html) => (app.innerHTML = html);
+// Keep in step with VERSION in sw.js. Shown in Settings so a stale copy of the app is easy to spot.
+const APP_VERSION = 'v7';
+window.NOTA_VERSION = APP_VERSION;
 const HIDE_INSTALL = 'nota-plus.hideInstall';
 const WELCOME_DONE = 'nota-plus.welcomeDone';
 let routing = Promise.resolve();
@@ -463,6 +466,7 @@ async function finishRecording() {
     S.rec = null;
     S.detected = [];
     clearDraft();
+    if (S.updatePending) setTimeout(() => location.reload(), 1500);
   } catch (e) {
     S.rec = null;
     S.detected = [];
@@ -965,6 +969,28 @@ const A = {
     submitAsk();
   },
 
+  // app updates
+  async 'check-update'() {
+    const reg = S.swReg || (await navigator.serviceWorker?.getRegistration());
+    if (!reg) return toast(t('latestVersion'));
+    toast(t('updating'));
+    try {
+      await reg.update();
+    } catch {}
+    setTimeout(() => {
+      if (!reg.installing && !reg.waiting) toast(t('latestVersion'));
+    }, 2500);
+  },
+  async 'force-refresh'() {
+    toast(t('updating'));
+    try {
+      (await caches.keys()).forEach((k) => caches.delete(k));
+      const regs = (await navigator.serviceWorker?.getRegistrations()) || [];
+      await Promise.all(regs.map((r) => r.unregister()));
+    } catch {}
+    setTimeout(() => location.reload(), 400);
+  },
+
   // first run and self-check
   'welcome-skip'() {
     markWelcomeDone();
@@ -1219,7 +1245,25 @@ async function boot() {
     }
   });
 
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if ('serviceWorker' in navigator) {
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register('sw.js').then((reg) => (S.swReg = reg)).catch(() => {});
+    // a new version took over: load it, but never in the middle of a recording
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController || S.reloading) return;
+      if (S.rec && !S.rec.stopped) {
+        S.updatePending = true;
+        toast(t('updateReady'));
+      } else {
+        S.reloading = true;
+        location.reload();
+      }
+    });
+    // phone apps stay suspended for days, so look for a new version whenever the app comes back
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && S.swReg) S.swReg.update().catch(() => {});
+    });
+  }
   let welcomed = false;
   try {
     welcomed = !!localStorage.getItem(WELCOME_DONE);
