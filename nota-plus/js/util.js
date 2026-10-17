@@ -72,3 +72,48 @@ export function debounce(fn, ms) {
     id = setTimeout(() => fn(...a), ms);
   };
 }
+
+// ---------- searching inside text ----------
+// Arabic search should ignore diacritics and the different ways of writing alef, ya and ta marbuta.
+const DIACRITICS = /[\u064B-\u0652\u0670\u0640]/;
+
+export function normMap(text) {
+  let norm = '';
+  const map = []; // map[i] is the index in the original text of norm[i]
+  const src = String(text || '');
+  for (let i = 0; i < src.length; i++) {
+    let c = src[i];
+    if (DIACRITICS.test(c)) continue;
+    if ('أإآٱ'.includes(c)) c = 'ا';
+    else if (c === 'ى') c = 'ي';
+    else if (c === 'ة') c = 'ه';
+    for (const ch of c.toLowerCase()) {
+      norm += ch;
+      map.push(i);
+    }
+  }
+  return { norm, map };
+}
+
+export const normText = (text) => normMap(text).norm;
+
+export function findRanges(text, q) {
+  const nq = normText(String(q || '').trim());
+  if (!nq) return [];
+  const { norm, map } = normMap(text);
+  const out = [];
+  for (let from = 0; ; ) {
+    const k = norm.indexOf(nq, from);
+    if (k < 0) break;
+    out.push([map[k], map[k + nq.length - 1] + 1]);
+    from = k + nq.length;
+  }
+  return out;
+}
+
+// "12:40", "1:02:03" or plain seconds
+export function parseClock(str) {
+  const parts = String(str || '').trim().split(':');
+  if (!parts.length || parts.length > 3 || parts.some((x) => !/^\d+(\.\d+)?$/.test(x.trim()))) return NaN;
+  return parts.map(Number).reduce((a, b) => a * 60 + b, 0);
+}

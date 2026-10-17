@@ -9,6 +9,7 @@ It is a progressive web app, plain HTML, CSS and JavaScript. There is no build s
 - Two ways to transcribe. **On this device** is free and live and uses the phone's own speech recognition, one language at a time. **Cloud Whisper** is the most accurate and handles Arabic and English mixed together.
 - AI summary, key points, decisions, action items and topics, in Arabic or English whatever language was spoken. Six templates: meeting, lecture, interview, sales call, study notes, voice memo.
 - Ask AI about one note, or across every note.
+- Find in any transcript: type a word, part of a word or a single letter and every match is highlighted with its time. Use the arrows to jump between matches, type a time like 12:40 to go straight there, or tap a marked moment or a time in an AI answer. With saved audio, playback jumps to the same moment. Arabic search ignores diacritics and alef spellings. Library search opens the note at the match.
 - Import audio or video files, paste text, search every word, translate a transcript, export to text, PDF or SRT subtitles.
 - Arabic and English interface with full right-to-left layout.
 - Notes and audio are stored on the device in the browser. The app opens offline and past notes can be read offline. Recording needs a connection on most phones, because phone speech recognition and Cloud Whisper both use the internet.
