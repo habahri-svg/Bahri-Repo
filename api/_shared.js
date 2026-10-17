@@ -106,7 +106,7 @@ function weigh(c) {
 async function gate(req, res, ready, overLimit, opts) {
   const blocks = !!(opts && opts.blocks);
   res.setHeader("Cache-Control", "no-store");
-  if (req.method === "GET") { res.status(200).json({ ok: ready, missing: (opts && opts.missing) || [] }); return null; }
+  if (req.method === "GET") { res.status(200).json({ ok: ready, missing: (opts && opts.missing) || [], label: (opts && opts.label) || undefined }); return null; }
   if (req.method !== "POST") { res.status(405).json({ error: "Method not allowed" }); return null; }
   if (!ready) { res.status(503).json({ error: "This AI isn't set up on this site yet. Missing in Vercel: " + (((opts && opts.missing) || []).join(", ") || "settings") + "." }); return null; }
   const token = String(req.headers.authorization || "").replace(/^Bearer\s+/i, "");
