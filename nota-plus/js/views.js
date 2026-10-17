@@ -226,6 +226,7 @@ export function recordSetupView() {
         <p class="hint">${t('speakersHint')}</p></section>
       <label class="switch"><input type="checkbox" data-setup="liveTranslate" ${u.liveTranslate ? 'checked' : ''}><span>${t('liveTranslate')}</span></label>
       <label class="switch"><input type="checkbox" data-setup="saveAudio" ${u.saveAudio ? 'checked' : ''}><span>${t('saveAudio')}${u.engine === 'device' ? `<small>${t('saveAudioHint')}</small>` : ''}</span></label>
+      <details class="card tips"><summary>${t('tipsTitle')}</summary><ul>${[1, 2, 3, 4, 5, 6].map((i) => `<li>${t('tip' + i)}</li>`).join('')}</ul></details>
       <button class="btn big rec" data-action="start-rec">${icon('mic', 24)}<span>${t('startRecording')}</span></button>
     </div>
   </div>`;
@@ -442,9 +443,9 @@ export function noteView(n) {
   </div>`;
 }
 
-export function menuHtml() {
+export function menuHtml(n) {
   const a = (id, label, cls = '') => `<button class="menuitem ${cls}" data-action="${id}">${label}</button>`;
-  return `<div class="sheet" role="dialog" aria-modal="true">${a('rename', t('rename'))}${a('generate', t('regenerate'))}${a('translate-all', t('translateAll'))}${a('export-txt', t('exportTxt'))}${a('export-srt', t('exportSrt'))}${a('delete', t('delete'), 'danger')}${a('close-modal', t('cancel'))}</div>`;
+  return `<div class="sheet" role="dialog" aria-modal="true">${a('rename', t('rename'))}${a('generate', t('regenerate'))}${a('translate-all', t('translateAll'))}${a('polish', t('polishTranscript'))}${n && (n.segments || []).some((s) => s.raw != null) ? a('undo-polish', t('undoPolish')) : ''}${a('export-txt', t('exportTxt'))}${a('export-srt', t('exportSrt'))}${a('delete', t('delete'), 'danger')}${a('close-modal', t('cancel'))}</div>`;
 }
 
 // ---------- ask across all notes ----------
@@ -482,6 +483,7 @@ export function settingsView() {
         <label class="lbl">${t('summaryLang')}<select class="select" data-setting="summaryLang">${opt('en', s.summaryLang, 'English')}${opt('ar', s.summaryLang, 'العربية')}</select></label>
         <label class="lbl">${t('defaultTemplate')}<select class="select" data-setting="template">${TEMPLATE_IDS.map((id) => opt(id, s.template, t('tpl_' + id))).join('')}</select></label>
         <label class="lbl">${t('defaultEngine')}<select class="select" data-setting="engine">${opt('auto', s.engine, t('engAuto'))}${opt('device', s.engine, t('engineDevice'))}${opt('cloud', s.engine, t('engineCloud'))}</select></label>
+        <label class="lbl">${t('sttQuality')}<select class="select" data-setting="sttQuality">${opt('best', s.sttQuality || 'best', t('qualityBest'))}${opt('fast', s.sttQuality || 'best', t('qualityFast'))}</select></label>
         <label class="lbl">${t('arabicDialect')}<select class="select" data-setting="arLocale">${ar.map(([v, l]) => opt(v, s.arLocale, l)).join('')}</select></label>
         <label class="lbl">${t('englishAccent')}<select class="select" data-setting="enLocale">${en.map(([v, l]) => opt(v, s.enLocale, l)).join('')}</select></label></section>
       <details class="card"><summary>${t('advanced')}</summary><div class="stack tight">

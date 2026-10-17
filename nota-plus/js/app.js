@@ -1,9 +1,9 @@
 import { S } from './state.js';
 import { t, setLang, getLang } from './i18n.js';
-import { $, esc, uid, fmtClock, langOf, arabicRatio, download, copyText, isIOS, isStandalone, parseClock } from './util.js';
+import { $, esc, uid, fmtClock, langOf, arabicRatio, download, copyText, isIOS, isStandalone, parseClock, levelAdvice } from './util.js';
 import { loadSettings, saveSettings, notesDb, audioDb, requestPersistence, storageEstimate, saveDraft, loadDraft, clearDraft } from './store.js';
 import { runChecks, reportText } from './selfcheck.js';
-import { summarize, quickSummary, translateTexts, answer, buildGlobalContext, transcribeBlob, testKey, friendlyError, detectActions, detectSpeakers, transcriptText } from './ai.js';
+import { summarize, quickSummary, translateTexts, polishTexts, answer, buildGlobalContext, transcribeBlob, testKey, friendlyError, detectActions, detectSpeakers, transcriptText } from './ai.js';
 import { deviceSupported } from './stt.js';
 import { Recorder } from './recorder.js';
 import * as V from './views.js';
@@ -12,7 +12,7 @@ import { noteToText, noteToSrt, printHtml } from './export.js';
 const app = $('#app');
 const paint = (html) => (app.innerHTML = html);
 // Keep in step with VERSION in sw.js. Shown in Settings so a stale copy of the app is easy to spot.
-const APP_VERSION = 'v7';
+const APP_VERSION = 'v8';
 window.NOTA_VERSION = APP_VERSION;
 const HIDE_INSTALL = 'nota-plus.hideInstall';
 const WELCOME_DONE = 'nota-plus.welcomeDone';
@@ -290,6 +290,8 @@ let tick = null;
 let raf = null;
 let frame = 0;
 const levels = new Array(40).fill(0);
+const levelHist = [];
+let lastAdvice = '';
 
 function startTicker() {
   stopTicker();
@@ -323,15 +325,19 @@ function paintBars() {
   if (!wrap || !r) return;
   if (++frame % 4) return;
   let lvl = 0;
-  if (r.analyser && !r.paused) {
-    const buf = new Uint8Array(r.analyser.fftSize);
-    r.analyser.getByteTimeDomainData(buf);
-    let sum = 0;
-    for (const v of buf) {
-      const d = (v - 128) / 128;
-      sum += d * d;
+  const raw = r.readLevel();
+  if (raw != null) {
+    lvl = Math.min(1, raw * 4);
+    levelHist.push({ rms: raw, peak: r.peak || 0 });
+    if (levelHist.length > 60) levelHist.shift();
+    // tell the speaker when the voice is too quiet or too loud, the biggest cause of poor transcripts
+    const hint = $('#rec-hint');
+    const advice = levelAdvice(levelHist);
+    if (hint && advice !== lastAdvice) {
+      lastAdvice = advice;
+      hint.textContent = advice === 'quiet' ? t('tooQuiet') : advice === 'loud' ? t('tooLoud') : r.kind === 'cloud' ? t('hintCloud') : t('hintDevice');
+      hint.classList.toggle('warnhint', !!advice);
     }
-    lvl = Math.min(1, Math.sqrt(sum / buf.length) * 4);
   }
   wrap.classList.toggle('pulse', !r.analyser && !r.paused);
   levels.push(lvl);
@@ -918,7 +924,50 @@ const A = {
     }
   },
   menu() {
-    modal(V.menuHtml());
+    modal(V.menuHtml(N()));
+  },
+  async polish() {
+    closeModal();
+    const n = N();
+    if (!S.settings.apiKey) return needKey();
+    const key = n.id + ':polish';
+    if (S.busy[key]) return;
+    S.busy[key] = true;
+    toast(t('polishing'));
+    try {
+      const names = Object.values(n.speakers || {}).filter(Boolean);
+      await polishTexts(S.settings, n.segments.map((s) => s.text), names, (start, got) => {
+        got.forEach((tx, k) => {
+          const sg = n.segments[start + k];
+          if (tx !== sg.text) {
+            sg.raw = sg.raw ?? sg.text; // keep the original so it can be restored
+            sg.text = tx;
+          }
+        });
+      });
+      toast(t('polishDone'));
+      if (Object.keys(n.summary || {}).length) generateSummary(n, S.sumLang); // better text, better summary
+    } catch (e) {
+      toast(friendlyError(e, t));
+    } finally {
+      delete S.busy[key];
+      await persist(n);
+      S.noteTab = 'transcript';
+      refreshNote(n);
+    }
+  },
+  async 'undo-polish'() {
+    closeModal();
+    const n = N();
+    n.segments.forEach((sg) => {
+      if (sg.raw != null) {
+        sg.text = sg.raw;
+        delete sg.raw;
+      }
+    });
+    await persist(n);
+    renderNote();
+    toast(t('polishUndone'));
   },
   'translate-all'() {
     closeModal();

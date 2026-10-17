@@ -165,7 +165,7 @@ const EXT = { 'audio/webm': 'webm', 'audio/mp4': 'm4a', 'audio/ogg': 'ogg', 'aud
 
 const AR_PROMPT = 'مرحباً. هذا حديث باللغة العربية.';
 
-async function transcribeOnce(cfg, blob, { lang, name, retries }) {
+async function transcribeOnce(cfg, blob, { lang, name, retries, hint }) {
   const base = (blob.type || 'audio/webm').split(';')[0];
   const res = await withModel(
     cfg,
@@ -177,10 +177,12 @@ async function transcribeOnce(cfg, blob, { lang, name, retries }) {
       fd.append('response_format', 'verbose_json');
       fd.append('temperature', '0');
       if (lang && lang !== 'auto') fd.append('language', lang);
-      if (lang === 'ar') fd.append('prompt', AR_PROMPT); // anchors the script and vocabulary, clearly better Arabic
+      // The prompt steers spelling and style: an Arabic cue for Arabic, then the names and the last words said.
+      const prompt = [lang === 'ar' ? AR_PROMPT : '', hint || ''].filter(Boolean).join(' ').slice(-220);
+      if (prompt) fd.append('prompt', prompt);
       return call(cfg, '/audio/transcriptions', { method: 'POST', body: fd }, 300000, retries);
     },
-    lang === 'ar' ? 'whisper-large-v3' : undefined // the larger model is noticeably better at Arabic
+    cfg.sttQuality === 'fast' ? undefined : 'whisper-large-v3' // the larger model is clearly more accurate, esp. for Arabic
   );
   const j = await res.json();
   return {
@@ -196,12 +198,12 @@ async function transcribeOnce(cfg, blob, { lang, name, retries }) {
   };
 }
 
-export async function transcribeBlob(cfg, blob, { lang, name, retries = 2 } = {}) {
-  const r = await transcribeOnce(cfg, blob, { lang, name, retries });
+export async function transcribeBlob(cfg, blob, { lang, name, retries = 2, hint } = {}) {
+  const r = await transcribeOnce(cfg, blob, { lang, name, retries, hint });
   // Auto mode sometimes calls an Arabic dialect Persian, Urdu or Malay. Only Arabic and English matter here, so redo it as Arabic.
   if ((!lang || lang === 'auto') && r.text && !['english', 'arabic', 'en', 'ar'].includes(r.detected)) {
     try {
-      const again = await transcribeOnce(cfg, blob, { lang: 'ar', name, retries });
+      const again = await transcribeOnce(cfg, blob, { lang: 'ar', name, retries, hint });
       if (again.text) return again;
     } catch {}
   }
@@ -336,7 +338,8 @@ export async function translateTexts(cfg, texts, target, onBatch) {
       ],
       { json: true, temperature: 0 }
     );
-    const arr = asList(parseJson(raw).translations);
+    const tj = parseJson(raw).translations;
+    const arr = Array.isArray(tj) ? tj.map((x) => String(x ?? '').trim()) : [];
     const got = part.map((_, k) => arr[k] || '');
     out.push(...got);
     if (onBatch) onBatch(i, got); // hand over each batch as it arrives so a later failure keeps earlier work
@@ -346,6 +349,37 @@ export async function translateTexts(cfg, texts, target, onBatch) {
 
 export async function ping(cfg) {
   return chat(cfg, [{ role: 'user', content: 'Reply with the single word OK.' }], { temperature: 0 });
+}
+
+// Fixes misheard words, spelling and punctuation line by line. Never translates or shortens.
+export async function polishTexts(cfg, texts, names = [], onBatch) {
+  const out = [];
+  for (let i = 0; i < texts.length; i += 25) {
+    const part = texts.slice(i, i + 25);
+    const who = names.length ? ` People in the conversation: ${names.join(', ')}.` : '';
+    const raw = await chat(
+      cfg,
+      [
+        {
+          role: 'system',
+          content: `You correct speech-recognition mistakes in transcript lines. Keep each line in its own language, keep its meaning and keep it about the same length. Fix words that were clearly misheard (use the surrounding lines for context), plus spelling and punctuation. Never translate, summarise, add or remove information.${who} Reply with one JSON object {"lines": [...]} holding exactly ${part.length} strings in the same order.`
+        },
+        { role: 'user', content: JSON.stringify(part) }
+      ],
+      { json: true, temperature: 0 }
+    );
+    const lj = parseJson(raw).lines;
+    const arr = Array.isArray(lj) ? lj.map((x) => String(x ?? '').trim()) : [];
+    const got = part.map((orig, k) => {
+      const n = arr[k];
+      if (!n) return orig;
+      const ratio = n.length / Math.max(1, orig.length);
+      return ratio < 0.5 || ratio > 2 ? orig : n; // a rewrite that changes the length a lot is not a correction, keep the original
+    });
+    out.push(...got);
+    if (onBatch) onBatch(i, got);
+  }
+  return out;
 }
 
 export async function answer(cfg, context, question, history = []) {
