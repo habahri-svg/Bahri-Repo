@@ -1,5 +1,5 @@
 // Offline shell for Nota+. Bump VERSION whenever any file in SHELL changes.
-const VERSION = 'nota-plus-v1';
+const VERSION = 'nota-plus-v2';
 const SHELL = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',
   'js/app.js', 'js/ai.js', 'js/export.js', 'js/i18n.js', 'js/recorder.js', 'js/state.js', 'js/stt.js', 'js/store.js', 'js/util.js', 'js/views.js',
@@ -27,18 +27,16 @@ self.addEventListener('fetch', (e) => {
   const font = /(^|\.)fonts\.(googleapis|gstatic)\.com$/.test(url.host);
   if (!sameOrigin && !font) return; // AI calls go straight to the network
 
+  // Network first so installed copies pick up fixes right away, cache when offline.
   e.respondWith(
-    caches.match(req, { ignoreSearch: sameOrigin }).then((hit) => {
-      const net = fetch(req)
-        .then((res) => {
-          if (res && (res.ok || res.type === 'opaque')) {
-            const copy = res.clone();
-            caches.open(VERSION).then((c) => c.put(req, copy));
-          }
-          return res;
-        })
-        .catch(() => hit || (req.mode === 'navigate' ? caches.match('index.html') : undefined));
-      return hit || net;
-    })
+    fetch(req)
+      .then((res) => {
+        if (res && (res.ok || res.type === 'opaque')) {
+          const copy = res.clone();
+          caches.open(VERSION).then((c) => c.put(req, copy));
+        }
+        return res;
+      })
+      .catch(() => caches.match(req, { ignoreSearch: sameOrigin }).then((hit) => hit || (req.mode === 'navigate' ? caches.match('index.html') : undefined)))
   );
 });

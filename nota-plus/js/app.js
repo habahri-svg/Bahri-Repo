@@ -658,8 +658,8 @@ const A = {
     const el = $('#key-status');
     el.textContent = '…';
     try {
-      await testKey(S.settings);
-      el.textContent = t('keyOk');
+      const m = await testKey(S.settings);
+      el.textContent = `${t('keyOk')} (${m.chat})`;
     } catch (e) {
       el.textContent = friendlyError(e, t);
     }
