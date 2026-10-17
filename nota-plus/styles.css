@@ -317,3 +317,9 @@ mark { background: #ffe08a; color: inherit; border-radius: 3px; padding: 0 1px; 
 .jump { flex: 1; justify-content: flex-end; min-width: 0; }
 .jump input { flex: 1; min-width: 0; max-width: 260px; min-height: 40px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); font-size: 14px; }
 .jump .btn { min-height: 40px; }
+
+/* ---------- recording tips and level warnings ---------- */
+.warnhint { color: var(--amber) !important; font-weight: 600; }
+.dark details.tips { background: var(--dk-surface); border-color: var(--dk-line); color: var(--dk-ink); }
+details.tips ul { margin: 0; padding-inline-start: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.5; }
+details.tips summary { cursor: pointer; }

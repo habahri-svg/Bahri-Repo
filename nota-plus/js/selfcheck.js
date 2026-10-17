@@ -34,7 +34,17 @@ export const CHECKS = [
     run: async () => {
       const where = isStandalone() ? 'installed app' : 'browser tab';
       const os = isIOS() ? 'iPhone or iPad' : isAndroid() ? 'Android' : 'computer';
-      return { s: navigator.onLine ? 'ok' : 'warn', d: `${os}, ${where}, ${navigator.onLine ? 'online' : 'offline'}` };
+      // the browser's online flag is often wrong (VPNs, firewalls), so really try the network
+      let real = false;
+      try {
+        const ctl = new AbortController();
+        const timer = setTimeout(() => ctl.abort(), 5000);
+        const res = await fetch('manifest.webmanifest?ping=' + Date.now(), { cache: 'no-store', signal: ctl.signal });
+        clearTimeout(timer);
+        real = res.ok;
+      } catch {}
+      if (real) return { s: 'ok', d: `${os}, ${where}, connected${navigator.onLine ? '' : ' (the browser says offline but the connection works)'}` };
+      return { s: 'warn', d: `${os}, ${where}, no internet connection. Transcription, summaries and translation need it. Check Wi-Fi or VPN.` };
     }
   },
   {

@@ -9,6 +9,7 @@ export function defaults() {
     apiKey: '',
     baseUrl: 'https://api.groq.com/openai/v1',
     sttModel: 'whisper-large-v3-turbo',
+    sttQuality: 'best', // best uses the larger, more accurate speech model; fast uses the lighter one
     chatModel: 'llama-3.3-70b-versatile',
     engine: 'auto', // auto | device | cloud
     sttLang: 'auto', // auto | en | ar

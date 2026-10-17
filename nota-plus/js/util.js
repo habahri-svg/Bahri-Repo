@@ -117,3 +117,13 @@ export function parseClock(str) {
   if (!parts.length || parts.length > 3 || parts.some((x) => !/^\d+(\.\d+)?$/.test(x.trim()))) return NaN;
   return parts.map(Number).reduce((a, b) => a * 60 + b, 0);
 }
+
+// Microphone level advice from about the last 4 seconds. Each sample is { rms, peak }, both from 0 to 1.
+export function levelAdvice(list) {
+  if (list.length < 20) return '';
+  const avg = list.reduce((a, b) => a + b.rms, 0) / list.length;
+  const top = Math.max(...list.map((x) => x.rms));
+  if (list.filter((x) => x.peak >= 0.98).length >= 6) return 'loud';
+  if (avg < 0.012 && top < 0.06) return 'quiet';
+  return '';
+}

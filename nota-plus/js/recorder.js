@@ -2,7 +2,8 @@ import { DeviceEngine, CloudEngine, pickMime } from './stt.js';
 import { transcribeBlob } from './ai.js';
 import { isAndroid, langOf, sleep } from './util.js';
 
-const MIC = { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } };
+// One clean mono channel at a high sample rate, with the phone's own echo and noise handling.
+const MIC = { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1, sampleRate: { ideal: 48000 } } };
 
 // One recording session. Owns the microphone, the speech engine and the live transcript.
 
@@ -51,6 +52,29 @@ export class Recorder {
     this.opts.onChange && this.opts.onChange();
   }
 
+  // Current microphone level from 0 to 1, or null when there is no level meter.
+  readLevel() {
+    if (!this.analyser || this.paused) return null;
+    const buf = new Uint8Array(this.analyser.fftSize);
+    this.analyser.getByteTimeDomainData(buf);
+    let sum = 0;
+    let peak = 0;
+    for (const v of buf) {
+      const d = Math.abs(v - 128) / 128;
+      sum += d * d;
+      if (d > peak) peak = d;
+    }
+    this.peak = peak;
+    return Math.sqrt(sum / buf.length);
+  }
+
+  // Names and the end of what was just said, given to the speech model so spelling and style stay consistent between pieces.
+  promptHint() {
+    const names = Object.values(this.speakerNames || {}).filter(Boolean);
+    const tail = this.segments.slice(-3).map((s) => s.text).join(' ').slice(-180);
+    return [names.length ? `${names.join(', ')}.` : '', tail].filter(Boolean).join(' ');
+  }
+
   async start({ kind, lang, saveAudio }) {
     this.kind = kind; // device | cloud
     this.lang = lang; // auto | en | ar
@@ -90,7 +114,7 @@ export class Recorder {
     if (!this.saveAudio) return; // cloud transcription needs the stream, not a stored copy
     const mime = pickMime();
     try {
-      this.audioRec = new MediaRecorder(this.stream, mime ? { mimeType: mime } : undefined);
+      this.audioRec = new MediaRecorder(this.stream, { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: 64000 });
       this.audioMime = this.audioRec.mimeType || mime || 'audio/webm';
       this.audioRec.ondataavailable = (e) => {
         if (e.data && e.data.size) this.audioChunks.push(e.data);
@@ -176,7 +200,9 @@ export class Recorder {
         stream: this.stream,
         lang: this.lang,
         elapsed: () => this.elapsed(),
-        transcribe: (blob, lang) => transcribeBlob(this.opts.settings, blob, { lang, retries: 0 }),
+        level: () => this.readLevel(),
+        hint: () => this.promptHint(),
+        transcribe: (blob, lang, hint) => transcribeBlob(this.opts.settings, blob, { lang, retries: 0, hint }),
         onSegments: (segs) => segs.forEach((x) => this._add(x.text, x.t, x.lang, false)),
         onError: (e) => {
           if (e && e.code === 'recorder') this.dead = 'recorder';
