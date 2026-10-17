@@ -1,4 +1,5 @@
 import { langOf, tokens, fmtClock } from './util.js';
+import { saveSettings } from './store.js';
 
 // Works with any OpenAI-compatible API. Defaults point at Groq's free tier.
 
@@ -43,9 +44,57 @@ export function friendlyError(err, t) {
   return (err && err.message) || t('errGeneric');
 }
 
+// ---------- model auto-detection (providers rename and retire models) ----------
+
+const CHAT_PREF = [
+  'llama-3.3-70b-versatile', 'llama-3.1-8b-instant',
+  'meta-llama/llama-4-maverick-17b-128e-instruct', 'meta-llama/llama-4-scout-17b-16e-instruct',
+  'openai/gpt-oss-120b', 'openai/gpt-oss-20b'
+];
+const NOT_CHAT = /whisper|guard|tts|embed|playai|orpheus|safeguard|distil/i;
+
+async function listModels(cfg) {
+  const res = await call(cfg, '/models', {}, 15000);
+  const j = await res.json();
+  return (j.data || []).map((m) => m.id).filter(Boolean);
+}
+
+function pickChat(ids) {
+  const ok = ids.filter((id) => !NOT_CHAT.test(id));
+  return CHAT_PREF.find((p) => ok.includes(p)) || ok[0];
+}
+
+function pickStt(ids) {
+  const w = ids.filter((id) => /whisper/i.test(id));
+  return w.find((id) => /turbo/i.test(id)) || w[0];
+}
+
+const isModelError = (e) => e instanceof AiError && (e.status === 404 || (e.status === 400 && /model/i.test(e.message)));
+
+// Runs `run(model)`. If the provider says the model is gone, finds a working one, retries, and remembers it.
+async function withModel(cfg, field, run) {
+  try {
+    return await run(cfg[field]);
+  } catch (e) {
+    if (!isModelError(e)) throw e;
+    const ids = await listModels(cfg);
+    const m = field === 'sttModel' ? pickStt(ids) : pickChat(ids);
+    if (!m || m === cfg[field]) throw e;
+    const out = await run(m);
+    cfg[field] = m;
+    saveSettings(cfg);
+    return out;
+  }
+}
+
 export async function testKey(cfg) {
-  await call(cfg, '/models', {}, 15000);
-  return true;
+  const ids = await listModels(cfg);
+  if (ids.length) {
+    if (!ids.includes(cfg.chatModel) || NOT_CHAT.test(cfg.chatModel)) cfg.chatModel = pickChat(ids) || cfg.chatModel;
+    if (!ids.includes(cfg.sttModel)) cfg.sttModel = pickStt(ids) || cfg.sttModel;
+    saveSettings(cfg);
+  }
+  return { chat: cfg.chatModel, stt: cfg.sttModel };
 }
 
 // ---------- speech to text ----------
@@ -54,13 +103,15 @@ const EXT = { 'audio/webm': 'webm', 'audio/mp4': 'm4a', 'audio/ogg': 'ogg', 'aud
 
 export async function transcribeBlob(cfg, blob, { lang, name } = {}) {
   const base = (blob.type || 'audio/webm').split(';')[0];
-  const fd = new FormData();
-  fd.append('file', blob, name || `audio.${EXT[base] || 'webm'}`);
-  fd.append('model', cfg.sttModel);
-  fd.append('response_format', 'verbose_json');
-  fd.append('temperature', '0');
-  if (lang && lang !== 'auto') fd.append('language', lang);
-  const res = await call(cfg, '/audio/transcriptions', { method: 'POST', body: fd }, 300000);
+  const res = await withModel(cfg, 'sttModel', (model) => {
+    const fd = new FormData();
+    fd.append('file', blob, name || `audio.${EXT[base] || 'webm'}`);
+    fd.append('model', model);
+    fd.append('response_format', 'verbose_json');
+    fd.append('temperature', '0');
+    if (lang && lang !== 'auto') fd.append('language', lang);
+    return call(cfg, '/audio/transcriptions', { method: 'POST', body: fd }, 300000);
+  });
   const j = await res.json();
   return {
     text: (j.text || '').trim(),
@@ -76,16 +127,27 @@ export async function transcribeBlob(cfg, blob, { lang, name } = {}) {
 
 // ---------- chat helpers ----------
 
-async function chat(cfg, messages, { json = false, temperature = 0.2, model } = {}) {
-  const body = { model: model || cfg.chatModel, messages, temperature };
-  if (json) body.response_format = { type: 'json_object' };
-  const res = await call(cfg, '/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
+async function chat(cfg, messages, { json = false, temperature = 0.2 } = {}) {
+  const send = (model, useJson) => {
+    const body = { model, messages, temperature };
+    if (useJson) body.response_format = { type: 'json_object' };
+    return call(cfg, '/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+  };
+  const res = await withModel(cfg, 'chatModel', async (model) => {
+    try {
+      return await send(model, json);
+    } catch (e) {
+      // some models reject JSON mode, the prompt already asks for JSON so retry plain
+      if (json && e instanceof AiError && e.status === 400 && /response_format|json/i.test(e.message)) return send(model, false);
+      throw e;
+    }
   });
   const j = await res.json();
-  return j.choices?.[0]?.message?.content || '';
+  return (j.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim();
 }
 
 function parseJson(text) {
