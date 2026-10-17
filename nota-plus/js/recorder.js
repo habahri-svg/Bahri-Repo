@@ -70,9 +70,10 @@ export class Recorder {
 
   // Names and the end of what was just said, given to the speech model so spelling and style stay consistent between pieces.
   promptHint() {
-    const names = Object.values(this.speakerNames || {}).filter(Boolean);
-    const tail = this.segments.slice(-3).map((s) => s.text).join(' ').slice(-180);
-    return [names.length ? `${names.join(', ')}.` : '', tail].filter(Boolean).join(' ');
+    const names = [...Object.values(this.speakerNames || {}), ...String(this.opts.settings.vocab || '').split(/[,،\n]+/).map((x) => x.trim())].filter(Boolean);
+    const list = names.join(', ').slice(0, 70); // names and special words first, they matter most
+    const tail = this.segments.slice(-3).map((s) => s.text).join(' ').slice(-90); // then the last words said
+    return [list ? `${list}.` : '', tail].filter(Boolean).join(' ');
   }
 
   async start({ kind, lang, saveAudio }) {

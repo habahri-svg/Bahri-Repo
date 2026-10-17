@@ -323,3 +323,20 @@ mark { background: #ffe08a; color: inherit; border-radius: 3px; padding: 0 1px; 
 .dark details.tips { background: var(--dk-surface); border-color: var(--dk-line); color: var(--dk-ink); }
 details.tips ul { margin: 0; padding-inline-start: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.5; }
 details.tips summary { cursor: pointer; }
+
+/* ---------- competitor-style features ---------- */
+.lg { font-size: 10px; font-weight: 700; letter-spacing: 0.4px; padding: 1px 5px; border-radius: 5px; border: 1px solid currentColor; opacity: 0.7; }
+.line .who { flex-wrap: wrap; }
+.lspk2 { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); background: none; border: 0; }
+.starmark { color: #d99a00; margin-inline-end: 6px; display: inline-flex; vertical-align: -2px; }
+.outline { display: flex; flex-direction: column; gap: 8px; }
+.chap { display: flex; gap: 10px; align-items: center; font-size: 15px; }
+.insights { display: flex; flex-direction: column; gap: 8px; }
+.ins { display: grid; grid-template-columns: 110px 1fr 44px; gap: 10px; align-items: center; font-size: 14px; }
+.ins .who { color: var(--ink); }
+.ins .bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; display: block; padding: 0; width: auto; }
+.ins .bar i { display: block; height: 100%; border-radius: 4px; background: var(--teal); }
+.ins .bar i.sp1 { background: #d99a00; } .ins .bar i.sp2 { background: #1f5fa8; } .ins .bar i.sp3 { background: #b3261e; } .ins .bar i.sp4 { background: #7b3fb5; } .ins .bar i.sp5 { background: #1e7e34; }
+.ins .num { text-align: end; font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
+.log.large .txt { font-size: 26px; line-height: 1.5; }
+.dialog textarea, .dialog #em-sub { font-size: 16px; }
