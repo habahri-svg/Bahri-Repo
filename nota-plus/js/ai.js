@@ -263,10 +263,12 @@ export async function answer(cfg, context, question, history = []) {
 
 // ---------- who is speaking (an AI guess from the conversation) ----------
 
-export async function detectSpeakers(cfg, note) {
+export async function detectSpeakers(cfg, note, preset = {}) {
   const segs = note.segments || [];
   const turns = new Array(segs.length).fill(-1);
-  const known = [];
+  const known = Object.entries(preset)
+    .filter(([id, name]) => Number(id) >= 0 && Number(id) <= 5 && name)
+    .map(([id, name]) => ({ id: Number(id), name: String(name) }));
   const CH = 60;
   for (let i = 0; i < segs.length; i += CH) {
     const part = segs.slice(i, i + CH);

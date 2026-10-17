@@ -322,10 +322,52 @@ async function saveNew(note, audioBlob) {
   generateSummary(note, note.lastSummaryLang);
 }
 
+const nameField = (i, val = '') =>
+  `<label class="namefield sp${i}"><i></i><input name="sp${i}" value="${esc(val)}" placeholder="${t('speaker')} ${i + 1}" autocomplete="off" aria-label="${t('speaker')} ${i + 1}"></label>`;
+
+// Shown after a recording: type who was speaking, optionally let AI assign the lines.
+function askSpeakerNames(note) {
+  const used = [...new Set(note.segments.map((s) => s.speaker))];
+  const preset = note.speakers || {};
+  const count = Math.min(6, Math.max(2, ...used.map((i) => i + 1), ...Object.keys(preset).map((i) => +i + 1)));
+  const aiDefault = used.length <= 1 && note.segments.length >= 2;
+  return new Promise((resolve) => {
+    promptResolve = resolve;
+    modal(`<form class="dialog speakers" data-form="speakers"><h3>${t('whoSpoke')}</h3><p class="muted">${t('whoSpokeHint')}</p>
+      <div id="name-fields" class="stack tight">${Array.from({ length: count }, (_, i) => nameField(i, preset[i] || '')).join('')}</div>
+      <button type="button" class="btn small ghost" data-action="add-name-field">+ ${t('addPerson')}</button>
+      ${S.settings.apiKey ? `<label class="switch lt"><input type="checkbox" name="ai"${aiDefault ? ' checked' : ''}><span>${t('aiAssign')}</span></label>` : ''}
+      <div class="row gap end"><button type="button" class="btn ghost" data-action="close-modal">${t('skip')}</button><button class="btn">${t('saveSummarize')}</button></div></form>`);
+    setTimeout(() => $('#modal input[name=sp0]')?.focus(), 60);
+  });
+}
+
+async function finalizeNew(note, audio) {
+  const ans = await askSpeakerNames(note);
+  if (ans) {
+    note.speakers = { ...note.speakers, ...ans.names };
+    if (ans.ai && S.settings.apiKey && note.segments.length > 1) {
+      wait(t('detecting'));
+      try {
+        const d = await detectSpeakers(S.settings, note, note.speakers);
+        note.segments.forEach((x, i) => (x.speaker = d.turns[i]));
+        for (const [id, nm] of Object.entries(d.names)) if (!note.speakers[id]) note.speakers[id] = nm;
+      } catch (e) {
+        toast(friendlyError(e, t));
+      } finally {
+        wait(null);
+      }
+    }
+  }
+  await saveNew(note, audio);
+}
+
 async function finishRecording() {
   const r = S.rec;
   stopTicker();
   wait(t('writing'));
+  let note;
+  let audio;
   try {
     const res = await r.stop();
     S.rec = null;
@@ -336,13 +378,15 @@ async function finishRecording() {
       location.hash = '#/';
       return;
     }
-    const note = newNote({ title: defaultTitle(), segments: res.segments, duration: res.duration, template: r.template, bookmarks: res.bookmarks, hasAudio: !!res.audio, speakers: { ...r.speakerNames } });
-    await saveNew(note, res.audio);
+    note = newNote({ title: defaultTitle(), segments: res.segments, duration: res.duration, template: r.template, bookmarks: res.bookmarks, hasAudio: !!res.audio, speakers: { ...r.speakerNames } });
+    audio = res.audio;
   } catch (e) {
     toast(friendlyError(e, t));
+    return;
   } finally {
     wait(null);
   }
+  await finalizeNew(note, audio);
 }
 
 // ---------- import and paste ----------
@@ -369,7 +413,7 @@ async function importFile(file) {
     const dur = r.segments.length ? r.segments[r.segments.length - 1].end : 0;
     const note = newNote({ title: file.name.replace(/\.[^.]+$/, '') || defaultTitle(), segments: segs, duration: dur, hasAudio: true });
     wait(null);
-    await saveNew(note, file);
+    await finalizeNew(note, file);
   } catch (e) {
     toast(friendlyError(e, t));
   } finally {
@@ -553,6 +597,12 @@ const A = {
     } else r.setSpeaker(i);
     render();
   },
+  'add-name-field'() {
+    const box = $('#name-fields');
+    if (!box || box.children.length >= 6) return;
+    box.insertAdjacentHTML('beforeend', nameField(box.children.length));
+    box.lastElementChild.querySelector('input').focus();
+  },
   'add-speaker'() {
     S.rec.addSpeaker();
     render();
@@ -622,7 +672,7 @@ const A = {
     S.busy[key] = true;
     renderNote();
     try {
-      const r = await detectSpeakers(S.settings, n);
+      const r = await detectSpeakers(S.settings, n, n.speakers);
       n.segments.forEach((x, i) => (x.speaker = r.turns[i]));
       const sp = { ...n.speakers };
       for (const [id, name] of Object.entries(r.names)) if (!sp[id]) sp[id] = name;
@@ -749,6 +799,14 @@ function onSubmit(e) {
   e.preventDefault();
   if (form.dataset.form === 'ask') submitAsk();
   else if (form.dataset.form === 'prompt') closeModal(form.v.value);
+  else if (form.dataset.form === 'speakers') {
+    const names = {};
+    form.querySelectorAll('input[name^=sp]').forEach((inp) => {
+      const v = inp.value.trim();
+      if (v) names[+inp.name.slice(2)] = v;
+    });
+    closeModal({ names, ai: !!(form.elements.ai && form.elements.ai.checked) });
+  }
 }
 
 function onChange(e) {

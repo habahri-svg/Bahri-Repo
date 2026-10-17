@@ -275,3 +275,13 @@ details.card[open] summary { margin-bottom: 8px; }
 .lspk { margin-inline-start: auto; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
 .dark .field { background: var(--dk-surface); border-color: var(--dk-line); color: var(--dk-ink); }
 .dark .field::placeholder { color: var(--dk-muted); }
+
+/* ---------- speaker naming dialog ---------- */
+.dialog.speakers { max-height: 88vh; overflow-y: auto; }
+.namefield { display: flex; align-items: center; gap: 10px; }
+.namefield i { width: 12px; height: 12px; border-radius: 50%; background: var(--teal); flex: none; }
+.namefield.sp1 i { background: #d99a00; } .namefield.sp2 i { background: #1f5fa8; } .namefield.sp3 i { background: #b3261e; }
+.namefield.sp4 i { background: #7b3fb5; } .namefield.sp5 i { background: #1e7e34; }
+.namefield input { flex: 1; min-width: 0; }
+.switch.lt { color: var(--ink); }
+.dialog .switch input { accent-color: var(--teal); }
