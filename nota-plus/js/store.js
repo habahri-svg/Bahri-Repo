@@ -23,7 +23,9 @@ export function defaults() {
 
 export function loadSettings() {
   try {
-    return { ...defaults(), ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') };
+    const s = { ...defaults(), ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') };
+    s.apiKey = String(s.apiKey || '').replace(/[^\x21-\x7E]/g, '');
+    return s;
   } catch {
     return defaults();
   }

@@ -30,7 +30,7 @@ The key stays in your browser. Free tiers have rate limits, so a very long recor
 - **Android:** on-device recognition can clash with saving audio at the same time, so saving audio is off by default for that mode.
 - Cloud Whisper sends audio to the AI provider in short chunks. Keep the screen on and the app open while recording, since phones pause web pages in the background. The app asks the phone to keep the screen awake.
 - Imported files are limited to 24 MB by the free tier.
-- Speaker labels are manual. Tap the Speaker button when the voice changes, and tap a name in the transcript to rename it.
+- Speakers: type the names before recording, then tap the name of whoever is talking (tap it again to rename). Lines are credited by the time you tapped. For finished notes, Detect speakers (AI) guesses who said what from the conversation, so check the result. A phone cannot reliably tell voices apart from audio alone.
 - Needs a recent browser: current Chrome on Android, or Safari on a recent iPadOS or iOS.
 
 ## Run it locally

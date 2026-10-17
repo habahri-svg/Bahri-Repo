@@ -178,7 +178,7 @@ details.card[open] summary { margin-bottom: 8px; }
 .cap { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--amber); letter-spacing: 0.3px; margin-bottom: 6px; }
 .det { font-size: 13px; line-height: 1.4; padding: 2px 0; }
 .det.none { color: var(--dk-muted); }
-.controls { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: start; justify-items: center; padding: 14px 12px calc(20px + var(--sab)); width: 100%; }
+.controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; justify-items: center; padding: 14px 12px calc(20px + var(--sab)); width: 100%; }
 .controls button { display: flex; flex-direction: column; align-items: center; gap: 6px; border: 0; background: transparent; font-size: 12px; color: var(--dk-muted); min-height: 44px; }
 .circ { width: 56px; height: 56px; border-radius: 50%; border: 1px solid var(--dk-line); background: var(--dk-surface); display: flex; align-items: center; justify-content: center; color: var(--dk-ink); }
 .circ.amber { color: var(--amber); }
@@ -257,3 +257,21 @@ details.card[open] summary { margin-bottom: 8px; }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* ---------- speakers ---------- */
+.spk { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.spk.bar { padding: 6px 20px 2px; width: 100%; }
+.chip.spc, .spk .chip { gap: 8px; }
+.spk .chip i { width: 10px; height: 10px; border-radius: 50%; background: var(--dk-teal); display: inline-block; flex: none; }
+.spk .chip.sp1 i { background: var(--amber); } .spk .chip.sp2 i { background: #8ab4f8; } .spk .chip.sp3 i { background: #f28b82; }
+.spk .chip.sp4 i { background: #c58af9; } .spk .chip.sp5 i { background: #81c995; }
+.who.sp4 i { background: #c58af9; } .who.sp4 b { color: #c58af9; }
+.who.sp5 i { background: #81c995; } .who.sp5 b { color: #81c995; }
+.line.light .who.sp4 b { color: #7b3fb5; } .line.light .who.sp5 b { color: #1e7e34; }
+.chip.dk.spc.on { background: var(--dk-surface); border-color: currentColor; box-shadow: 0 0 0 1px currentColor inset; }
+.chip.dk.spc.sp0 { color: var(--dk-teal); } .chip.dk.spc.sp1 { color: var(--amber); } .chip.dk.spc.sp2 { color: #8ab4f8; }
+.chip.dk.spc.sp3 { color: #f28b82; } .chip.dk.spc.sp4 { color: #c58af9; } .chip.dk.spc.sp5 { color: #81c995; }
+.chip.dk.spc:not(.on) { color: var(--dk-ink); }
+.lspk { margin-inline-start: auto; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
+.dark .field { background: var(--dk-surface); border-color: var(--dk-line); color: var(--dk-ink); }
+.dark .field::placeholder { color: var(--dk-muted); }

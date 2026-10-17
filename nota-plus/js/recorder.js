@@ -11,6 +11,9 @@ export class Recorder {
     this.bookmarks = [];
     this.interim = '';
     this.speaker = 0;
+    this.speakerCount = 2;
+    this.speakerLog = [{ t: 0, s: 0 }];
+    this.speakerNames = {};
     this.paused = false;
     this.pausedTotal = 0;
     this.pausedAt = 0;
@@ -143,13 +146,14 @@ export class Recorder {
     if (!text) return;
     lang = lang || langOf(text);
     const last = this.segments[this.segments.length - 1];
-    if (merge && !this.liveTranslate && last && last.speaker === this.speaker && last.lang === lang && last.text.length < 220 && t - (last.lastT ?? last.t) < 5) {
+    const sp = this._speakerAt(t);
+    if (merge && !this.liveTranslate && last && last.speaker === sp && last.lang === lang && last.text.length < 220 && t - (last.lastT ?? last.t) < 5) {
       last.text += ' ' + text;
       last.lastT = t;
       this._chg();
       return last;
     }
-    const seg = { t, lastT: t, speaker: this.speaker, text, lang };
+    const seg = { t, lastT: t, speaker: sp, text, lang };
     let i = this.segments.length;
     while (i > 0 && this.segments[i - 1].t > t) i--;
     this.segments.splice(i, 0, seg);
@@ -166,8 +170,29 @@ export class Recorder {
     this._chg();
   }
 
-  nextSpeaker() {
-    this.speaker = (this.speaker + 1) % 4;
+  // Cloud text arrives seconds late, so each line is credited to whoever was marked as talking at its start time.
+  _speakerAt(t) {
+    let s = this.speakerLog[0].s;
+    for (const e of this.speakerLog) if (e.t <= t) s = e.s;
+    return s;
+  }
+
+  setSpeaker(i) {
+    this.speaker = i;
+    this.speakerLog.push({ t: this.elapsed(), s: i });
+    this._chg();
+  }
+
+  addSpeaker() {
+    if (this.speakerCount >= 6) return;
+    this.speakerCount++;
+    this.speaker = this.speakerCount - 1;
+    this.speakerLog.push({ t: this.elapsed(), s: this.speaker });
+    this._chg();
+  }
+
+  renameSpeaker(i, name) {
+    this.speakerNames = { ...this.speakerNames, [i]: name };
     this._chg();
   }
 

@@ -36,7 +36,7 @@ async function call(cfg, path, init = {}, timeoutMs = 120000) {
 
 export function friendlyError(err, t) {
   if (err instanceof AiError) {
-    if (err.status === 401 || err.status === 403) return t('errKey');
+    if (err.status === 401 || err.status === 403) return err.message && err.message !== 'No API key' ? `${t('errKey')} (${err.message})` : t('errKey');
     if (err.status === 429) return t('errRate');
     if (err.status === 413) return t('errBig');
   }
@@ -259,6 +259,51 @@ export async function answer(cfg, context, question, history = []) {
   const system = `You answer questions about recorded conversations using only the transcript excerpts below. If the answer is not in them, say so plainly. Reply in the same language as the question. Mention moments like [12:40] when they help. Be concise.\n\n${context}`;
   const msgs = [{ role: 'system', content: system }, ...history.slice(-8), { role: 'user', content: question }];
   return chat(cfg, msgs, { temperature: 0.2 });
+}
+
+// ---------- who is speaking (an AI guess from the conversation) ----------
+
+export async function detectSpeakers(cfg, note) {
+  const segs = note.segments || [];
+  const turns = new Array(segs.length).fill(-1);
+  const known = [];
+  const CH = 60;
+  for (let i = 0; i < segs.length; i += CH) {
+    const part = segs.slice(i, i + CH);
+    const lines = part.map((s, k) => `${i + k}: ${s.text.slice(0, 300)}`).join('\n');
+    const prior = known.length
+      ? `Speakers found so far: ${JSON.stringify(known)}. Reuse these ids for the same people and add a new id only for a new person.`
+      : '';
+    const raw = await chat(
+      cfg,
+      [
+        {
+          role: 'system',
+          content: `You label who is speaking in the transcript of a conversation between several people. Use only conversational cues: questions and answers, people addressing each other by name, topic changes and language switches. ${prior} Use at most 6 speakers with ids 0 to 5. If someone's name is said in the conversation, give it as the name, otherwise leave the name empty. Reply with one JSON object {"speakers":[{"id":0,"name":""}],"turns":[{"i":0,"s":0}]} where "turns" has one entry for every line number you were given.`
+        },
+        { role: 'user', content: lines }
+      ],
+      { json: true, temperature: 0 }
+    );
+    const j = parseJson(raw);
+    for (const sp of j.speakers || []) {
+      const id = Number(sp.id);
+      if (!Number.isInteger(id) || id < 0 || id > 5) continue;
+      const name = String(sp.name || '').trim();
+      const have = known.find((k) => k.id === id);
+      if (!have) known.push({ id, name });
+      else if (!have.name && name) have.name = name;
+    }
+    for (const t of j.turns || []) {
+      const idx = Number(t.i);
+      const sp = Number(t.s);
+      if (Number.isInteger(idx) && idx >= i && idx < i + part.length && Number.isInteger(sp) && sp >= 0 && sp <= 5) turns[idx] = sp;
+    }
+  }
+  for (let i = 0; i < turns.length; i++) if (turns[i] < 0) turns[i] = i ? turns[i - 1] : 0;
+  const names = {};
+  for (const k of known) if (k.name) names[k.id] = k.name;
+  return { turns, names };
 }
 
 // ---------- retrieval for "ask across all notes" ----------
