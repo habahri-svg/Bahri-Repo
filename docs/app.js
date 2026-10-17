@@ -1124,7 +1124,7 @@ function drawSuggest(){
     const cp=el("button","btn small ghost","Copy");cp.type="button";cp.onclick=()=>navigator.clipboard.writeText(S.text).then(()=>cp.textContent="Copied").catch(()=>cp.textContent="Select the text to copy");
     a.append(use,cp);c.append(a);
   }else if(S.state==="loading"){c.append(el("p","status","One moment..."))}
-  else if(S.state==="error"){c.append(el("p","status err",S.error))}
+  else if(S.state==="error"){c.append(el("p","status"+(S.info?"":" err"),S.error))}
   else{c.append(el("p","status",sample?"Pick an AI and it writes an answer here, ready for you to edit.":"No AI is connected yet. Use a free chat, or connect Claude or ChatGPT under Settings."))}
   const row=el("div","acts");row.append(el("span","status","Write it with:"));
   aiOptions().filter(o=>o.kind==="builtin"&&o.ready).forEach(o=>{
@@ -1159,7 +1159,7 @@ function drawQuick(){
         if(!t)throw new Error("the AI sent back nothing");
         if(!$("thrText").value.trim()){$("thrText").value=t;st.className="status";st.textContent="Edit it, then send it or save it as a draft.";$("thrText").focus();if(state.quickArm!==false){thr.armed=0;try{await thrAct("send")}catch(e){}}}
         else{thr.sug={state:"ready",prov:Connectors.ai.active()||"claude",text:t,note:"One tap: "+label};drawSuggest();st.className="status";st.textContent="Your reply box already had text, so the answer is in the suggestion above."}
-      }catch(e){st.className="status err";st.textContent="Couldn't write it ("+clip((e&&e.message)||"unknown reason",90)+")."+(isCreditErr(e)?" Use a free chat below.":"");if(isCreditErr(e))showFree()}
+      }catch(e){if(isCreditErr(e))toFree(st);else{st.className="status err";st.textContent="Couldn't write it ("+clip((e&&e.message)||"unknown reason",90)+")."}}
       all.forEach(x=>x.disabled=false);b.textContent=old;
     };
     q.append(b);
@@ -1190,18 +1190,30 @@ async function suggestReply(o){
   }catch(e){
     if(thr.id!==idAtStart)return;
     const credit=isCreditErr(e);
-    thr.sug={state:"error",prov:pv,error:credit?(e.message||"No credit left.")+" Pick another AI below, or use a free chat.":"Couldn't write it ("+clip((e&&e.message)||"unknown reason",100)+"). Try another AI below."};
+    if(credit){creditOutAt=Date.now();showFree(!o.force)}
+    thr.sug={state:"error",info:credit,prov:pv,error:credit?FREE_MSG:"Couldn't write it ("+clip((e&&e.message)||"unknown reason",100)+"). Try another AI below."};
     drawSuggest();
   }
 }
 $("autoSuggest").onchange=()=>{state.autoSuggest=$("autoSuggest").checked;persist()};
 /* Writing without API credit: the person's own free ChatGPT or Claude chat on its website, then paste the answer back */
+/* No Claude credit: switch to the free chat by itself, and remember it for 5 minutes so the page stops trying a call that will fail */
+let creditOutAt=0;
+const creditOut=()=>Date.now()-creditOutAt<5*60*1000;
+const FREE_MSG="Claude has no credit, so I switched you to the free chat. Press Open Claude below, then paste its answer in the box.";
+function toFree(st,noScroll,extra){
+  creditOutAt=Date.now();
+  if(st){st.className="status";st.textContent=FREE_MSG+(extra||"")}
+  showFree(noScroll);
+}
 async function creditFallback(run){
+  if(creditOut())throw new Error("Claude has no credit left.");
   const first=aiPickValue()||Connectors.ai.active();
   try{return await run(first)}
   catch(e){
     const other=first==="claude"?"chatgpt":"claude";
     if(/no credit|credit left|billing|quota/i.test((e&&e.message)||"")&&Connectors.ai.avail(other)){const r=await run(other);r.usedOther=other;r.skipped=first;return r}
+    if(/no credit|credit left|billing|quota/i.test((e&&e.message)||""))creditOutAt=Date.now();
     throw e;
   }
 }
@@ -1213,8 +1225,8 @@ function freePrompt(){
   const chase=thrChase();
   return (chase?"Write a short, polite follow-up email chasing an answer that is still owed":"Write a reply email")+" for "+(myName||"me")+" at "+BR.co+", "+BR.desc+". Plain text only, short, warm, professional, with contractions. No em dashes, no semicolons. Use [DATE] or [DETAIL] where a fact is unknown. Give only the email body.\n\nSubject: "+$("thrTitle").textContent+"\nThread (latest last):\n"+threadBlock(thr.msgs).slice(-6000);
 }
-function showFree(){
-  $("thrFree").hidden=false;$("thrFree").scrollIntoView({block:"nearest"});
+function showFree(noScroll){
+  $("thrFree").hidden=false;if(!noScroll)$("thrFree").scrollIntoView({block:"nearest"});
 }
 function openFree(url,name){
   const p=freePrompt();
@@ -1272,7 +1284,7 @@ async function writeMyWay(dir,chase,text,set,status,about){
   if(!sample){set(dir.trim());status(chatAI()?"No AI on this page yet, so your direction is in the box. Edit it, or use Write it with "+CHAT[chatAI()].name+".":"No AI is connected, so your words are in the box. Edit them, then send.");return}
   status("Writing it your way...");
   try{let tone="";try{tone=await toneExamples()}catch(x){}const r=await creditFallback(p=>sample(replyPrompt(chase,tone,text,about)+dirNote(dir),{cache:false,provider:p}));const t=String(r.text||"").trim();if(!t)throw new Error("the AI sent back nothing");set(t);status("Here it is, written your way. Edit anything, then send.")}
-  catch(e){status("Couldn't write it ("+clip((e&&e.message)||"unknown reason",90)+"). Your direction is still in the box above.",true)}
+  catch(e){if(isCreditErr(e)){creditOutAt=Date.now();status(FREE_MSG+" Your direction is still in the box above.");if($("thrFree")&&!$("thr").hidden)showFree();return}status("Couldn't write it ("+clip((e&&e.message)||"unknown reason",90)+"). Your direction is still in the box above.",true)}
 }
 function replyPrompt(chase,tone,text,about){const it=about||thr.item||{};return (chase?"Write a short, polite follow-up email chasing an answer that is still owed, ":"Write a reply email ")+"for "+(myName||"me")+" at "+BR.co+". Plain text only, ready to edit, "+(sigText()?"with no sign-off and no name, because their signature is added automatically":"signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject, no quoted text."+(tone?"\n\n"+tone:"")+"\n\nWhat it's about: "+(it.title||"")+". "+(it.summary||"")+"\n\nThread (latest last):\n"+text}
 async function thrDraft(){
@@ -1283,7 +1295,7 @@ async function thrDraft(){
     const tone=sample?await toneExamples():"";
     const r=!sample?{text:templateDraft(thr.item,chase)}:await creditFallback(prov=>sample(replyPrompt(chase,tone,text),{cache:false,provider:prov,onText:u=>{ta.value=u.text}}));
     ta.value=r.text;st.textContent=r.usedOther?Connectors.ai.names[r.skipped]+" has no credit, so "+Connectors.ai.names[r.usedOther]+" wrote this. Edit it, then send it or save it as a draft.":"Edit it, then send it or save it as a draft."
-  }catch(e){st.className="status err";st.textContent="Couldn't write a draft ("+clip((e&&e.message)||"unknown reason",110)+")."+(isCreditErr(e)?" You can still use a free chat below, or write your own here.":" Write your own here.");if(isCreditErr(e))showFree()}
+  }catch(e){if(isCreditErr(e))toFree(st,false," You can also write your own here.");else{st.className="status err";st.textContent="Couldn't write a draft ("+clip((e&&e.message)||"unknown reason",110)+"). Write your own here."}}
 }
 function thrArgs(){
   const last=lastMsg(),subj=String(tById(thr.id)&&tById(thr.id).subject||$("thrTitle").textContent||"");
@@ -3011,7 +3023,7 @@ async function composeDraft(){
     const r=await creditFallback(prov=>sample.json("Write an email for "+(myName||"me")+" at "+BR.co+", "+BR.desc+".\nIt is to: "+($("thrTo").value.trim()||"someone")+".\nWhat it should say: "+brief+"\n\nPlain text, "+(sigText()?"no sign-off and no name, because the signature is added automatically":"signed with the first name"+(first?" "+first:""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return JSON only: {\"subject\": a short subject line, \"body\": the email body}."+(tone?"\n\n"+tone:""),{cache:false,provider:prov}));
     ta.value=String(r.body||"").trim();if(!$("thrSubj").value.trim())$("thrSubj").value=String(r.subject||"").trim();
     st.textContent="Edit it, then send it or save it as a draft."
-  }catch(e){st.className="status err";st.textContent="Couldn't write it ("+clip((e&&e.message)||"unknown reason",110)+")."+(isCreditErr(e)?" You can still use a free chat below, or write your own here.":" Write your own here.");if(isCreditErr(e))showFree()}
+  }catch(e){if(isCreditErr(e))toFree(st,false," You can also write your own here.");else{st.className="status err";st.textContent="Couldn't write it ("+clip((e&&e.message)||"unknown reason",110)+"). Write your own here."}}
 }
 $("newMailBtn").onclick=()=>{if(!G.connected()){showWelcome();return}openCompose()};
 $("newMailBtn2").onclick=()=>{if(!G.connected()){showWelcome();return}openCompose()};
