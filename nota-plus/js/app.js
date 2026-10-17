@@ -2,7 +2,7 @@ import { S } from './state.js';
 import { t, setLang, getLang } from './i18n.js';
 import { $, esc, uid, fmtClock, langOf, arabicRatio, download, copyText, isIOS, isStandalone } from './util.js';
 import { loadSettings, saveSettings, notesDb, audioDb, requestPersistence, storageEstimate } from './store.js';
-import { summarize, quickSummary, translateTexts, answer, buildGlobalContext, transcribeBlob, testKey, friendlyError, detectActions, transcriptText } from './ai.js';
+import { summarize, quickSummary, translateTexts, answer, buildGlobalContext, transcribeBlob, testKey, friendlyError, detectActions, detectSpeakers, transcriptText } from './ai.js';
 import { deviceSupported } from './stt.js';
 import { Recorder } from './recorder.js';
 import * as V from './views.js';
@@ -83,9 +83,11 @@ function render(scrollTop) {
 function renderNote() {
   if (!S.note) return;
   const old = $('#player');
+  const y = window.scrollY;
   paint(V.noteView(S.note));
   const nu = $('#player');
   if (old && nu) nu.replaceWith(old); // keep playback going across re-renders
+  window.scrollTo(0, y);
   const chat = $('#chat');
   if (chat) chat.lastElementChild?.scrollIntoView({ block: 'nearest' });
 }
@@ -144,7 +146,8 @@ function initSetup() {
     lang: engine === 'cloud' ? 'auto' : s.uiLang === 'ar' ? 'ar' : 'en',
     template: s.template,
     saveAudio: s.saveAudio,
-    liveTranslate: s.liveTranslate && !!s.apiKey
+    liveTranslate: s.liveTranslate && !!s.apiKey,
+    names: ''
   };
 }
 
@@ -177,6 +180,9 @@ async function startRec() {
   });
   rec.template = u.template;
   rec.liveTranslate = u.liveTranslate && !!S.settings.apiKey;
+  const names = (u.names || '').split(/[,،;\n]+/).map((x) => x.trim()).filter(Boolean).slice(0, 6);
+  rec.speakerNames = Object.fromEntries(names.map((n, i) => [i, n]));
+  rec.speakerCount = Math.max(2, names.length);
   try {
     await rec.start({ kind: u.engine, lang: u.lang, saveAudio: u.saveAudio });
   } catch {
@@ -288,7 +294,7 @@ function dominantLang(segments) {
   return r > 0.8 ? 'ar' : r < 0.2 ? 'en' : 'mixed';
 }
 
-function newNote({ title, segments, duration, template, bookmarks = [], hasAudio = false }) {
+function newNote({ title, segments, duration, template, bookmarks = [], hasAudio = false, speakers = {} }) {
   return {
     id: uid(),
     title,
@@ -299,7 +305,7 @@ function newNote({ title, segments, duration, template, bookmarks = [], hasAudio
     lang: dominantLang(segments),
     segments: segments.map(({ t, speaker, text, lang, marked, tr }) => ({ t, speaker: speaker || 0, text, lang, marked: !!marked, tr })),
     bookmarks,
-    speakers: {},
+    speakers,
     summary: {},
     lastSummaryLang: S.settings.summaryLang,
     hasAudio
@@ -330,7 +336,7 @@ async function finishRecording() {
       location.hash = '#/';
       return;
     }
-    const note = newNote({ title: defaultTitle(), segments: res.segments, duration: res.duration, template: r.template, bookmarks: res.bookmarks, hasAudio: !!res.audio });
+    const note = newNote({ title: defaultTitle(), segments: res.segments, duration: res.duration, template: r.template, bookmarks: res.bookmarks, hasAudio: !!res.audio, speakers: { ...r.speakerNames } });
     await saveNew(note, res.audio);
   } catch (e) {
     toast(friendlyError(e, t));
@@ -538,9 +544,18 @@ const A = {
     navigator.vibrate?.(30);
     paintLive();
   },
-  speaker() {
-    S.rec.nextSpeaker();
-    paintLive();
+  async 'pick-speaker'(el) {
+    const r = S.rec;
+    const i = +el.dataset.i;
+    if (r.speaker === i) {
+      const v = await promptModal({ title: t('rename'), value: V.speakerName({ speakers: r.speakerNames }, i) });
+      if (v && v.trim()) r.renameSpeaker(i, v.trim());
+    } else r.setSpeaker(i);
+    render();
+  },
+  'add-speaker'() {
+    S.rec.addSpeaker();
+    render();
   },
   'pause-rec'() {
     S.rec.paused ? S.rec.resume() : S.rec.pause();
@@ -589,6 +604,39 @@ const A = {
       N().speakers = { ...N().speakers, [i]: v.trim() };
       await persist(N());
       renderNote();
+    }
+  },
+  'line-speaker'(el) {
+    const n = N();
+    const seg = n.segments[+el.dataset.seg];
+    const count = Math.min(6, Math.max(...n.segments.map((x) => x.speaker)) + 2);
+    seg.speaker = (seg.speaker + 1) % count;
+    persist(n);
+    renderNote();
+  },
+  async 'detect-speakers'() {
+    const n = N();
+    if (!S.settings.apiKey) return toast(t('errNeedKey'));
+    const key = n.id + ':spk';
+    if (S.busy[key]) return;
+    S.busy[key] = true;
+    renderNote();
+    try {
+      const r = await detectSpeakers(S.settings, n);
+      n.segments.forEach((x, i) => (x.speaker = r.turns[i]));
+      const sp = { ...n.speakers };
+      for (const [id, name] of Object.entries(r.names)) if (!sp[id]) sp[id] = name;
+      n.speakers = sp;
+      toast(t('speakersDone'));
+      await persist(n);
+      if (Object.keys(n.summary || {}).length) generateSummary(n, S.sumLang);
+    } catch (e) {
+      toast(friendlyError(e, t));
+    } finally {
+      delete S.busy[key];
+      await persist(n);
+      S.noteTab = 'transcript';
+      refreshNote(n);
     }
   },
   async rename() {
@@ -656,6 +704,10 @@ const A = {
   // settings
   async 'test-key'() {
     const el = $('#key-status');
+    if (/groq\.com/.test(S.settings.baseUrl) && !S.settings.apiKey.startsWith('gsk_')) {
+      el.textContent = t('keyFormat');
+      return;
+    }
     el.textContent = '…';
     try {
       const m = await testKey(S.settings);
@@ -703,7 +755,10 @@ function onChange(e) {
   const el = e.target;
   if (el.dataset.setting) {
     const key = el.dataset.setting;
-    S.settings[key] = key === 'apiKey' ? el.value.trim() : el.value;
+    if (key === 'apiKey') {
+      el.value = el.value.replace(/[^\x21-\x7E]/g, ''); // pasted keys often carry spaces or hidden characters
+      S.settings[key] = el.value;
+    } else S.settings[key] = el.value;
     saveSettings(S.settings);
     if (key === 'uiLang') {
       setLang(el.value);
@@ -729,7 +784,12 @@ function onInput(e) {
   if (el.id === 'q') {
     S.q = el.value;
     $('#list').innerHTML = V.noteListHtml();
-  } else if (el.dataset.setting === 'apiKey' || el.dataset.setting === 'baseUrl' || el.dataset.setting === 'sttModel' || el.dataset.setting === 'chatModel') {
+  } else if (el.id === 'rec-names') {
+    S.setup.names = el.value;
+  } else if (el.dataset.setting === 'apiKey') {
+    S.settings.apiKey = el.value.replace(/[^\x21-\x7E]/g, '');
+    saveSettings(S.settings);
+  } else if (el.dataset.setting === 'baseUrl' || el.dataset.setting === 'sttModel' || el.dataset.setting === 'chatModel') {
     S.settings[el.dataset.setting] = el.value.trim();
     saveSettings(S.settings);
   }

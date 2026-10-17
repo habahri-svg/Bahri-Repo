@@ -202,6 +202,9 @@ export function recordSetupView() {
       <section><h3>${t('spokenLang')}</h3>${seg(langItems(u.engine), u.lang, 'set-lang-setup')}</section>
       <section><h3>${t('template')}</h3>
         <select id="rec-template" class="select" aria-label="${t('template')}">${TEMPLATE_IDS.map((id) => `<option value="${id}"${u.template === id ? ' selected' : ''}>${t('tpl_' + id)}</option>`).join('')}</select></section>
+      <section><h3>${t('speakersLabel')}</h3>
+        <input id="rec-names" class="field" value="${esc(u.names || '')}" placeholder="${t('speakersPh')}" autocomplete="off" aria-label="${t('speakersLabel')}">
+        <p class="hint">${t('speakersHint')}</p></section>
       <label class="switch"><input type="checkbox" data-setup="liveTranslate" ${u.liveTranslate ? 'checked' : ''}><span>${t('liveTranslate')}</span></label>
       ${u.engine === 'device' ? `<label class="switch"><input type="checkbox" data-setup="saveAudio" ${u.saveAudio ? 'checked' : ''}><span>${t('saveAudio')}<small>${t('saveAudioHint')}</small></span></label>` : ''}
       <button class="btn big rec" data-action="start-rec">${icon('mic', 24)}<span>${t('startRecording')}</span></button>
@@ -244,10 +247,10 @@ export function recordLiveView() {
       <div class="bars" id="rec-bars" aria-hidden="true">${'<i></i>'.repeat(40)}</div>
     </div>
     <div class="log" id="rec-lines" role="log" aria-label="${t('tabTranscript')}">${liveLinesHtml(r)}</div>
+    <div class="spk bar" id="rec-spk" role="group" aria-label="${t('speaker')}">${Array.from({ length: r.speakerCount }, (_, i) => `<button class="chip dk spc sp${i}${r.speaker === i ? ' on' : ''}" data-action="pick-speaker" data-i="${i}" aria-pressed="${r.speaker === i}"><i></i>${esc(speakerName(names, i))}</button>`).join('')}${r.speakerCount < 6 ? `<button class="chip dk" data-action="add-speaker" aria-label="${t('addSpeaker')}">+</button>` : ''}</div>
     <div class="ainotes"><div class="cap">${icon('sparkle', 14)} ${t('detectedTasks')}</div><div id="rec-ai">${detectedHtml()}</div></div>
     <div class="controls">
       <button data-action="mark"><span class="circ amber">${icon('bookmark', 24)}</span>${t('markMoment')}</button>
-      <button data-action="speaker"><span class="circ">${icon('user', 24)}</span><span id="rec-speaker">${esc(speakerName(names, r.speaker))}</span></button>
       <button data-action="pause-rec" id="rec-pause"><span class="circ light">${icon(r.paused ? 'play' : 'pause', 24)}</span>${r.paused ? t('resume') : t('pause')}</button>
       <button data-action="stop-rec"><span class="circ red">${icon('stop', 22)}</span>${t('stopSummarize')}</button>
     </div>
@@ -307,13 +310,18 @@ export function transcriptHtml(n) {
     .map(
       (s, i) => `<div class="line light${s.marked ? ' marked' : ''}" data-t="${s.t}" data-seg="${i}">
       <div class="who sp${s.speaker}"><button class="lnk" data-action="rename-speaker" data-i="${s.speaker}"><b>${esc(speakerName(n, s.speaker))}</b></button>
-      <button class="lnk" data-action="seek" data-t="${s.t}"><time>${fmtClock(s.t)}</time></button>${s.marked ? `<em>${icon('bookmarkF', 14)}</em>` : ''}</div>
+      <button class="lnk" data-action="seek" data-t="${s.t}"><time>${fmtClock(s.t)}</time></button>${s.marked ? `<em>${icon('bookmarkF', 14)}</em>` : ''}<button class="lnk lspk" data-action="line-speaker" data-seg="${i}" aria-label="${t('changeSpeaker')}">${icon('user', 16)}</button></div>
       <div class="txt" dir="auto">${esc(s.text)}</div>
       ${s.tr ? `<div class="tr" dir="auto">${esc(s.tr)}</div>` : ''}</div>`
     )
     .join('');
   const busy = S.busy[n.id + ':tr'];
-  return `<div class="row between wrap"><span class="muted">${(n.segments || []).length} ${t('lines')}</span>
+  const ids = [...new Set((n.segments || []).map((x) => x.speaker))].sort((a, b) => a - b);
+  const detecting = S.busy[n.id + ':spk'];
+  const speakers = `<div class="spk">${ids.map((i) => `<button class="chip sp${i}" data-action="rename-speaker" data-i="${i}"><i></i>${esc(speakerName(n, i))}</button>`).join('')}
+    <button class="btn small ghost" data-action="detect-speakers" ${detecting ? 'disabled' : ''}>${icon('user', 16)}<span>${detecting ? t('detecting') : t('detectSpeakers')}</span></button></div>
+    <p class="hint">${t('speakersAiNote')}</p>`;
+  return `${speakers}<div class="row between wrap"><span class="muted">${(n.segments || []).length} ${t('lines')}</span>
     <button class="btn small ghost" data-action="translate-all" ${busy ? 'disabled' : ''}>${icon('translate', 16)}<span>${busy ? t('translating') : t('translateAll')}</span></button></div>
     <div class="stack tight">${lines || `<p class="empty">${t('noTranscript')}</p>`}</div>`;
 }
