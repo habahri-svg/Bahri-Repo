@@ -231,6 +231,7 @@ export class Recorder {
     if (merge && !this.liveTranslate && last && last.speaker === sp && last.lang === lang && last.text.length < 220 && t - (last.lastT ?? last.t) < 5) {
       last.text += ' ' + text;
       last.lastT = t;
+      this.opts.onSegment && this.opts.onSegment(last); // keeps the live "detected tasks" box in step
       this._chg();
       return last;
     }

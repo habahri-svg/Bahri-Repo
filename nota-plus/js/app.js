@@ -12,7 +12,7 @@ import { noteToText, noteToSrt, printHtml } from './export.js';
 const app = $('#app');
 const paint = (html) => (app.innerHTML = html);
 // Keep in step with VERSION in sw.js. Shown in Settings so a stale copy of the app is easy to spot.
-const APP_VERSION = 'v7';
+const APP_VERSION = 'v8';
 window.NOTA_VERSION = APP_VERSION;
 const HIDE_INSTALL = 'nota-plus.hideInstall';
 const WELCOME_DONE = 'nota-plus.welcomeDone';

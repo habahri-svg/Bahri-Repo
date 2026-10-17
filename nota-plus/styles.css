@@ -73,14 +73,14 @@ h3 { font-size: 14px; font-weight: 700; color: var(--teal); margin-bottom: 6px; 
 
 /* ---------- buttons, inputs ---------- */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 18px; border-radius: 12px; border: 1px solid var(--teal); background: var(--teal); color: #fff; font-weight: 600; font-size: 15px; }
-.btn.small { min-height: 44px; padding: 0 14px; font-size: 14px; }
+.btn.small { min-height: 44px; padding: 0 14px; font-size: 14px; white-space: nowrap; flex: none; }
 .btn.ghost { background: var(--surface); color: var(--ink); border-color: var(--line); }
 .btn.danger { background: #fff; color: var(--red); border-color: var(--red); }
 .btn.big { min-height: 60px; font-size: 18px; border-radius: 16px; width: 100%; }
 .btn.rec { background: var(--red); border-color: var(--red); }
 .btn[disabled] { opacity: 0.55; }
 .search { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); color: var(--muted); }
-.search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 16px; }
+.search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 16px; text-overflow: ellipsis; }
 .field, .select, textarea, .dialog input { width: 100%; min-height: 48px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); font-size: 16px; }
 .select { appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2355676a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-inline-end: 36px; }
 [dir='rtl'] .select { background-position: left 12px center; }
@@ -101,8 +101,8 @@ details.card[open] summary { margin-bottom: 8px; }
 .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--red); display: inline-block; }
 .dot.off { background: var(--dk-muted); }
 .tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.tile { display: flex; flex-direction: column; justify-content: space-between; gap: 10px; height: 88px; padding: 12px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); text-align: start; font-size: 14px; font-weight: 600; color: var(--ink); }
-.tile svg { color: var(--teal); }
+.tile { display: flex; flex-direction: column; justify-content: space-between; gap: 10px; min-height: 88px; padding: 12px 12px 14px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); text-align: start; font-size: 14px; font-weight: 600; color: var(--ink); }
+.tile svg { color: var(--teal); flex: none; }
 .tile.primary { background: var(--teal); border-color: var(--teal); color: #fff; }
 .tile.primary svg { color: #fff; }
 .chips { display: flex; gap: 8px; flex-wrap: wrap; }

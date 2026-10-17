@@ -1,5 +1,5 @@
 // Offline shell for Nota+. Bump VERSION whenever any file in SHELL changes.
-const VERSION = 'nota-plus-v7';
+const VERSION = 'nota-plus-v8';
 const SHELL = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',
   'js/app.js', 'js/ai.js', 'js/export.js', 'js/i18n.js', 'js/recorder.js', 'js/selfcheck.js', 'js/state.js', 'js/stt.js', 'js/store.js', 'js/util.js', 'js/views.js',
