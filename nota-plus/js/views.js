@@ -1,6 +1,6 @@
 import { S } from './state.js';
 import { t, getLang } from './i18n.js';
-import { esc, fmtClock, tokens } from './util.js';
+import { esc, fmtClock, normText, findRanges, parseClock } from './util.js';
 import { TEMPLATE_IDS } from './ai.js';
 import { deviceSupported } from './stt.js';
 
@@ -25,6 +25,7 @@ const P = {
   translate: '<path d="M4 5h9M8.5 3v2M6 5c0 4 3 7 6 8M11 5c0 3-3 7-7 9M13 20l4-9 4 9M14.5 17h5"/>',
   more: '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>',
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.5-7 8-7s8 3 8 7"/>',
+  up: '<path d="M6 15l6-6 6 6"/>',
   send: '<path d="M4 12l16-8-6 16-3-7z"/>'
 };
 const FILLED = {
@@ -105,23 +106,38 @@ function banners() {
 
 function haystack(n) {
   const sm = Object.values(n.summary || {}).map((x) => `${x.overview} ${(x.key_points || []).join(' ')} ${(x.topics || []).join(' ')}`).join(' ');
-  return `${n.title} ${(n.segments || []).map((s) => s.text).join(' ')} ${sm}`.toLowerCase();
+  return normText(`${n.title} ${(n.segments || []).map((s) => s.text).join(' ')} ${sm}`);
+}
+
+// Segments of a note whose text (or translation) contains the query. Works for a word, a part of a word or one letter.
+export function matchSegs(n, q) {
+  const nq = normText(String(q || '').trim());
+  if (!nq) return [];
+  const out = [];
+  (n.segments || []).forEach((s, i) => {
+    if (normText(s.text).includes(nq) || (s.tr && normText(s.tr).includes(nq))) out.push(i);
+  });
+  return out;
 }
 
 function snippet(n, q) {
-  const text = (n.segments || []).map((s) => s.text).join(' ');
   if (q) {
-    const first = tokens(q)[0];
-    const i = first ? text.toLowerCase().indexOf(first) : -1;
-    if (i >= 0) return (i > 30 ? '…' : '') + text.slice(Math.max(0, i - 30), i + 90) + '…';
+    const hit = matchSegs(n, q)[0];
+    if (hit !== undefined) {
+      const sg = n.segments[hit];
+      const r = findRanges(sg.text, q)[0];
+      const at = r ? r[0] : 0;
+      return `[${fmtClock(sg.t)}] ${at > 30 ? '…' : ''}${sg.text.slice(Math.max(0, at - 30), at + 90)}…`;
+    }
   }
+  const text = (n.segments || []).map((s) => s.text).join(' ');
   const sm = n.summary?.[n.lastSummaryLang || ''];
   return (sm && sm.overview ? sm.overview : text).slice(0, 110);
 }
 
 export function noteListHtml() {
-  const q = S.q.trim().toLowerCase();
-  const qt = tokens(q);
+  const q = S.q.trim();
+  const qt = q.split(/\s+/).map(normText).filter(Boolean);
   const list = S.notes.filter((n) => {
     if (S.filter !== 'all' && KIND[n.template || 'meeting'] !== S.filter) return false;
     if (!qt.length) return true;
@@ -135,7 +151,7 @@ export function noteListHtml() {
   }
   return list
     .map(
-      (n) => `<a class="card note" href="#/note/${n.id}">
+      (n) => `<a class="card note" href="#/note/${n.id}${q ? '?find=' + encodeURIComponent(q) : ''}">
       <span class="ico">${icon('wave', 20)}</span>
       <span class="grow"><span class="title" dir="auto">${esc(n.title)}</span>
       <span class="meta">${fmtDate(n.createdAt)} · ${fmtDur(n.duration)}</span>
@@ -307,38 +323,88 @@ function actionsHtml(n, lang) {
     .join('')}<button class="btn ghost" data-action="copy-tasks">${t('copyTasks')}</button></div>`;
 }
 
-export function transcriptHtml(n) {
-  const target = (x) => (x === 'ar' ? 'en' : 'ar');
-  const lines = (n.segments || [])
+function highlight(text, q) {
+  const ranges = q ? findRanges(text, q) : [];
+  if (!ranges.length) return esc(text);
+  let out = '';
+  let at = 0;
+  for (const [a, b] of ranges) {
+    out += esc(text.slice(at, a)) + '<mark>' + esc(text.slice(a, b)) + '</mark>';
+    at = b;
+  }
+  return out + esc(text.slice(at));
+}
+
+export function curMatch(n) {
+  const m = matchSegs(n, S.find);
+  return m.length ? m[Math.min(Math.max(S.findIdx || 0, 0), m.length - 1)] : null;
+}
+
+export function findCountText(n) {
+  if (!S.find || !S.find.trim()) return '';
+  const m = matchSegs(n, S.find);
+  if (!m.length) return t('noMatches');
+  return `${Math.min(S.findIdx || 0, m.length - 1) + 1} / ${m.length}`;
+}
+
+export function linesHtml(n) {
+  const q = S.find ? S.find.trim() : '';
+  const hits = new Set(matchSegs(n, q));
+  return (n.segments || [])
     .map(
-      (s, i) => `<div class="line light${s.marked ? ' marked' : ''}" data-t="${s.t}" data-seg="${i}">
+      (s, i) => `<div class="line light${s.marked ? ' marked' : ''}${hits.has(i) ? ' hit' : ''}${S.curSeg === i ? ' cur' : ''}" data-t="${s.t}" data-seg="${i}">
       <div class="who sp${s.speaker}"><button class="lnk" data-action="rename-speaker" data-i="${s.speaker}"><b>${esc(speakerName(n, s.speaker))}</b></button>
-      <button class="lnk" data-action="seek" data-t="${s.t}"><time>${fmtClock(s.t)}</time></button>${s.marked ? `<em>${icon('bookmarkF', 14)}</em>` : ''}<button class="lnk lspk" data-action="line-speaker" data-seg="${i}" aria-label="${t('changeSpeaker')}">${icon('user', 16)}</button></div>
-      <div class="txt" dir="auto">${esc(s.text)}</div>
-      ${s.tr ? `<div class="tr" dir="auto">${esc(s.tr)}</div>` : ''}</div>`
+      <button class="lnk" data-action="seek" data-t="${s.t}" aria-label="${t('playFrom')} ${fmtClock(s.t)}"><time>${fmtClock(s.t)}</time></button>${s.marked ? `<em>${icon('bookmarkF', 14)}</em>` : ''}<button class="lnk lspk" data-action="line-speaker" data-seg="${i}" aria-label="${t('changeSpeaker')}">${icon('user', 16)}</button></div>
+      <div class="txt" dir="auto">${highlight(s.text, q)}</div>
+      ${s.tr ? `<div class="tr" dir="auto">${highlight(s.tr, q)}</div>` : ''}</div>`
     )
-    .join('');
+    .join('') || `<p class="empty">${t('noTranscript')}</p>`;
+}
+
+export function transcriptHtml(n) {
   const busy = S.busy[n.id + ':tr'];
   const ids = [...new Set((n.segments || []).map((x) => x.speaker))].sort((a, b) => a - b);
   const detecting = S.busy[n.id + ':spk'];
   const speakers = `<div class="spk">${ids.map((i) => `<button class="chip sp${i}" data-action="rename-speaker" data-i="${i}"><i></i>${esc(speakerName(n, i))}</button>`).join('')}
     <button class="btn small ghost" data-action="detect-speakers" ${detecting ? 'disabled' : ''}>${icon('user', 16)}<span>${detecting ? t('detecting') : t('detectSpeakers')}</span></button></div>
     <p class="hint">${t('speakersAiNote')}</p>`;
-  return `${speakers}<div class="row between wrap"><span class="muted">${(n.segments || []).length} ${t('lines')}</span>
+  const marks = (n.bookmarks || []).length
+    ? `<div class="marks"><span class="muted">${t('markedMoments')}</span>${n.bookmarks.map((b) => `<button class="ts" data-action="goto-time" data-t="${b.t}">[${fmtClock(b.t)}]${b.text ? ' ' + esc(b.text.slice(0, 22)) : ''}</button>`).join('')}</div>`
+    : '';
+  const find = `<div class="findbar">
+    <div class="row gap">
+      <label class="search grow">${icon('search', 20)}<input id="find" type="search" value="${esc(S.find || '')}" placeholder="${t('findPh')}" aria-label="${t('findPh')}" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+      <button class="iconbtn sm" data-action="find-prev" aria-label="${t('prevMatch')}">${icon('up', 22)}</button>
+      <button class="iconbtn sm" data-action="find-next" aria-label="${t('nextMatch')}">${icon('chevron', 22)}</button>
+    </div>
+    <div class="row between gap">
+      <span id="find-count" class="muted" role="status">${findCountText(n)}</span>
+      <form class="row gap jump" data-form="jump"><input id="jump" inputmode="numeric" placeholder="${t('jumpPh')}" aria-label="${t('jumpPh')}" autocomplete="off"><button class="btn small ghost">${t('go')}</button></form>
+    </div>
+  </div>`;
+  return `${find}${marks}${speakers}<div class="row between wrap"><span class="muted">${(n.segments || []).length} ${t('lines')}</span>
     <button class="btn small ghost" data-action="translate-all" ${busy ? 'disabled' : ''}>${icon('translate', 16)}<span>${busy ? t('translating') : t('translateAll')}</span></button></div>
-    <div class="stack tight">${lines || `<p class="empty">${t('noTranscript')}</p>`}</div>`;
+    <div id="tr-lines" class="stack tight">${linesHtml(n)}</div>`;
 }
 
-export function askMessagesHtml(chat) {
+export function askMessagesHtml(chat, linkable = false) {
   if (!chat.length) return '';
+  const link = (html) =>
+    html.replace(/\[(\d{1,2}:\d{2}(?::\d{2})?)\]/g, (all, ts) => {
+      const sec = parseClock(ts);
+      return Number.isNaN(sec) ? all : `<button class="ts" data-action="goto-time" data-t="${sec}">[${ts}]</button>`;
+    });
   return chat
-    .map((m) => `<div class="msg ${m.role === 'user' ? 'me' : 'ai'}" dir="auto">${esc(m.content).replace(/\n/g, '<br>')}</div>`)
+    .map((m) => {
+      const html = esc(m.content).replace(/\n/g, '<br>');
+      return `<div class="msg ${m.role === 'user' ? 'me' : 'ai'}" dir="auto">${linkable && m.role !== 'user' ? link(html) : html}</div>`;
+    })
     .join('');
 }
 
 function askHtml(n) {
   const chat = S.chats[n.id] || [];
-  return `<div class="stack tight"><div id="chat" class="chat">${askMessagesHtml(chat)}${S.busy[n.id + ':ask'] ? `<div class="msg ai"><span class="spin"></span>${t('thinking')}</div>` : ''}</div>
+  return `<div class="stack tight"><div id="chat" class="chat">${askMessagesHtml(chat, true)}${S.busy[n.id + ':ask'] ? `<div class="msg ai"><span class="spin"></span>${t('thinking')}</div>` : ''}</div>
     ${chat.length ? '' : `<div class="tags big">${[t('sug1'), t('sug2'), t('sug3')].map((x) => `<button data-action="suggest" data-q="${esc(x)}">${esc(x)}</button>`).join('')}</div>`}
     <form class="askbar" data-form="ask"><input name="q" autocomplete="off" placeholder="${t('askPh')}" aria-label="${t('askPh')}"><button class="iconbtn send" aria-label="${t('send')}">${icon('send', 20, 'flip')}</button></form></div>`;
 }

@@ -301,3 +301,19 @@ details.card[open] summary { margin-bottom: 8px; }
 .chk.warn .mk { background: var(--amber); color: #3b2a00; }
 .chk.fail .mk { background: var(--red); color: #fff; }
 .chk .muted { word-break: break-word; }
+
+/* ---------- find inside a note ---------- */
+.findbar { position: sticky; top: 0; z-index: 3; background: var(--bg); padding: 6px 0 8px; display: flex; flex-direction: column; gap: 8px; }
+.findbar .field { flex: 1; min-width: 0; }
+.iconbtn.sm { width: 44px; height: 44px; background: var(--surface); border: 1px solid var(--line); }
+mark { background: #ffe08a; color: inherit; border-radius: 3px; padding: 0 1px; }
+.line.light.hit { background: rgba(242, 181, 68, 0.14); padding-inline: 10px; border-radius: 10px; }
+.line.light.cur { outline: 2px solid var(--teal); outline-offset: 2px; border-radius: 10px; padding-inline: 10px; }
+.ts { background: var(--teal-soft); color: var(--teal); border: 0; border-radius: 8px; padding: 6px 10px; min-height: 36px; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; font-weight: 600; cursor: pointer; }
+.msg .ts { margin-inline: 2px; }
+.marks { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.findbar { gap: 6px; padding: 4px 0 6px; }
+.findbar .search { margin: 0; }
+.jump { flex: 1; justify-content: flex-end; min-width: 0; }
+.jump input { flex: 1; min-width: 0; max-width: 260px; min-height: 40px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); font-size: 14px; }
+.jump .btn { min-height: 40px; }

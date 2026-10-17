@@ -1,6 +1,6 @@
 import { S } from './state.js';
 import { t, setLang, getLang } from './i18n.js';
-import { $, esc, uid, fmtClock, langOf, arabicRatio, download, copyText, isIOS, isStandalone } from './util.js';
+import { $, esc, uid, fmtClock, langOf, arabicRatio, download, copyText, isIOS, isStandalone, parseClock } from './util.js';
 import { loadSettings, saveSettings, notesDb, audioDb, requestPersistence, storageEstimate, saveDraft, loadDraft, clearDraft } from './store.js';
 import { runChecks, reportText } from './selfcheck.js';
 import { summarize, quickSummary, translateTexts, answer, buildGlobalContext, transcribeBlob, testKey, friendlyError, detectActions, detectSpeakers, transcriptText } from './ai.js';
@@ -112,6 +112,10 @@ function renderNote() {
     if (focused) q2.focus();
   }
   window.scrollTo(0, y);
+  if (S.pendingFocus) {
+    S.pendingFocus = false;
+    setTimeout(() => focusCurrent(false), 60);
+  }
   const chat = $('#chat');
   if (chat) chat.lastElementChild?.scrollIntoView({ block: 'nearest' });
 }
@@ -125,7 +129,9 @@ function leaveNote() {
 }
 
 async function route() {
-  const [name, arg] = location.hash.replace(/^#\/?/, '').split('/');
+  const raw = location.hash.replace(/^#\/?/, '');
+  const [pathPart, qs] = raw.split('?');
+  const [name, arg] = pathPart.split('/');
   leaveNote();
   closeModal();
   if (name === 'record') {
@@ -133,7 +139,7 @@ async function route() {
     if (!S.rec || S.rec.stopped) initSetup();
   } else if (name === 'note') {
     S.view = 'note';
-    await openNote(arg);
+    await openNote(arg, { find: new URLSearchParams(qs || '').get('find') || '' });
     return;
   } else if (name === 'ask') S.view = 'ask';
   else if (name === 'welcome') S.view = 'welcome';
@@ -142,7 +148,7 @@ async function route() {
   render(true);
 }
 
-async function openNote(id) {
+async function openNote(id, opts = {}) {
   const n = S.notes.find((x) => x.id === id);
   if (!n) {
     location.hash = '#/';
@@ -150,6 +156,15 @@ async function openNote(id) {
   }
   S.note = n;
   S.noteTab = 'summary';
+  S.find = opts.find || '';
+  S.findIdx = 0;
+  S.curSeg = null;
+  if (S.find) {
+    // arrived from a search result, show the transcript with the first match highlighted
+    S.noteTab = 'transcript';
+    S.curSeg = V.curMatch(n);
+    S.pendingFocus = true;
+  }
   S.sumLang = n.lastSummaryLang || S.settings.summaryLang;
   if (n.hasAudio) {
     try {
@@ -545,6 +560,64 @@ async function pasteText() {
   await saveNew(note, null);
 }
 
+// ---------- find and jump inside a note ----------
+
+function focusCurrent(seek) {
+  const el = $('#tr-lines .line.cur');
+  if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  const sg = S.note && S.curSeg != null ? S.note.segments[S.curSeg] : null;
+  const p = $('#player');
+  if (seek && sg && p) {
+    try {
+      p.currentTime = sg.t;
+    } catch {}
+  }
+}
+
+function refreshLines() {
+  const n = S.note;
+  if (!n) return;
+  const box = $('#tr-lines');
+  if (box) box.innerHTML = V.linesHtml(n);
+  const cnt = $('#find-count');
+  if (cnt) cnt.textContent = V.findCountText(n);
+}
+
+function stepFind(d) {
+  const n = S.note;
+  const len = V.matchSegs(n, S.find).length;
+  if (!len) return;
+  S.findIdx = ((S.findIdx || 0) + d + len) % len;
+  S.curSeg = V.curMatch(n);
+  refreshLines();
+  focusCurrent(true);
+}
+
+// Jumps to the transcript line closest to a time, shows it, and moves the audio there.
+function gotoTime(sec, play) {
+  const n = S.note;
+  if (!n || !n.segments.length) return;
+  let best = 0;
+  let dist = Infinity;
+  n.segments.forEach((s, i) => {
+    const d = Math.abs(s.t - sec);
+    if (d < dist) {
+      dist = d;
+      best = i;
+    }
+  });
+  S.curSeg = best;
+  if (S.noteTab !== 'transcript') {
+    S.noteTab = 'transcript';
+    renderNote();
+  } else refreshLines();
+  setTimeout(() => {
+    focusCurrent(true);
+    const p = $('#player');
+    if (play && p) p.play().catch(() => {});
+  }, 60);
+}
+
 // ---------- AI actions ----------
 
 async function persist(n) {
@@ -775,9 +848,18 @@ const A = {
   },
   seek(el) {
     const p = $('#player');
-    if (!p) return;
+    if (!p) return toast(t('noAudio'));
     p.currentTime = +el.dataset.t;
     p.play().catch(() => {});
+  },
+  'goto-time'(el) {
+    gotoTime(+el.dataset.t, true);
+  },
+  'find-next'() {
+    stepFind(1);
+  },
+  'find-prev'() {
+    stepFind(-1);
   },
   async 'rename-speaker'(el) {
     const i = +el.dataset.i;
@@ -991,7 +1073,11 @@ function onSubmit(e) {
   if (!form) return;
   e.preventDefault();
   if (form.dataset.form === 'ask') submitAsk();
-  else if (form.dataset.form === 'welcome') welcomeSave(form.key.value);
+  else if (form.dataset.form === 'jump') {
+    const sec = parseClock($('#jump').value);
+    if (Number.isNaN(sec)) toast(t('jumpBad'));
+    else gotoTime(sec, true);
+  } else if (form.dataset.form === 'welcome') welcomeSave(form.key.value);
   else if (form.dataset.form === 'prompt') closeModal(form.v.value);
   else if (form.dataset.form === 'speakers') {
     const names = {};
@@ -1033,7 +1119,13 @@ function onChange(e) {
 
 function onInput(e) {
   const el = e.target;
-  if (el.id === 'q') {
+  if (el.id === 'find' && S.note) {
+    S.find = el.value;
+    S.findIdx = 0;
+    S.curSeg = V.curMatch(S.note);
+    refreshLines();
+    focusCurrent(false);
+  } else if (el.id === 'q') {
     S.q = el.value;
     $('#list').innerHTML = V.noteListHtml();
   } else if (el.id === 'rec-names') {
