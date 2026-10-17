@@ -1,4 +1,4 @@
-import { langOf, tokens, fmtClock, sleep } from './util.js';
+import { langOf, tokens, fmtClock, sleep, parseClock } from './util.js';
 import { saveSettings } from './store.js';
 
 // Works with any OpenAI-compatible API. Defaults point at Groq's free tier.
@@ -164,6 +164,8 @@ export async function testKey(cfg) {
 const EXT = { 'audio/webm': 'webm', 'audio/mp4': 'm4a', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'video/mp4': 'mp4', 'video/webm': 'webm', 'audio/x-m4a': 'm4a', 'audio/aac': 'm4a' };
 
 const AR_PROMPT = 'مرحباً. هذا حديث باللغة العربية.';
+// For Auto: tells the model that both languages appear, so English words stay in English letters inside Arabic speech.
+const BI_PROMPT = 'Hello, مرحباً. Arabic and English, عربي وإنجليزي.';
 
 async function transcribeOnce(cfg, blob, { lang, name, retries, hint }) {
   const base = (blob.type || 'audio/webm').split(';')[0];
@@ -178,7 +180,8 @@ async function transcribeOnce(cfg, blob, { lang, name, retries, hint }) {
       fd.append('temperature', '0');
       if (lang && lang !== 'auto') fd.append('language', lang);
       // The prompt steers spelling and style: an Arabic cue for Arabic, then the names and the last words said.
-      const prompt = [lang === 'ar' ? AR_PROMPT : '', hint || ''].filter(Boolean).join(' ').slice(-220);
+      const cue = lang === 'ar' ? AR_PROMPT : lang === 'en' ? '' : BI_PROMPT;
+      const prompt = [cue, hint || ''].filter(Boolean).join(' ').slice(0, 224); // the recorder keeps the hint short, names first
       if (prompt) fd.append('prompt', prompt);
       return call(cfg, '/audio/transcriptions', { method: 'POST', body: fd }, 300000, retries);
     },
@@ -287,7 +290,7 @@ async function condense(cfg, body) {
         {
           role: 'system',
           content:
-            'Condense this transcript excerpt into detailed bullet notes in the language it was spoken. Keep names, numbers, dates, decisions and tasks exact. Maximum 250 words. Output the bullets only.'
+            'Condense this transcript excerpt into detailed bullet notes in the language it was spoken. Begin each bullet with the [mm:ss] time where that point starts. Keep names, numbers, dates, decisions and tasks exact. Maximum 250 words. Output the bullets only.'
         },
         { role: 'user', content: p }
       ])
@@ -300,11 +303,15 @@ function asList(v) {
   return Array.isArray(v) ? v.map((x) => String(x).trim()).filter(Boolean) : [];
 }
 
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
+
 export async function summarize(cfg, note, { lang, template }) {
   const langName = lang === 'ar' ? 'Arabic (clear, natural Modern Standard Arabic)' : 'English';
   let body = transcriptText(note);
   if (body.length > 14000) body = await condense(cfg, body);
-  const system = `You are an expert note-taker. The text below is the transcript of ${TEMPLATE_HINT[template] || TEMPLATE_HINT.meeting} It may mix Arabic and English and may contain speech recognition errors. Write everything in ${langName}, even if the speakers used another language. Keep names, numbers and dates exact. Never invent facts that are not in the transcript. Reply with one JSON object only, using exactly these keys: "title" (at most 8 words), "overview" (2 to 4 sentences), "key_points" (array of 3 to 8 short strings), "decisions" (array of strings, may be empty), "action_items" (array of objects with "text", "owner" and "due", using an empty string when unknown), "topics" (array of 2 to 6 short keywords).`;
+  const today = new Date().toISOString().slice(0, 10);
+  const vocab = (cfg.vocab || '').trim();
+  const system = `You are an expert note-taker. The text below is the transcript of ${TEMPLATE_HINT[template] || TEMPLATE_HINT.meeting} It may mix Arabic and English and may contain speech recognition errors.${vocab ? ` Names and terms that may appear, spell them exactly like this: ${vocab}.` : ''} Write everything in ${langName}, even if the speakers used another language. Keep names, numbers and dates exact. Never invent facts that are not in the transcript. Today is ${today}. Reply with one JSON object only, using exactly these keys: "title" (at most 8 words), "overview" (2 to 4 sentences), "key_points" (array of 3 to 8 short strings), "decisions" (array of strings, may be empty), "action_items" (array of objects with "text", "owner", "due" as the words used, and "due_date" as YYYY-MM-DD when a real date can be worked out from today's date, otherwise an empty string), "topics" (array of 2 to 6 short keywords), "chapters" (array of 3 to 10 objects with "time" as mm:ss copied from the transcript where that part starts, and "title" of 2 to 6 words, in order).`;
   const raw = await chat(cfg, [{ role: 'system', content: system }, { role: 'user', content: body }], { json: true });
   const j = parseJson(raw);
   return {
@@ -315,11 +322,39 @@ export async function summarize(cfg, note, { lang, template }) {
     action_items: (Array.isArray(j.action_items) ? j.action_items : [])
       .map((a) => (typeof a === 'string' ? { text: a } : a))
       .filter((a) => a && a.text)
-      .map((a) => ({ text: String(a.text).trim(), owner: String(a.owner || '').trim(), due: String(a.due || '').trim(), done: false })),
+      .map((a) => {
+        const iso = String(a.due_date || '').trim();
+        return { text: String(a.text).trim(), owner: String(a.owner || '').trim(), due: String(a.due || '').trim(), iso: ISO.test(iso) ? iso : '', done: false };
+      }),
     topics: asList(j.topics),
+    chapters: (Array.isArray(j.chapters) ? j.chapters : [])
+      .map((c) => ({ t: parseClock(String(c && c.time).replace(/[\[\]]/g, '')), title: String((c && c.title) || '').trim() }))
+      .filter((c) => !Number.isNaN(c.t) && c.title),
     at: Date.now(),
     offline: false
   };
+}
+
+// A short follow-up email for the people in the conversation, built from the saved summary.
+export async function followUpEmail(cfg, note, lang) {
+  const sm = note.summary?.[lang];
+  if (!sm) throw new Error('No summary');
+  const langName = lang === 'ar' ? 'Arabic' : 'English';
+  const names = Object.values(note.speakers || {}).filter(Boolean);
+  const facts = JSON.stringify({ title: note.title, people: names, overview: sm.overview, decisions: sm.decisions, action_items: sm.action_items.map(({ text, owner, due }) => ({ text, owner, due })) });
+  const raw = await chat(
+    cfg,
+    [
+      {
+        role: 'system',
+        content: `Write a short, friendly, professional follow-up email to the people who took part in a conversation. Use only the facts given. Include a one line recap, the decisions, and the action items with owners and dates, then a polite closing. Do not invent anything. Write in ${langName}. Reply with one JSON object {"subject": "...", "body": "..."} where body uses plain text and line breaks.`
+      },
+      { role: 'user', content: facts }
+    ],
+    { json: true, temperature: 0.3 }
+  );
+  const j = parseJson(raw);
+  return { subject: String(j.subject || note.title).trim(), body: String(j.body || '').trim() };
 }
 
 export async function translateTexts(cfg, texts, target, onBatch) {
@@ -505,8 +540,9 @@ export function quickSummary(note) {
     overview: top.slice(0, 3).map((x) => x.s).join(' '),
     key_points: top.slice(3).map((x) => x.s),
     decisions: [],
-    action_items: actions.map((a) => ({ text: a, owner: '', due: '', done: false })),
+    action_items: actions.map((a) => ({ text: a, owner: '', due: '', iso: '', done: false })),
     topics,
+    chapters: [],
     at: Date.now(),
     offline: true
   };

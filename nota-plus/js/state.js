@@ -18,6 +18,7 @@ export const S = {
   findIdx: 0,
   curSeg: null, // transcript line currently jumped to
   pendingFocus: false,
+  largeText: false,
   sumLang: 'en',
   audioUrl: '',
   installEvt: null,
