@@ -752,7 +752,19 @@
     var s = String(txt || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
     try { return JSON.parse(s); } catch (e) {}
     var a = s.indexOf("{"), b = s.lastIndexOf("}");
-    if (a >= 0 && b > a) return JSON.parse(s.slice(a, b + 1));
+    if (a >= 0 && b > a) {
+      var body = s.slice(a, b + 1);
+      try { return JSON.parse(body); } catch (e1) {
+        /* A long answer sometimes breaks in the middle of a list. Keep every complete item before the break and close the list. */
+        var pos = +((/position (\d+)/.exec(String(e1 && e1.message)) || [])[1]);
+        var cut = isFinite(pos) ? body.lastIndexOf("}", pos) : -1;
+        while (cut > 0) {
+          try { return JSON.parse(body.slice(0, cut + 1) + "]}"); } catch (e2) {}
+          cut = body.lastIndexOf("}", cut - 1);
+        }
+        throw e1;
+      }
+    }
     throw cerr("tool_error", "The AI's answer wasn't readable");
   }
   /* Shared AI: the site owner's key sits on the server (api/claude.js and api/chatgpt.js). Signed-in people use it with no key of their own. */
@@ -776,12 +788,12 @@
   function modeOf(p) { p = p || active(); return !p ? "" : keyOf(p) ? "key" : shared[p] ? "shared" : ""; }
   function textOf(j) { return (j.content || []).filter(function (b) { return b.type === "text"; }).map(function (b) { return b.text; }).join(""); }
 
-  async function callShared(p, messages) {
+  async function callShared(p, messages, o) {
     var t = await ensure();
     var r = await fetch(p === "chatgpt" ? "/api/chatgpt" : "/api/claude", {
       method: "POST",
       headers: { "content-type": "application/json", Authorization: "Bearer " + t },
-      body: JSON.stringify({ model: p === "chatgpt" ? (isFree(p) ? "" : getOModel()) : getModel(), messages: messages, max_tokens: 8000 })
+      body: JSON.stringify({ model: p === "chatgpt" ? (isFree(p) ? "" : getOModel()) : getModel(), messages: messages, max_tokens: 8000, json: !!(o && o.json) })
     });
     var detail = "";
     if (!r.ok) { try { detail = (await r.json()).error || ""; } catch (e) {} }
@@ -789,12 +801,12 @@
     if (!r.ok) throw cerr("tool_error", detail || NAMES[p] + " answered " + r.status);
     return { text: textOf(await r.json()) };
   }
-  async function callDirect(p, messages) {
+  async function callDirect(p, messages, o) {
     var r, key = keyOf(p);
     if (p === "chatgpt" && /^AIza/.test(String(key))) {
       var gm = /^gemini-/.test(getOModel()) ? getOModel() : GMODEL;
       var gtext = function (c) { return typeof c === "string" ? c : (Array.isArray(c) ? c.map(function (x) { return x && x.text ? x.text : ""; }).join("\n") : ""); };
-      r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(gm) + ":generateContent", { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": key }, body: JSON.stringify({ contents: messages.map(function (m) { return { role: m.role === "assistant" ? "model" : "user", parts: [{ text: gtext(m.content) }] }; }) }) });
+      r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(gm) + ":generateContent", { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": key }, body: JSON.stringify({ contents: messages.map(function (m) { return { role: m.role === "assistant" ? "model" : "user", parts: [{ text: gtext(m.content) }] }; }), generationConfig: (o && o.json) ? { responseMimeType: "application/json" } : undefined }) });
       var gd = "";
       if (!r.ok) { try { var ge = (await r.json()).error || {}; gd = String(ge.message || ""); } catch (x) {} }
       if (r.status === 400 && /API key/i.test(gd) || r.status === 403) throw cerr("not_granted", NAMES[p] + " rejected the API key");
@@ -828,7 +840,7 @@
       var files = messages.some(function (m) { return Array.isArray(m.content); });
       var other = p === "claude" ? "chatgpt" : "claude";
       var canSwitch = !(opts && opts.noFallback) && !files && avail(other) && !(isFree(p) && isPaid(other));   /* never spend paid credit by itself when the free AI is the one asked */
-      var run = function (pp) { return keyOf(pp) ? callDirect(pp, messages) : callShared(pp, messages); };
+      var run = function (pp) { return keyOf(pp) ? callDirect(pp, messages, opts) : callShared(pp, messages, opts); };
       if (canSwitch && down[p] && down[p].until > Date.now() && !(down[other] && down[other].until > Date.now())) {
         try { var r0 = await run(other); r0.usedOther = other; r0.skipped = p; if (down[p].credit) autoSwitch(p, other); return r0; }
         catch (e0) { if (!creditLike(e0)) throw e0; down[other] = { until: Date.now() + 2 * 60000, why: String(e0.message || "").slice(0, 160), credit: /credit|billing|quota/i.test(String(e0.message || "")) }; announce(); throw e0; }
@@ -858,7 +870,7 @@
       return r;
     };
     sample.json = async function (input, opts) {
-      var r = await call(String(input) + "\n\nReturn valid JSON only. No code fences and no commentary.", opts);
+      var r = await call(String(input) + "\n\nReturn valid JSON only. No code fences and no commentary.", Object.assign({}, opts, { json: true }));
       try { if (window.WYZ_USAGE) setTimeout(function () { window.WYZ_USAGE.refresh(false); }, 2500); } catch (e) {}
       return parseJson(r.text);
     };

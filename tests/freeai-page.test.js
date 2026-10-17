@@ -32,6 +32,12 @@ const gem = (text) => ({ ok: true, status: 200, json: async () => ({ candidates:
     assert.ok(err, "should have failed instead of using Claude"); assert.match(err.message, /free limit/); assert.ok(fetchLog.every((x) => !/anthropic\.com/.test(x.url)), "Claude was called");
   });
   await t("free-first off: the saved Claude is used again", () => { A.setFreeFirst(false); A.setChosen("claude"); assert.strictEqual(A.active(), "claude"); A.setFreeFirst(true); });
+  await t("a list broken in the middle keeps the complete items and asks Google for JSON mode", async () => {
+    const broken = '{"headline":"Hi","items":[{"id":"a","st":"reply"},{"id":"b","st":"fol"low"},{"id":"c","st":"work"}]}';
+    responder = () => gem(broken); const s = sb.Connectors.makeSample(); const r = await s.json("sort", { cache: false });
+    assert.strictEqual(r.headline, "Hi"); assert.ok(r.items.length >= 1 && r.items[0].id === "a", JSON.stringify(r));
+    assert.ok(/responseMimeType/.test(fetchLog[0].body), "JSON mode was not requested");
+  });
   await t("removing the free key goes back to ChatGPT naming", () => { A.clearOpenAI(); assert.strictEqual(A.names.chatgpt, "ChatGPT"); assert.strictEqual(A.isFree("chatgpt"), false); });
   console.log(pass + " passed, " + fail + " failed"); process.exit(fail ? 1 : 0);
 })();

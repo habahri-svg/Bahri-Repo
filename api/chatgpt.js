@@ -30,7 +30,7 @@ async function gemini(ctx, res) {
     const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent", {
       method: "POST",
       headers: { "content-type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
-      body: JSON.stringify({ contents: ctx.msgs.map(function (m) { return { role: m.role === "assistant" ? "model" : "user", parts: [{ text: textOf(m.content) }] }; }) })
+      body: JSON.stringify({ contents: ctx.msgs.map(function (m) { return { role: m.role === "assistant" ? "model" : "user", parts: [{ text: textOf(m.content) }] }; }), generationConfig: ctx.body.json ? { responseMimeType: "application/json" } : undefined })
     });
     const out = await r.text();
     if (!r.ok) {
