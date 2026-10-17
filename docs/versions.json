@@ -197,6 +197,11 @@
     },
     {
       "version": "3.80",
+      "path": "previous/v3.80/",
+      "label": "Arrange this page: drag to move and switch off any button or section"
+    },
+    {
+      "version": "3.81",
       "path": "",
       "label": "Current"
     }
