@@ -8,6 +8,9 @@ export const S = {
   setup: null, // choices on the record screen before starting
   detected: [],
   busy: {},
+  rerun: {},
+  checks: [],
+  errors: [],
   chats: {},
   note: null, // note open in the note view
   noteTab: 'summary',

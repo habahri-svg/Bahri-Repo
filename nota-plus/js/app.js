@@ -1,7 +1,8 @@
 import { S } from './state.js';
 import { t, setLang, getLang } from './i18n.js';
 import { $, esc, uid, fmtClock, langOf, arabicRatio, download, copyText, isIOS, isStandalone } from './util.js';
-import { loadSettings, saveSettings, notesDb, audioDb, requestPersistence, storageEstimate } from './store.js';
+import { loadSettings, saveSettings, notesDb, audioDb, requestPersistence, storageEstimate, saveDraft, loadDraft, clearDraft } from './store.js';
+import { runChecks, reportText } from './selfcheck.js';
 import { summarize, quickSummary, translateTexts, answer, buildGlobalContext, transcribeBlob, testKey, friendlyError, detectActions, detectSpeakers, transcriptText } from './ai.js';
 import { deviceSupported } from './stt.js';
 import { Recorder } from './recorder.js';
@@ -11,6 +12,8 @@ import { noteToText, noteToSrt, printHtml } from './export.js';
 const app = $('#app');
 const paint = (html) => (app.innerHTML = html);
 const HIDE_INSTALL = 'nota-plus.hideInstall';
+const WELCOME_DONE = 'nota-plus.welcomeDone';
+let routing = Promise.resolve();
 
 // ---------- small UI helpers ----------
 
@@ -31,9 +34,14 @@ function wait(msg) {
   } else el.hidden = true;
 }
 
-function modal(html) {
+function modal(html, { sticky = false } = {}) {
   const m = $('#modal');
-  m.innerHTML = `<div class="scrim" data-action="close-modal"></div>${html}`;
+  m.innerHTML = `<div class="scrim"${sticky ? '' : ' data-action="close-modal"'}></div>${html}`;
+  const box = m.querySelector('.dialog, .sheet');
+  if (box) {
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+  }
   m.hidden = false;
 }
 
@@ -47,6 +55,12 @@ function closeModal(value = null) {
     promptResolve = null;
     r(value);
   }
+}
+
+// Translation, summaries, Ask AI and the best Arabic accuracy all need the free key, so say so clearly and offer the setup.
+function needKey() {
+  modal(`<div class="dialog"><h3>${t('needKeyTitle')}</h3><p>${t('needKeyBody')}</p>
+    <div class="row gap end"><button type="button" class="btn ghost" data-action="close-modal">${t('cancel')}</button><a class="btn" href="#/welcome">${t('setupKey')}</a></div></div>`);
 }
 
 function promptModal({ title, value = '', multiline = false, ok, placeholder = '' }) {
@@ -69,9 +83,11 @@ function render(scrollTop) {
     if (S.rec && !S.rec.stopped) paintLive(true);
   } else if (S.view === 'note') {
     renderNote();
-  } else if (S.view === 'ask') paint(V.askAllView());
+  } else if (S.view === 'welcome') paint(V.welcomeView());
+  else if (S.view === 'ask') paint(V.askAllView());
   else if (S.view === 'settings') {
     paint(V.settingsView());
+    paintChecks();
     storageEstimate().then((e) => {
       const el = $('#storage-info');
       if (e && el) el.textContent = `${S.notes.length} ${t('notesCount')} · ${(e.used / 1048576).toFixed(1)} MB`;
@@ -84,9 +100,17 @@ function renderNote() {
   if (!S.note) return;
   const old = $('#player');
   const y = window.scrollY;
+  const q = $('form[data-form=ask] input[name=q]');
+  const typed = q ? q.value : null;
+  const focused = !!q && document.activeElement === q;
   paint(V.noteView(S.note));
   const nu = $('#player');
   if (old && nu) nu.replaceWith(old); // keep playback going across re-renders
+  const q2 = $('form[data-form=ask] input[name=q]');
+  if (q2 && typed) {
+    q2.value = typed; // a background job finishing must not wipe a half-typed question
+    if (focused) q2.focus();
+  }
   window.scrollTo(0, y);
   const chat = $('#chat');
   if (chat) chat.lastElementChild?.scrollIntoView({ block: 'nearest' });
@@ -112,6 +136,7 @@ async function route() {
     await openNote(arg);
     return;
   } else if (name === 'ask') S.view = 'ask';
+  else if (name === 'welcome') S.view = 'welcome';
   else if (name === 'settings') S.view = 'settings';
   else S.view = 'library';
   render(true);
@@ -145,7 +170,7 @@ function initSetup() {
     engine,
     lang: engine === 'cloud' ? 'auto' : s.uiLang === 'ar' ? 'ar' : 'en',
     template: s.template,
-    saveAudio: s.saveAudio,
+    saveAudio: engine === 'cloud' ? true : s.saveAudio,
     liveTranslate: s.liveTranslate && !!s.apiKey,
     names: ''
   };
@@ -161,12 +186,18 @@ function onRecError(e) {
 }
 
 async function startRec() {
-  const u = S.setup;
-  if (u.engine === 'cloud' && !S.settings.apiKey) {
-    toast(t('errNeedKey'));
-    location.hash = '#/settings';
-    return;
+  if (S.starting || (S.rec && !S.rec.stopped)) return; // a second tap must not start a second recorder
+  S.starting = true;
+  try {
+    await startRecInner();
+  } finally {
+    S.starting = false;
   }
+}
+
+async function startRecInner() {
+  const u = S.setup;
+  if (u.engine === 'cloud' && !S.settings.apiKey) return needKey();
   if (u.engine === 'device' && !deviceSupported()) {
     toast(t('errBlocked'));
     return;
@@ -192,13 +223,16 @@ async function startRec() {
   S.rec = rec;
   S.detected = [];
   startTicker();
+  startDraftTimer();
   render();
 }
 
 let trChain = Promise.resolve();
 function onSegment(seg) {
-  S.detected = detectActions(S.rec.segments);
-  if (S.rec.liveTranslate) {
+  const r = S.rec;
+  if (!r) return;
+  S.detected = detectActions(r.segments);
+  if (r.liveTranslate) {
     trChain = trChain.then(async () => {
       try {
         const [tr] = await translateTexts(S.settings, [seg.text], seg.lang === 'ar' ? 'en' : 'ar');
@@ -260,9 +294,9 @@ function paintTimer() {
   const el = $('#rec-timer');
   if (el) el.textContent = fmtClock(r.elapsed());
   const st = $('#rec-status');
-  if (st) st.textContent = r.paused ? t('paused') : t('live');
+  if (st) st.textContent = r.paused ? t('paused') : r.interrupted ? t('micLost') : r.dead ? t('notCapturing') : t('live');
   const d = $('#rec-dot');
-  if (d) d.classList.toggle('off', r.paused);
+  if (d) d.classList.toggle('off', r.paused || !!r.dead);
 }
 
 function paintBars() {
@@ -314,10 +348,31 @@ function newNote({ title, segments, duration, template, bookmarks = [], hasAudio
 
 const defaultTitle = () => `${t('defaultTitle')} ${new Date().toLocaleDateString(getLang() === 'ar' ? 'ar-u-nu-latn' : undefined, { day: 'numeric', month: 'short' })}`;
 
-async function saveNew(note, audioBlob) {
-  await notesDb.put(note);
-  if (audioBlob) await audioDb.put(note.id, audioBlob);
+// Writes the note first and its audio second, so a full disk can cost the audio but never the transcript.
+async function persistNew(note, audioBlob) {
+  try {
+    await notesDb.put(note);
+  } catch (e) {
+    try {
+      download(`${note.title}.txt`, noteToText(note, S.sumLang)); // last resort, hand the text to the user
+    } catch {}
+    toast(t('saveFailed'));
+    throw e;
+  }
+  if (audioBlob) {
+    try {
+      await audioDb.put(note.id, audioBlob);
+    } catch {
+      note.hasAudio = false;
+      await notesDb.put(note).catch(() => {});
+      toast(t('audioNotSaved'));
+    }
+  }
   S.notes.unshift(note);
+}
+
+async function saveNew(note, audioBlob) {
+  await persistNew(note, audioBlob);
   location.hash = '#/note/' + note.id;
   generateSummary(note, note.lastSummaryLang);
 }
@@ -337,12 +392,16 @@ function askSpeakerNames(note) {
       <div id="name-fields" class="stack tight">${Array.from({ length: count }, (_, i) => nameField(i, preset[i] || '')).join('')}</div>
       <button type="button" class="btn small ghost" data-action="add-name-field">+ ${t('addPerson')}</button>
       ${S.settings.apiKey ? `<label class="switch lt"><input type="checkbox" name="ai"${aiDefault ? ' checked' : ''}><span>${t('aiAssign')}</span></label>` : ''}
-      <div class="row gap end"><button type="button" class="btn ghost" data-action="close-modal">${t('skip')}</button><button class="btn">${t('saveSummarize')}</button></div></form>`);
+      <div class="row gap end"><button type="button" class="btn ghost" data-action="close-modal">${t('skip')}</button><button class="btn">${t('saveSummarize')}</button></div></form>`, { sticky: true });
     setTimeout(() => $('#modal input[name=sp0]')?.focus(), 60);
   });
 }
 
-async function finalizeNew(note, audio) {
+// The note is already saved when this runs, so closing the page here loses nothing.
+async function openAndName(note) {
+  location.hash = '#/note/' + note.id;
+  await new Promise((r) => setTimeout(r, 0));
+  await routing;
   const ans = await askSpeakerNames(note);
   if (ans) {
     note.speakers = { ...note.speakers, ...ans.names };
@@ -358,45 +417,84 @@ async function finalizeNew(note, audio) {
         wait(null);
       }
     }
+    await persist(note);
+    refreshNote(note);
   }
-  await saveNew(note, audio);
+  generateSummary(note, note.lastSummaryLang);
 }
 
 async function finishRecording() {
   const r = S.rec;
+  if (!r || S.stopping) return; // a double tap on Stop does nothing
+  S.stopping = true;
   stopTicker();
+  stopDraftTimer();
   wait(t('writing'));
   let note;
-  let audio;
   try {
     const res = await r.stop();
-    S.rec = null;
-    S.detected = [];
     const text = res.segments.map((s) => s.text).join(' ').trim();
     if (!text) {
+      S.rec = null;
+      S.detected = [];
+      clearDraft();
       toast(t('emptyRecording'));
       location.hash = '#/';
+      render();
       return;
     }
     note = newNote({ title: defaultTitle(), segments: res.segments, duration: res.duration, template: r.template, bookmarks: res.bookmarks, hasAudio: !!res.audio, speakers: { ...r.speakerNames } });
-    audio = res.audio;
+    await persistNew(note, res.audio); // saved before anything else is asked
+    S.rec = null;
+    S.detected = [];
+    clearDraft();
   } catch (e) {
+    S.rec = null;
+    S.detected = [];
     toast(friendlyError(e, t));
+    location.hash = '#/';
+    render();
     return;
   } finally {
     wait(null);
+    S.stopping = false;
   }
-  await finalizeNew(note, audio);
+  await openAndName(note);
+}
+
+// ---------- draft autosave and recovery ----------
+
+let draftTimer = null;
+function saveDraftNow() {
+  const r = S.rec;
+  if (r && !r.stopped && r.segments.length) saveDraft(r.snapshot());
+}
+function startDraftTimer() {
+  stopDraftTimer();
+  draftTimer = setInterval(saveDraftNow, 8000);
+}
+function stopDraftTimer() {
+  clearInterval(draftTimer);
+  draftTimer = null;
+}
+
+async function recoverDraft() {
+  const d = loadDraft();
+  if (!d) return;
+  if (!d.segments || !d.segments.length) return clearDraft();
+  const note = newNote({ title: `${defaultTitle()} (${t('recoveredTag')})`, segments: d.segments, duration: d.duration || 0, template: d.template, bookmarks: d.bookmarks || [], speakers: d.speakers || {} });
+  note.createdAt = d.at || note.createdAt;
+  try {
+    await persistNew(note, null);
+    clearDraft();
+    toast(t('recoveredToast'));
+  } catch {}
 }
 
 // ---------- import and paste ----------
 
 async function importFile(file) {
-  if (!S.settings.apiKey) {
-    toast(t('importNeedKey'));
-    location.hash = '#/settings';
-    return;
-  }
+  if (!S.settings.apiKey) return needKey();
   if (file.size > 24 * 1048576) {
     toast(t('importTooBig'));
     return;
@@ -413,7 +511,8 @@ async function importFile(file) {
     const dur = r.segments.length ? r.segments[r.segments.length - 1].end : 0;
     const note = newNote({ title: file.name.replace(/\.[^.]+$/, '') || defaultTitle(), segments: segs, duration: dur, hasAudio: true });
     wait(null);
-    await finalizeNew(note, file);
+    await persistNew(note, file);
+    await openAndName(note);
   } catch (e) {
     toast(friendlyError(e, t));
   } finally {
@@ -424,7 +523,23 @@ async function importFile(file) {
 async function pasteText() {
   const text = await promptModal({ title: t('pasteTitle'), multiline: true, ok: t('summarize'), placeholder: t('pastePh') });
   if (!text || !text.trim()) return;
-  const parts = text.split(/\n+/).map((x) => x.trim()).filter(Boolean);
+  const parts = [];
+  for (const para of text.split(/\n+/).map((x) => x.trim()).filter(Boolean)) {
+    if (para.length <= 500) parts.push(para);
+    else {
+      // a long block with no line breaks becomes sentence-sized lines of at most about 500 characters
+      const sentences = para.match(/[^.!?؟۔]+[.!?؟۔]*\s*/g) || [para];
+      let cur = '';
+      for (const sn of sentences) {
+        if (cur && cur.length + sn.length > 500) {
+          parts.push(cur.trim());
+          cur = '';
+        }
+        cur += sn;
+      }
+      if (cur.trim()) parts.push(cur.trim());
+    }
+  }
   const segs = parts.map((p, i) => ({ t: i, text: p, lang: langOf(p), speaker: 0 }));
   const note = newNote({ title: defaultTitle(), segments: segs, duration: 0 });
   await saveNew(note, null);
@@ -433,9 +548,12 @@ async function pasteText() {
 // ---------- AI actions ----------
 
 async function persist(n) {
+  if (!S.notes.includes(n)) return; // deleted while a job was running, never bring it back
   try {
     await notesDb.put(n);
-  } catch {}
+  } catch {
+    toast(t('saveFailed'));
+  }
 }
 
 function refreshNote(n) {
@@ -445,13 +563,21 @@ function refreshNote(n) {
 async function generateSummary(n, lang) {
   lang = lang || S.sumLang;
   const key = n.id + ':' + lang;
-  if (S.busy[key]) return;
+  if (S.busy[key]) {
+    S.rerun[key] = true; // a new template or names arrived mid-run, go again when this one ends
+    return;
+  }
   S.busy[key] = true;
   refreshNote(n);
   try {
     n.summary = n.summary || {};
+    const before = n.summary[lang]?.action_items || [];
     if (S.settings.apiKey) {
       const sm = await summarize(S.settings, n, { lang, template: n.template || 'meeting' });
+      for (const a of sm.action_items) {
+        // keep the ticks the user already made
+        if (before.some((o) => o.done && o.text.trim().toLowerCase() === a.text.trim().toLowerCase())) a.done = true;
+      }
       n.summary[lang] = sm;
       if (n.autoTitle && sm.title) n.title = sm.title;
     } else {
@@ -466,11 +592,15 @@ async function generateSummary(n, lang) {
     delete S.busy[key];
     await persist(n);
     refreshNote(n);
+    if (S.rerun[key]) {
+      delete S.rerun[key];
+      generateSummary(n, lang);
+    }
   }
 }
 
 async function translateTranscript(n) {
-  if (!S.settings.apiKey) return toast(t('errNeedKey'));
+  if (!S.settings.apiKey) return needKey();
   const key = n.id + ':tr';
   if (S.busy[key]) return;
   S.busy[key] = true;
@@ -479,8 +609,9 @@ async function translateTranscript(n) {
     for (const target of ['en', 'ar']) {
       const ids = n.segments.map((s, i) => i).filter((i) => !n.segments[i].tr && (n.segments[i].lang === 'ar' ? 'en' : 'ar') === target);
       if (!ids.length) continue;
-      const out = await translateTexts(S.settings, ids.map((i) => n.segments[i].text), target);
-      ids.forEach((i, k) => (n.segments[i].tr = out[k]));
+      await translateTexts(S.settings, ids.map((i) => n.segments[i].text), target, (start, got) => {
+        got.forEach((tr, k) => (n.segments[ids[start + k]].tr = tr));
+      });
     }
     toast(t('translatedDone'));
   } catch (e) {
@@ -567,6 +698,7 @@ const A = {
     S.setup.engine = el.dataset.id;
     if (S.setup.engine === 'device' && S.setup.lang === 'auto') S.setup.lang = S.settings.uiLang === 'ar' ? 'ar' : 'en';
     if (S.setup.engine === 'cloud') S.setup.lang = 'auto';
+    S.setup.saveAudio = S.setup.engine === 'cloud' ? true : S.settings.saveAudio;
     render();
   },
   'set-lang-setup'(el) {
@@ -579,7 +711,7 @@ const A = {
     render();
   },
   'toggle-translate'() {
-    if (!S.settings.apiKey) return toast(t('errNeedKey'));
+    if (!S.settings.apiKey) return needKey();
     S.rec.liveTranslate = !S.rec.liveTranslate;
     render();
   },
@@ -666,7 +798,7 @@ const A = {
   },
   async 'detect-speakers'() {
     const n = N();
-    if (!S.settings.apiKey) return toast(t('errNeedKey'));
+    if (!S.settings.apiKey) return needKey();
     const key = n.id + ':spk';
     if (S.busy[key]) return;
     S.busy[key] = true;
@@ -751,6 +883,30 @@ const A = {
     submitAsk();
   },
 
+  // first run and self-check
+  'welcome-skip'() {
+    markWelcomeDone();
+    location.hash = '#/';
+  },
+  async 'run-checks'() {
+    if (S.checking) return;
+    S.checking = true;
+    S.checks = [];
+    paintChecks();
+    try {
+      S.checks = await runChecks((r) => {
+        S.checks = r.slice();
+        paintChecks();
+      });
+    } finally {
+      S.checking = false;
+      paintChecks();
+    }
+  },
+  async 'copy-report'() {
+    toast((await copyText(reportText(S.checks || [], (id) => t('chk_' + id)))) ? t('copied') : t('errGeneric'));
+  },
+
   // settings
   async 'test-key'() {
     const el = $('#key-status');
@@ -776,6 +932,43 @@ const A = {
   }
 };
 
+function paintChecks() {
+  const el = $('#checks');
+  if (el) el.innerHTML = V.checksHtml();
+}
+
+function markWelcomeDone() {
+  try {
+    localStorage.setItem(WELCOME_DONE, '1');
+  } catch {}
+}
+
+async function welcomeSave(raw) {
+  const el = $('#welcome-status');
+  const key = String(raw || '').replace(/[^\x21-\x7E]/g, '');
+  if (!key) {
+    el.textContent = t('keyEmpty');
+    return;
+  }
+  if (/groq\.com/.test(S.settings.baseUrl) && !key.startsWith('gsk_')) {
+    el.textContent = t('keyFormat');
+    return;
+  }
+  S.settings.apiKey = key;
+  saveSettings(S.settings);
+  el.textContent = '…';
+  try {
+    const m = await testKey(S.settings);
+    markWelcomeDone();
+    toast(`${t('keyOk')} (${m.chat})`);
+    location.hash = '#/';
+  } catch (e) {
+    S.settings.apiKey = '';
+    saveSettings(S.settings);
+    el.textContent = friendlyError(e, t);
+  }
+}
+
 function submitAsk() {
   const form = $('form[data-form=ask]');
   if (!form) return;
@@ -798,6 +991,7 @@ function onSubmit(e) {
   if (!form) return;
   e.preventDefault();
   if (form.dataset.form === 'ask') submitAsk();
+  else if (form.dataset.form === 'welcome') welcomeSave(form.key.value);
   else if (form.dataset.form === 'prompt') closeModal(form.v.value);
   else if (form.dataset.form === 'speakers') {
     const names = {};
@@ -826,7 +1020,7 @@ function onChange(e) {
     const key = el.dataset.setup;
     if (key === 'liveTranslate' && el.checked && !S.settings.apiKey) {
       el.checked = false;
-      return toast(t('errNeedKey'));
+      return needKey();
     }
     S.setup[key] = el.checked;
   } else if (el.id === 'rec-template') S.setup.template = el.value;
@@ -864,7 +1058,37 @@ async function boot() {
   } catch {
     S.notes = [];
   }
+  await recoverDraft();
   requestPersistence();
+
+  S.errors = [];
+  const logErr = (m) => {
+    S.errors.push(`${new Date().toISOString()} ${m}`);
+    if (S.errors.length > 30) S.errors.shift();
+  };
+  let lastCrash = 0;
+  const crash = () => {
+    if (Date.now() - lastCrash > 10000) {
+      lastCrash = Date.now();
+      toast(t('errUnexpected'));
+    }
+  };
+  window.addEventListener('error', (e) => {
+    logErr(`${e.message} @${(e.filename || '').split('/').pop()}:${e.lineno}`);
+    crash();
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    const r = e.reason;
+    logErr(`unhandled: ${(r && r.message) || r}`);
+    crash();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') saveDraftNow();
+  });
+  window.addEventListener('pagehide', saveDraftNow);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !$('#modal').hidden) closeModal(null);
+  });
 
   let hidden = false;
   try {
@@ -893,7 +1117,9 @@ async function boot() {
     e.target.value = '';
     if (f) importFile(f);
   });
-  window.addEventListener('hashchange', route);
+  window.addEventListener('hashchange', () => {
+    routing = route();
+  });
   window.addEventListener('beforeunload', (e) => {
     if (S.rec && !S.rec.stopped) {
       e.preventDefault();
@@ -902,7 +1128,12 @@ async function boot() {
   });
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
-  route();
+  let welcomed = false;
+  try {
+    welcomed = !!localStorage.getItem(WELCOME_DONE);
+  } catch {}
+  if (!S.settings.apiKey && !welcomed && !location.hash.replace('#', '')) location.hash = '#/welcome';
+  routing = route();
 }
 
 boot();

@@ -1,6 +1,8 @@
 import { DeviceEngine, CloudEngine, pickMime } from './stt.js';
 import { transcribeBlob } from './ai.js';
-import { isAndroid, langOf } from './util.js';
+import { isAndroid, langOf, sleep } from './util.js';
+
+const MIC = { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } };
 
 // One recording session. Owns the microphone, the speech engine and the live transcript.
 
@@ -12,8 +14,8 @@ export class Recorder {
     this.interim = '';
     this.speaker = 0;
     this.speakerCount = 2;
-    this.speakerLog = [{ t: 0, s: 0 }];
     this.speakerNames = {};
+    this.speakerLog = [{ t: 0, s: 0 }];
     this.paused = false;
     this.pausedTotal = 0;
     this.pausedAt = 0;
@@ -23,12 +25,20 @@ export class Recorder {
     this.audioChunks = [];
     this.audioRec = null;
     this.audioMime = '';
+    this.saveAudio = false;
     this.engine = null;
     this.ac = null;
     this.analyser = null;
     this.wake = null;
+    this.stopped = false;
+    this.dead = ''; // reason the transcript stopped growing, shown on screen
+    this.interrupted = false; // the microphone was taken away (call, Bluetooth switch, lock)
+    this.result = null;
     this._vis = () => {
-      if (document.visibilityState === 'visible' && !this.stopped) this._wake();
+      if (document.visibilityState === 'visible' && !this.stopped) {
+        this._wake();
+        this._checkAlive();
+      }
     };
   }
 
@@ -44,35 +54,27 @@ export class Recorder {
   async start({ kind, lang, saveAudio }) {
     this.kind = kind; // device | cloud
     this.lang = lang; // auto | en | ar
+    this.saveAudio = !!saveAudio;
     if (kind === 'cloud' || saveAudio) {
       try {
-        this.stream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-        });
+        this.stream = await navigator.mediaDevices.getUserMedia(MIC);
       } catch (e) {
         if (kind === 'cloud') throw e;
       }
     }
     this.t0 = Date.now();
-    if (this.stream) this._startAudio();
+    if (this.stream) this._attachStream();
     this._startEngine();
     this._wake();
     document.addEventListener('visibilitychange', this._vis);
   }
 
-  _startAudio() {
-    const mime = pickMime();
+  _attachStream() {
+    const track = this.stream.getAudioTracks()[0];
+    if (track) track.onended = () => this._trackEnded();
+    this._startAudioRec();
     try {
-      this.audioRec = new MediaRecorder(this.stream, mime ? { mimeType: mime } : undefined);
-      this.audioMime = this.audioRec.mimeType || mime || 'audio/webm';
-      this.audioRec.ondataavailable = (e) => {
-        if (e.data && e.data.size) this.audioChunks.push(e.data);
-      };
-      this.audioRec.start(5000);
-    } catch {
-      this.audioRec = null;
-    }
-    try {
+      this.ac && this.ac.close();
       const AC = window.AudioContext || window.webkitAudioContext;
       this.ac = new AC();
       const src = this.ac.createMediaStreamSource(this.stream);
@@ -84,6 +86,66 @@ export class Recorder {
     }
   }
 
+  _startAudioRec() {
+    if (!this.saveAudio) return; // cloud transcription needs the stream, not a stored copy
+    const mime = pickMime();
+    try {
+      this.audioRec = new MediaRecorder(this.stream, mime ? { mimeType: mime } : undefined);
+      this.audioMime = this.audioRec.mimeType || mime || 'audio/webm';
+      this.audioRec.ondataavailable = (e) => {
+        if (e.data && e.data.size) this.audioChunks.push(e.data);
+      };
+      this.audioRec.start(5000);
+    } catch {
+      this.audioRec = null;
+    }
+  }
+
+  _trackEnded() {
+    if (this.stopped || this.paused) return;
+    this.interrupted = true;
+    this._chg();
+    this._reacquire();
+  }
+
+  // After a phone call or an audio route change, keep trying to get the microphone back.
+  async _reacquire() {
+    if (this.reacquiring) return;
+    this.reacquiring = true;
+    for (let i = 0; i < 60 && !this.stopped; i++) {
+      if (this.paused) {
+        await sleep(1500);
+        continue;
+      }
+      try {
+        const s = await navigator.mediaDevices.getUserMedia(MIC);
+        if (this.stopped) {
+          s.getTracks().forEach((t) => t.stop());
+          break;
+        }
+        this.stream = s;
+        this._attachStream(); // a new stored audio part starts here, the transcript carries on seamlessly
+        if (this.kind === 'cloud' && this.engine) this.engine.setStream(s);
+        this.interrupted = false;
+        this._chg();
+        break;
+      } catch {
+        await sleep(3000);
+      }
+    }
+    this.reacquiring = false;
+  }
+
+  // The screen was locked or the app was in the background, check that listening carried on.
+  _checkAlive() {
+    if (this.paused || this.dead) return;
+    if (this.kind === 'device' && this.engine) this.engine.ensure();
+    if (this.kind === 'cloud' && this.stream) {
+      const t = this.stream.getAudioTracks()[0];
+      if (t && t.readyState === 'ended') this._trackEnded();
+    }
+  }
+
   _locale(lang) {
     const s = this.opts.settings;
     if (lang === 'ar') return s.arLocale;
@@ -92,6 +154,7 @@ export class Recorder {
   }
 
   _startEngine() {
+    this.dead = '';
     if (this.kind === 'device') {
       this.engine = new DeviceEngine({
         locale: this._locale(this.lang),
@@ -113,31 +176,49 @@ export class Recorder {
         stream: this.stream,
         lang: this.lang,
         elapsed: () => this.elapsed(),
-        transcribe: (blob, lang) => transcribeBlob(this.opts.settings, blob, { lang }),
+        transcribe: (blob, lang) => transcribeBlob(this.opts.settings, blob, { lang, retries: 0 }),
         onSegments: (segs) => segs.forEach((x) => this._add(x.text, x.t, x.lang, false)),
-        onError: (e) => this.opts.onError(e)
+        onError: (e) => {
+          if (e && e.code === 'recorder') this.dead = 'recorder';
+          this._chg();
+          this.opts.onError(e);
+        }
       });
     }
     this.engine.start();
   }
 
   async _deviceError(code) {
+    if (this.stopped || this.paused) return;
     const fatal = ['service-not-allowed', 'not-allowed', 'language-not-supported', 'network', 'audio-capture'];
     if (!fatal.includes(code)) return;
-    if (this.opts.settings.apiKey) {
+    if (this.opts.settings.apiKey && !this.switching) {
+      this.switching = true;
       try {
         await this.engine.stop();
+        if (this.stopped) return;
         if (!this.stream) {
-          this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
-          this._startAudio();
+          const s = await navigator.mediaDevices.getUserMedia(MIC);
+          if (this.stopped) {
+            s.getTracks().forEach((t) => t.stop());
+            return;
+          }
+          this.stream = s;
+          this._attachStream();
         }
         this.kind = 'cloud';
         this._startEngine();
         this.opts.onEngineSwitch && this.opts.onEngineSwitch('cloud', code);
         this._chg();
         return;
-      } catch {}
+      } catch {
+        // fall through and report
+      } finally {
+        this.switching = false;
+      }
     }
+    this.dead = code;
+    this._chg();
     this.opts.onError({ code });
   }
 
@@ -204,7 +285,7 @@ export class Recorder {
   }
 
   pause() {
-    if (this.paused) return;
+    if (this.paused || this.stopped) return;
     this.paused = true;
     this.pausedAt = Date.now();
     this.engine && this.engine.pause();
@@ -216,7 +297,7 @@ export class Recorder {
   }
 
   resume() {
-    if (!this.paused) return;
+    if (!this.paused || this.stopped) return;
     this.pausedTotal += Date.now() - this.pausedAt;
     this.paused = false;
     this.engine && this.engine.resume();
@@ -228,20 +309,28 @@ export class Recorder {
 
   async _wake() {
     try {
-      if (navigator.wakeLock && !this.wake) {
-        this.wake = await navigator.wakeLock.request('screen');
-        this.wake.addEventListener('release', () => (this.wake = null));
+      if (navigator.wakeLock && !this.wake && !this.stopped) {
+        const w = await navigator.wakeLock.request('screen');
+        if (this.stopped) return w.release();
+        this.wake = w;
+        w.addEventListener('release', () => (this.wake = null));
       }
     } catch {}
   }
 
+  // Everything said up to the moment of Stop ends up in the result, including the last phrase.
   async stop() {
+    if (this.stopped) return this.result;
     this.stopped = true;
     const duration = this.elapsed();
     document.removeEventListener('visibilitychange', this._vis);
     try {
       this.engine && (await this.engine.stop());
     } catch {}
+    if (this.interim.trim()) {
+      this._add(this.interim, this.phraseStart ?? Math.max(0, duration - 2), null, true);
+    }
+    this.interim = '';
     await new Promise((res) => {
       if (!this.audioRec || this.audioRec.state === 'inactive') return res();
       this.audioRec.onstop = res;
@@ -259,6 +348,19 @@ export class Recorder {
       this.wake && this.wake.release();
     } catch {}
     const audio = this.audioChunks.length ? new Blob(this.audioChunks, { type: this.audioMime || 'audio/webm' }) : null;
-    return { segments: this.segments, bookmarks: this.bookmarks, duration, audio };
+    this.result = { segments: this.segments, bookmarks: this.bookmarks, duration, audio };
+    return this.result;
+  }
+
+  // Unsaved work, small enough to keep in localStorage in case the phone kills the page.
+  snapshot() {
+    return {
+      at: Date.now(),
+      duration: this.elapsed(),
+      template: this.template,
+      speakers: this.speakerNames,
+      bookmarks: this.bookmarks,
+      segments: this.segments.map(({ t, speaker, text, lang, marked, tr }) => ({ t, speaker, text, lang, marked: !!marked, tr }))
+    };
   }
 }

@@ -1,4 +1,4 @@
-import { langOf, tokens, fmtClock } from './util.js';
+import { langOf, tokens, fmtClock, sleep } from './util.js';
 import { saveSettings } from './store.js';
 
 // Works with any OpenAI-compatible API. Defaults point at Groq's free tier.
@@ -11,7 +11,7 @@ export class AiError extends Error {
   }
 }
 
-async function call(cfg, path, init = {}, timeoutMs = 120000) {
+async function callOnce(cfg, path, init = {}, timeoutMs = 120000) {
   if (!cfg.apiKey) throw new AiError(401, 'No API key');
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), timeoutMs);
@@ -34,13 +34,34 @@ async function call(cfg, path, init = {}, timeoutMs = 120000) {
   }
 }
 
+// The free tier answers 429 or 503 when it is busy, waiting a few seconds and asking again usually works.
+async function call(cfg, path, init = {}, timeoutMs = 120000, retries = 2) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await callOnce(cfg, path, init, timeoutMs);
+    } catch (e) {
+      const again = e instanceof AiError && (e.status === 429 || e.status === 503) && attempt < retries;
+      if (!again) throw e;
+      await sleep(Math.min(Number(e.retryAfter) || 4 * (attempt + 1), 20) * 1000);
+    }
+  }
+}
+
+export class BadReply extends Error {
+  constructor() {
+    super('The AI reply could not be read');
+    this.name = 'BadReply';
+  }
+}
+
 export function friendlyError(err, t) {
   if (err instanceof AiError) {
     if (err.status === 401 || err.status === 403) return err.message && err.message !== 'No API key' ? `${t('errKey')} (${err.message})` : t('errKey');
     if (err.status === 429) return t('errRate');
     if (err.status === 413) return t('errBig');
   }
-  if (err && (err.name === 'TypeError' || err.name === 'AbortError')) return t('errNet');
+  if (err && err.name === 'BadReply') return t('errBadReply');
+  if (err && (err.name === 'AbortError' || (err.name === 'TypeError' && /fetch|network|load failed|failed to/i.test(err.message || '')))) return t('errNet');
   return (err && err.message) || t('errGeneric');
 }
 
@@ -59,41 +80,67 @@ async function listModels(cfg) {
   return (j.data || []).map((m) => m.id).filter(Boolean);
 }
 
-function pickChat(ids) {
+function chatCandidates(ids) {
   const ok = ids.filter((id) => !NOT_CHAT.test(id));
-  return CHAT_PREF.find((p) => ok.includes(p)) || ok[0];
+  return [...CHAT_PREF.filter((p) => ok.includes(p)), ...ok.filter((id) => !CHAT_PREF.includes(id))];
 }
 
-function pickStt(ids) {
+function sttCandidates(ids) {
   const w = ids.filter((id) => /whisper/i.test(id));
-  return w.find((id) => /turbo/i.test(id)) || w[0];
+  return [...w.filter((id) => /turbo/i.test(id)), ...w.filter((id) => !/turbo/i.test(id))];
 }
 
-const isModelError = (e) => e instanceof AiError && (e.status === 404 || (e.status === 400 && /model/i.test(e.message)));
+const pickChat = (ids) => chatCandidates(ids)[0];
+const pickStt = (ids) => sttCandidates(ids)[0];
 
-// Runs `run(model)`. If the provider says the model is gone, finds a working one, retries, and remembers it.
-async function withModel(cfg, field, run) {
+const MODEL_GONE = /(not found|does not exist|decommission|deprecat|no longer|unsupported|not supported|no access|do not have access|permission|blocked)/i;
+const isModelError = (e) =>
+  e instanceof AiError && (e.status === 404 || ((e.status === 400 || e.status === 403) && /model/i.test(e.message) && MODEL_GONE.test(e.message) && !/context|token|length/i.test(e.message)));
+
+// Runs `run(model)`. If the provider refuses the model, really tries the other models the key can see, one by one,
+// and remembers the first that works. A model can be listed yet blocked for an account, so listing alone is not enough.
+async function withModel(cfg, field, run, preferred) {
+  const tried = new Set();
+  const attempt = async (m) => {
+    tried.add(m);
+    return run(m);
+  };
+  if (preferred && preferred !== cfg[field]) {
+    try {
+      return await attempt(preferred); // e.g. the larger Arabic speech model, quietly falls back if the key cannot use it
+    } catch (e) {
+      if (!isModelError(e)) throw e;
+    }
+  }
   try {
-    return await run(cfg[field]);
+    return await attempt(cfg[field]);
   } catch (e) {
     if (!isModelError(e)) throw e;
     const ids = await listModels(cfg);
-    const m = field === 'sttModel' ? pickStt(ids) : pickChat(ids);
-    if (!m || m === cfg[field]) throw e;
-    const out = await run(m);
-    cfg[field] = m;
-    saveSettings(cfg);
-    return out;
+    const list = field === 'sttModel' ? sttCandidates(ids) : chatCandidates(ids);
+    let last = e;
+    for (const m of list) {
+      if (tried.has(m)) continue;
+      try {
+        const out = await attempt(m);
+        cfg[field] = m;
+        saveSettings(cfg);
+        return out;
+      } catch (err) {
+        if (!isModelError(err)) throw err;
+        last = err;
+        if (tried.size >= 8) break;
+      }
+    }
+    throw last;
   }
 }
 
 export async function testKey(cfg) {
-  const ids = await listModels(cfg);
-  if (ids.length) {
-    if (!ids.includes(cfg.chatModel) || NOT_CHAT.test(cfg.chatModel)) cfg.chatModel = pickChat(ids) || cfg.chatModel;
-    if (!ids.includes(cfg.sttModel)) cfg.sttModel = pickStt(ids) || cfg.sttModel;
-    saveSettings(cfg);
-  }
+  const ids = await listModels(cfg); // a wrong key stops here with 401
+  if (ids.length && !ids.includes(cfg.sttModel)) cfg.sttModel = pickStt(ids) || cfg.sttModel;
+  await ping(cfg); // a real request, this also finds a chat model the key is allowed to use
+  saveSettings(cfg);
   return { chat: cfg.chatModel, stt: cfg.sttModel };
 }
 
@@ -101,20 +148,29 @@ export async function testKey(cfg) {
 
 const EXT = { 'audio/webm': 'webm', 'audio/mp4': 'm4a', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'video/mp4': 'mp4', 'video/webm': 'webm', 'audio/x-m4a': 'm4a', 'audio/aac': 'm4a' };
 
-export async function transcribeBlob(cfg, blob, { lang, name } = {}) {
+const AR_PROMPT = 'مرحباً. هذا حديث باللغة العربية.';
+
+async function transcribeOnce(cfg, blob, { lang, name, retries }) {
   const base = (blob.type || 'audio/webm').split(';')[0];
-  const res = await withModel(cfg, 'sttModel', (model) => {
-    const fd = new FormData();
-    fd.append('file', blob, name || `audio.${EXT[base] || 'webm'}`);
-    fd.append('model', model);
-    fd.append('response_format', 'verbose_json');
-    fd.append('temperature', '0');
-    if (lang && lang !== 'auto') fd.append('language', lang);
-    return call(cfg, '/audio/transcriptions', { method: 'POST', body: fd }, 300000);
-  });
+  const res = await withModel(
+    cfg,
+    'sttModel',
+    (model) => {
+      const fd = new FormData();
+      fd.append('file', blob, name || `audio.${EXT[base] || 'webm'}`);
+      fd.append('model', model);
+      fd.append('response_format', 'verbose_json');
+      fd.append('temperature', '0');
+      if (lang && lang !== 'auto') fd.append('language', lang);
+      if (lang === 'ar') fd.append('prompt', AR_PROMPT); // anchors the script and vocabulary, clearly better Arabic
+      return call(cfg, '/audio/transcriptions', { method: 'POST', body: fd }, 300000, retries);
+    },
+    lang === 'ar' ? 'whisper-large-v3' : undefined // the larger model is noticeably better at Arabic
+  );
   const j = await res.json();
   return {
     text: (j.text || '').trim(),
+    detected: String(j.language || '').toLowerCase(),
     segments: (j.segments || []).map((s) => ({
       start: s.start || 0,
       end: s.end || 0,
@@ -123,6 +179,18 @@ export async function transcribeBlob(cfg, blob, { lang, name } = {}) {
       lp: s.avg_logprob ?? 0
     }))
   };
+}
+
+export async function transcribeBlob(cfg, blob, { lang, name, retries = 2 } = {}) {
+  const r = await transcribeOnce(cfg, blob, { lang, name, retries });
+  // Auto mode sometimes calls an Arabic dialect Persian, Urdu or Malay. Only Arabic and English matter here, so redo it as Arabic.
+  if ((!lang || lang === 'auto') && r.text && !['english', 'arabic', 'en', 'ar'].includes(r.detected)) {
+    try {
+      const again = await transcribeOnce(cfg, blob, { lang: 'ar', name, retries });
+      if (again.text) return again;
+    } catch {}
+  }
+  return r;
 }
 
 // ---------- chat helpers ----------
@@ -156,8 +224,12 @@ function parseJson(text) {
   } catch {
     const a = text.indexOf('{');
     const b = text.lastIndexOf('}');
-    if (a >= 0 && b > a) return JSON.parse(text.slice(a, b + 1));
-    throw new Error('Bad AI response');
+    if (a >= 0 && b > a) {
+      try {
+        return JSON.parse(text.slice(a, b + 1));
+      } catch {}
+    }
+    throw new BadReply();
   }
 }
 
@@ -180,17 +252,17 @@ export function transcriptText(note) {
 }
 
 async function condense(cfg, body) {
-  const lines = body.split('\n');
+  const lines = body.split('\n').flatMap((l) => (l.length > 8000 ? l.match(/[\s\S]{1,8000}/g) : [l]));
   const pieces = [];
   let cur = '';
   for (const l of lines) {
-    if (cur.length + l.length > 9000) {
+    if (cur && cur.length + l.length > 9000) {
       pieces.push(cur);
       cur = '';
     }
     cur += l + '\n';
   }
-  if (cur) pieces.push(cur);
+  if (cur.trim()) pieces.push(cur);
   const out = [];
   for (const p of pieces) {
     out.push(
@@ -233,7 +305,7 @@ export async function summarize(cfg, note, { lang, template }) {
   };
 }
 
-export async function translateTexts(cfg, texts, target) {
+export async function translateTexts(cfg, texts, target, onBatch) {
   const langName = target === 'ar' ? 'Arabic' : 'English';
   const out = [];
   for (let i = 0; i < texts.length; i += 30) {
@@ -250,9 +322,15 @@ export async function translateTexts(cfg, texts, target) {
       { json: true, temperature: 0 }
     );
     const arr = asList(parseJson(raw).translations);
-    for (let k = 0; k < part.length; k++) out.push(arr[k] || '');
+    const got = part.map((_, k) => arr[k] || '');
+    out.push(...got);
+    if (onBatch) onBatch(i, got); // hand over each batch as it arrives so a later failure keeps earlier work
   }
   return out;
+}
+
+export async function ping(cfg) {
+  return chat(cfg, [{ role: 'user', content: 'Reply with the single word OK.' }], { temperature: 0 });
 }
 
 export async function answer(cfg, context, question, history = []) {

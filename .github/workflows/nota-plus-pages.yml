@@ -1,7 +1,7 @@
 name: Deploy Nota+ to GitHub Pages
 on:
   push:
-    branches: [claude/whatsapp-call-recorder-app-6jfgcv]
+    branches: [main, claude/whatsapp-call-recorder-app-6jfgcv]
     paths: ['nota-plus/**']
   workflow_dispatch:
 permissions:
