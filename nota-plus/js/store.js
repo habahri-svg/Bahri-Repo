@@ -38,7 +38,7 @@ export function saveSettings(s) {
 }
 
 const DB_NAME = 'nota-plus';
-let dbPromise;
+let dbPromise = null;
 
 function open() {
   if (!dbPromise) {
@@ -49,24 +49,51 @@ function open() {
         db.createObjectStore('notes', { keyPath: 'id' });
         db.createObjectStore('audio', { keyPath: 'id' });
       };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
+      req.onsuccess = () => {
+        const db = req.result;
+        // iOS can drop the connection when the app sits in the background, so reopen next time
+        db.onclose = () => (dbPromise = null);
+        db.onversionchange = () => {
+          db.close();
+          dbPromise = null;
+        };
+        resolve(db);
+      };
+      req.onerror = () => {
+        dbPromise = null; // never cache a failure
+        reject(req.error);
+      };
     });
   }
   return dbPromise;
 }
 
-function run(store, mode, fn) {
+function attempt(store, mode, fn) {
   return open().then(
     (db) =>
       new Promise((resolve, reject) => {
-        const tx = db.transaction(store, mode);
+        let tx;
+        try {
+          tx = db.transaction(store, mode);
+        } catch (e) {
+          return reject(e);
+        }
         const req = fn(tx.objectStore(store));
         tx.oncomplete = () => resolve(req ? req.result : undefined);
         tx.onerror = () => reject(tx.error);
         tx.onabort = () => reject(tx.error);
       })
   );
+}
+
+function run(store, mode, fn) {
+  return attempt(store, mode, fn).catch((e) => {
+    if (e && (e.name === 'InvalidStateError' || e.name === 'TransactionInactiveError' || /clos/i.test(e.message || ''))) {
+      dbPromise = null;
+      return attempt(store, mode, fn); // one retry on a fresh connection
+    }
+    throw e;
+  });
 }
 
 export const notesDb = {
@@ -96,5 +123,28 @@ export async function storageEstimate() {
 export function requestPersistence() {
   try {
     navigator.storage?.persist?.();
+  } catch {}
+}
+
+// An unsaved recording is copied here every few seconds so a killed page loses almost nothing.
+const DRAFT_KEY = 'nota-plus.draft';
+
+export function saveDraft(obj) {
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(obj));
+  } catch {}
+}
+
+export function loadDraft() {
+  try {
+    return JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
+  } catch {
+    return null;
+  }
+}
+
+export function clearDraft() {
+  try {
+    localStorage.removeItem(DRAFT_KEY);
   } catch {}
 }

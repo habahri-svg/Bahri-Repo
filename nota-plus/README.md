@@ -11,12 +11,13 @@ It is a progressive web app, plain HTML, CSS and JavaScript. There is no build s
 - Ask AI about one note, or across every note.
 - Import audio or video files, paste text, search every word, translate a transcript, export to text, PDF or SRT subtitles.
 - Arabic and English interface with full right-to-left layout.
-- Works offline for recording on device. Notes and audio are stored on the device in the browser.
+- Notes and audio are stored on the device in the browser. The app opens offline and past notes can be read offline. Recording needs a connection on most phones, because phone speech recognition and Cloud Whisper both use the internet.
 
 ## Use it on your phone or iPad
 1. Open the deployed link (see Deploy below) in **Chrome on Android** or **Safari on iPad and iPhone**.
 2. Android: tap the Install banner, or the browser menu then Install app. iPad and iPhone: tap Share, then Add to Home Screen.
-3. Open Settings in the app and paste a free AI key (below). Without a key the app still records on device and writes a basic offline summary.
+3. The first time you open the app it walks you through the free AI key (below). Without a key the app still records with phone speech recognition and writes a basic summary, but translation, Ask AI and the best Arabic accuracy need the key.
+4. Settings, Self-check tests the microphone, speech recognition, storage and key on your device in one tap.
 
 ### Get the free AI key
 The app talks to any OpenAI-compatible API. It defaults to Groq's free tier, which covers Whisper transcription and the language model with one key.
@@ -42,7 +43,7 @@ Open http://localhost:8080. Microphone access needs `localhost` or https.
 
 ## Deploy (free)
 The app is a folder of static files, so any static host works.
-- **GitHub Pages:** the workflow in `.github/workflows/nota-plus-pages.yml` publishes this folder. In the repo go to Settings, Pages, and set Source to GitHub Actions. It runs on pushes to the default branch that touch `nota-plus/`, or by hand from the Actions tab.
+- **GitHub Pages:** the workflow in `.github/workflows/nota-plus-pages.yml` publishes this folder. In the repo go to Settings, Pages, and set Source to GitHub Actions. It runs on pushes to `main` or the repo's current default branch that touch `nota-plus/`, or by hand from the Actions tab.
 - **Netlify Drop:** drag the `nota-plus` folder onto https://app.netlify.com/drop.
 - **Vercel or Cloudflare Pages:** point the project at the `nota-plus` folder with no build command.
 

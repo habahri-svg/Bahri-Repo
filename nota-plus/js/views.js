@@ -90,7 +90,7 @@ function banners() {
     h += `<a class="banner rec" href="#/record"><span class="dot"></span><span>${t('recordingNow')}</span><b>${t('tapReturn')}</b></a>`;
   }
   if (!S.settings.apiKey) {
-    h += `<div class="banner"><div><b>${t('keyBannerTitle')}</b><p>${t('keyBannerBody')}</p></div><a class="btn small" href="#/settings">${t('openSettings')}</a></div>`;
+    h += `<div class="banner"><div><b>${t('keyBannerTitle')}</b><p>${t('keyBannerBody')}</p></div><a class="btn small" href="#/welcome">${t('setupKey')}</a></div>`;
   }
   if (S.showInstall) {
     const body = S.installEvt ? t('installAndroidBody') : t('installIosBody');
@@ -192,6 +192,7 @@ export function recordSetupView() {
       <h1 class="h1">${t('newRecording')}</h1><span class="iconbtn"></span>
     </header>
     <div class="pad stack">
+      ${S.settings.apiKey ? '' : `<a class="banner keycta" href="#/welcome"><div><b>${t('keyBannerTitle')}</b><p>${t('keyNeededHere')}</p></div><span class="btn small">${t('setupKey')}</span></a>`}
       <section><h3>${t('engine')}</h3>
         <div class="opts">
           <button class="opt${u.engine === 'device' ? ' on' : ''}" data-action="set-engine" data-id="device" ${devOk ? '' : 'disabled'}>
@@ -199,14 +200,16 @@ export function recordSetupView() {
           <button class="opt${u.engine === 'cloud' ? ' on' : ''}" data-action="set-engine" data-id="cloud">
             <b>${t('engineCloud')}</b><span>${S.settings.apiKey ? t('engineCloudDesc') : t('engineCloudNoKey')}</span></button>
         </div></section>
-      <section><h3>${t('spokenLang')}</h3>${seg(langItems(u.engine), u.lang, 'set-lang-setup')}</section>
+      <section><h3>${t('spokenLang')}</h3>${seg(langItems(u.engine), u.lang, 'set-lang-setup')}
+        ${u.engine === 'device' && u.lang === 'ar' ? `<select class="select" data-setting="arLocale" aria-label="${t('arabicDialect')}">${[['ar-SA', 'السعودية'], ['ar-EG', 'مصر'], ['ar-AE', 'الإمارات'], ['ar-JO', 'الأردن'], ['ar-KW', 'الكويت'], ['ar-QA', 'قطر'], ['ar-IQ', 'العراق'], ['ar-MA', 'المغرب'], ['ar-DZ', 'الجزائر'], ['ar-LB', 'لبنان']].map(([v, l]) => `<option value="${v}"${S.settings.arLocale === v ? ' selected' : ''}>${t('dialectOf')} ${l}</option>`).join('')}</select>` : ''}
+        ${u.engine === 'cloud' && u.lang === 'auto' ? `<p class="hint">${t('autoLangHint')}</p>` : ''}</section>
       <section><h3>${t('template')}</h3>
         <select id="rec-template" class="select" aria-label="${t('template')}">${TEMPLATE_IDS.map((id) => `<option value="${id}"${u.template === id ? ' selected' : ''}>${t('tpl_' + id)}</option>`).join('')}</select></section>
       <section><h3>${t('speakersLabel')}</h3>
         <input id="rec-names" class="field" value="${esc(u.names || '')}" placeholder="${t('speakersPh')}" autocomplete="off" aria-label="${t('speakersLabel')}">
         <p class="hint">${t('speakersHint')}</p></section>
       <label class="switch"><input type="checkbox" data-setup="liveTranslate" ${u.liveTranslate ? 'checked' : ''}><span>${t('liveTranslate')}</span></label>
-      ${u.engine === 'device' ? `<label class="switch"><input type="checkbox" data-setup="saveAudio" ${u.saveAudio ? 'checked' : ''}><span>${t('saveAudio')}<small>${t('saveAudioHint')}</small></span></label>` : ''}
+      <label class="switch"><input type="checkbox" data-setup="saveAudio" ${u.saveAudio ? 'checked' : ''}><span>${t('saveAudio')}${u.engine === 'device' ? `<small>${t('saveAudioHint')}</small>` : ''}</span></label>
       <button class="btn big rec" data-action="start-rec">${icon('mic', 24)}<span>${t('startRecording')}</span></button>
     </div>
   </div>`;
@@ -246,7 +249,7 @@ export function recordLiveView() {
       </div>
       <div class="bars" id="rec-bars" aria-hidden="true">${'<i></i>'.repeat(40)}</div>
     </div>
-    <div class="log" id="rec-lines" role="log" aria-label="${t('tabTranscript')}">${liveLinesHtml(r)}</div>
+    <div class="log" id="rec-lines" aria-live="off" aria-label="${t('tabTranscript')}">${liveLinesHtml(r)}</div>
     <div class="spk bar" id="rec-spk" role="group" aria-label="${t('speaker')}">${Array.from({ length: r.speakerCount }, (_, i) => `<button class="chip dk spc sp${i}${r.speaker === i ? ' on' : ''}" data-action="pick-speaker" data-i="${i}" aria-pressed="${r.speaker === i}"><i></i>${esc(speakerName(names, i))}</button>`).join('')}${r.speakerCount < 6 ? `<button class="chip dk" data-action="add-speaker" aria-label="${t('addSpeaker')}">+</button>` : ''}</div>
     <div class="ainotes"><div class="cap">${icon('sparkle', 14)} ${t('detectedTasks')}</div><div id="rec-ai">${detectedHtml()}</div></div>
     <div class="controls">
@@ -421,8 +424,48 @@ export function settingsView() {
         <label class="lbl">${t('chatModel')}<input class="field" data-setting="chatModel" value="${esc(s.chatModel)}" dir="ltr" autocapitalize="off" spellcheck="false"></label></div></details>
       <section class="card stack tight"><h3>${t('storage')}</h3><p class="muted" id="storage-info">${S.notes.length} ${t('notesCount')}</p>
         <button class="btn small danger" data-action="delete-all">${t('deleteAll')}</button></section>
+      <section class="card stack tight"><h3>${t('selfCheck')}</h3>
+        <button class="btn small" data-action="run-checks">${t('runChecks')}</button>
+        <div id="checks">${checksHtml()}</div></section>
       <section class="card stack tight"><h3>${t('privacy')}</h3><p class="muted">${t('privacyBody')}</p></section>
     </div>
     ${nav('settings')}
   </div>`;
+}
+
+// ---------- first run and self-check ----------
+
+export function welcomeView() {
+  return `<div class="screen">
+    <header class="top">
+      <div class="brand"><span class="logo">${icon('wave', 20)}</span><span class="word" dir="ltr">Nota+</span></div>
+      <button class="pill" data-action="toggle-ui-lang" aria-label="${t('uiLang')}">${icon('globe', 18)}<span>EN · عربي</span></button>
+    </header>
+    <div class="pad stack">
+      <h1 class="bigtitle">${t('welcomeTitle')}</h1>
+      <p class="lead">${t('welcomeIntro')}</p>
+      <ol class="steps">
+        <li><div><b>${t('welcomeStep1')}</b><a class="btn" href="https://console.groq.com/keys" target="_blank" rel="noopener">${t('openGroq')}</a></div></li>
+        <li><div><b>${t('welcomeStep2')}</b></div></li>
+        <li><div><b>${t('welcomeStep3')}</b></div></li>
+      </ol>
+      <form class="stack tight" data-form="welcome">
+        <input class="field" name="key" type="password" placeholder="${t('keyPlaceholder')}" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="${t('aiKey')}">
+        <button class="btn big">${t('saveTest')}</button>
+        <p id="welcome-status" class="muted" role="status"></p>
+      </form>
+      <p class="hint">${t('welcomeWhy')}</p>
+      <button class="btn ghost" data-action="welcome-skip">${t('welcomeSkip')}</button>
+    </div>
+  </div>`;
+}
+
+const MARK = { ok: '✓', warn: '!', fail: '✕', skip: '–', run: '…' };
+
+export function checksHtml() {
+  if (!S.checks || !S.checks.length) return `<p class="muted">${t('selfCheckHint')}</p>`;
+  const rows = S.checks
+    .map((r) => `<li class="chk ${r.s}"><span class="mk" aria-hidden="true">${MARK[r.s] || ''}</span><div><b>${t('chk_' + r.id)}</b><div class="muted">${esc(r.d || '')}</div></div></li>`)
+    .join('');
+  return `<ul class="checks">${rows}</ul>${S.checking ? '' : `<button class="btn small ghost" data-action="copy-report">${t('copyReport')}</button>`}`;
 }
