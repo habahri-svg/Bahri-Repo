@@ -12,6 +12,7 @@
   var short = function (s, n) { return typeof clip === "function" ? clip(s, n) : String(s || "").slice(0, n); };
   var B = function (t, fn, cls) { var b = el("button", "btn small" + (cls ? " " + cls : ""), t); b.type = "button"; b.onclick = function () { fn(b); }; return b; };
   var fmtDate = function (ms) { try { return new Date(ms).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); } catch (e) { return ""; } };
+  var fmtDT = function (ms) { try { return ms ? new Date(ms).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Dubai" }) + " Dubai" : ""; } catch (e) { return fmtDate(ms); } };
   var plural = function (n, w) { return n.toLocaleString("en-GB") + " " + w + (n === 1 ? "" : "s"); };
 
   /* ---------- storage (IndexedDB) ---------- */
@@ -89,6 +90,7 @@
     if (/^\s*(<!doctype html|<html)/i.test(String(f.text || "").slice(0, 200))) return "HTML page";
     return f.kind === "Canvas document" || f.kind === "Artifact" ? "Document" : "Other";
   }
+  var PDFHTML = "PDF or HTML";
   var isHtml = function (f) { return typeOf(f) === "HTML page" && !!f.text; };
   var isMade = function (f) { return f.kind !== "File you shared"; };
   /* every file ChatGPT knows of in one chat: canvas documents (with their edits), files you shared, files it made. Looks at every branch, not only the visible one. */
@@ -371,7 +373,8 @@
     lov.projects.forEach(function (p) { var k = "lovable:" + p.id; if (!inTrash[k]) all.push({ key: k, src: "lovable", kind: "App project", title: p.name, at: Date.parse(p.edited) || 0, chat: p.workspace, url: p.editor, preview: p.preview, text: p.description || "", published: p.published }); });
     var head = el("p", "sub"), note = el("p", "status");
     pad.append(head, note);
-    var F = { src: "", kind: "", type: "", origin: "", group: "date", range: "all", from: "", to: "", q: "", shown: 120, trash: false }, SEL = {}; var shut = {}, groupKeys = [];
+    var PRE = window.__wyzLibPreset || {}; window.__wyzLibPreset = null;
+    var F = { src: PRE.src || "", kind: "", type: PRE.type || "", origin: PRE.origin || "", group: "date", range: "all", from: "", to: "", q: "", shown: 120, trash: false }, SEL = {}; var shut = {}, groupKeys = [];
     var count = function (rows) { var n = { chatgpt: 0, claude: 0, lovable: 0 }; rows.forEach(function (f) { n[f.src] = (n[f.src] || 0) + 1; }); return n; };
     var bar = el("div", "chips"), tbar = el("div", "chips"), origin = el("select", "in"), groupBy = el("select", "in"), kinds = el("select", "in"), rng = el("div", "chips"), q = el("input", "in"), custom = el("div", "ask"), tools = el("div", "acts"), list = el("div"); list.id = "libFiles";
     q.placeholder = "Search file names and text"; q.setAttribute("aria-label", "Search my files");
@@ -383,7 +386,7 @@
       else if (F.range !== "all") from = now - (+F.range) * day;
       var ts = F.q ? terms(F.q) : [];
       return rowsNow().filter(function (f) {
-        if (F.src && f.src !== F.src) return false; if (F.kind && f.kind !== F.kind) return false; if (F.type && typeOf(f) !== F.type) return false; if (F.origin && (F.origin === "made") !== isMade(f)) return false; if (f.at < from || f.at >= to) return false;
+        if (F.src && f.src !== F.src) return false; if (F.kind && f.kind !== F.kind) return false; if (F.type && (F.type === PDFHTML ? (typeOf(f) !== "PDF" && typeOf(f) !== "HTML page") : typeOf(f) !== F.type)) return false; if (F.origin && (F.origin === "made") !== isMade(f)) return false; if (f.at < from || f.at >= to) return false;
         if (F.q) { var hay = (f.title + " " + (f.chat || "") + " " + (f.text || "")).toLowerCase(); return ts.every(function (w) { return hay.indexOf(w) >= 0; }); }
         return true;
       }).sort(function (a, b) { return F.trash ? (b.trashedAt || 0) - (a.trashedAt || 0) : b.at - a.at; });
@@ -397,11 +400,13 @@
       var ks = {}; rowsNow().forEach(function (f) { ks[f.kind] = 1; });
       tbar.replaceChildren(); var tn = {}; rowsNow().forEach(function (f) { var t = typeOf(f); tn[t] = (tn[t] || 0) + 1; });
       chip(tbar, "Every type", !F.type, function () { F.type = ""; });
+      var ph = 0; rowsNow().forEach(function (f) { var t = typeOf(f); if (t === "PDF" || t === "HTML page") ph++; });
+      chip(tbar, "PDF and HTML only (" + ph + ")", F.type === PDFHTML, function () { F.type = PDFHTML; });
       Object.keys(tn).sort(function (a, b) { return tn[b] - tn[a]; }).forEach(function (t) { chip(tbar, t + " (" + tn[t] + ")", F.type === t, function () { F.type = t; }); });
-      if (F.type && !tn[F.type]) F.type = "";
+      if (F.type && F.type !== PDFHTML && !tn[F.type]) F.type = "";
       kinds.replaceChildren(new Option("All kinds", "")); Object.keys(ks).sort().forEach(function (k) { kinds.append(new Option(k, k)); }); kinds.value = F.kind && ks[F.kind] ? F.kind : ""; if (!ks[F.kind]) F.kind = "";
     }
-    origin.setAttribute("aria-label", "Created or shared"); [["", "Created and shared"], ["made", "Created by the AI"], ["shared", "Shared by me"]].forEach(function (o) { origin.append(new Option(o[1], o[0])); }); origin.style.flex = "0 1 190px"; origin.onchange = function () { F.origin = origin.value; F.shown = 120; draw(); };
+    origin.setAttribute("aria-label", "Created or shared"); [["", "Created and shared"], ["made", "Created by the AI"], ["shared", "Shared by me"]].forEach(function (o) { origin.append(new Option(o[1], o[0])); }); origin.style.flex = "0 1 190px"; origin.onchange = function () { F.origin = origin.value; F.shown = 120; draw(); }; origin.value = F.origin;
     groupBy.setAttribute("aria-label", "Group files"); [["date", "Group by date"], ["chat", "Group by chat"], ["type", "Group by type"], ["file", "By file name"]].forEach(function (o) { groupBy.append(new Option(o[1], o[0])); }); groupBy.style.flex = "0 1 170px"; groupBy.onchange = function () { F.group = groupBy.value; F.shown = 120; draw(); };
     kinds.style.flex = "0 1 190px"; kinds.setAttribute("aria-label", "Kind of file"); kinds.onchange = function () { F.kind = kinds.value; F.shown = 120; draw(); };
     [["all", "Any date"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["90", "Last 3 months"], ["365", "Last year"]].forEach(function (r, i) { chip(rng, r[1], i === 0, function () { F.range = r[0]; F.from = F.to = ""; fromI.value = toI.value = ""; }); });
@@ -468,7 +473,7 @@
       cb.onchange = function () { if (cb.checked) SEL[f.key] = 1; else delete SEL[f.key]; drawTools(); }; r.append(cb);
       var nv = (f.versions || []).length, tp = typeOf(f);
       var m = el("div", "main"); m.append(el("span", "t", f.title));
-      m.append(el("span", "m", SRC_NAME[f.src] + " · " + tp + (sizeOf(f) ? " · " + sizeOf(f) : "") + " · " + f.kind + " · " + fmtDate(f.at) + (nv > 1 ? " · " + nv + " versions" : "") + (f.src === "lovable" ? " · " + f.chat + (f.published ? " · Published" : " · Not published") : f.chat ? " · in \"" + short(f.chat, 50) + "\"" : "")));
+      m.append(el("span", "m", SRC_NAME[f.src] + " · " + tp + (sizeOf(f) ? " · " + sizeOf(f) : "") + " · " + f.kind + " · " + fmtDT(f.at) + (nv > 1 ? " · " + nv + " versions" : "") + (f.src === "lovable" ? " · " + f.chat + (f.published ? " · Published" : " · Not published") : f.chat ? " · in \"" + short(f.chat, 50) + "\"" : "")));
       var a = el("div", "acts"); a.append(B(f.text ? "Read" : "Details", function () { openFile(f); }, "solid"));
       if (isHtml(f) && window.WYZ_PREVIEW) a.append(B("Preview", function () { window.WYZ_PREVIEW(f.title, f.text); }, "solid"));
       var o = el("a", "btn small", f.src === "lovable" ? "Open in Lovable ↗" : "Open chat ↗"); o.href = f.url; o.target = "_blank"; o.rel = "noopener"; a.append(o);
@@ -532,7 +537,22 @@
     await putMany("files", back.filter(function (t) { return t.rec.src !== "lovable"; }).map(function (t) { var c = Object.assign({}, t.rec); delete c.trashedAt; return c; }));
     await delMany("trash", back.map(function (t) { return t.key; }));
   }
-  window.WYZ_LIB = { trashKeys: async function (keys, lov) { await dbTrash(keys, lov); await render(); }, restoreKeys: async function (keys) { await dbRestore(keys); await render(); } };
+  /* "Created files": opens the file list already narrowed to the PDF and HTML files ChatGPT and Claude made. */
+  async function showCreated() {
+    window.__wyzLibPreset = { origin: "made", type: PDFHTML };
+    try { if (typeof collapsed !== "undefined" && collapsed.delete) { collapsed.delete("c-lib"); if (typeof saveCol === "function") saveCol(); if (typeof applyCol === "function") applyCol(); } } catch (e) {}
+    await render();
+    var c = $("libCard"); if (c) { c.scrollIntoView({ block: "start", behavior: "smooth" }); var hs = [].slice.call(c.querySelectorAll("h2")).filter(function (x) { return /All my files/.test(x.textContent); }); if (hs[0]) hs[0].scrollIntoView({ block: "start", behavior: "smooth" }); }
+  }
+  var cbtn = null;
+  function addCreatedButton() {
+    if (cbtn || $("createdBtn")) return;
+    var row = document.querySelector(".herorefresh"); if (!row) return;
+    cbtn = el("button", "btn", "📁 Created files"); cbtn.type = "button"; cbtn.id = "createdBtn"; cbtn.title = "Every PDF and HTML file ChatGPT and Claude made, newest first";
+    cbtn.onclick = showCreated;
+    var after = $("graphsBtn") || $("refresh"); after && after.nextSibling ? row.insertBefore(cbtn, after.nextSibling) : row.append(cbtn);
+  }
+  window.WYZ_LIB = { showCreated: showCreated, trashKeys: async function (keys, lov) { await dbTrash(keys, lov); await render(); }, restoreKeys: async function (keys) { await dbRestore(keys); await render(); } };
 
   /* ---------- the card ---------- */
   var card = null, busy = false;
@@ -682,6 +702,7 @@
     var on = false; try { on = G.connected(); } catch (e) {}
     if (!on) { if (++tries < 400) setTimeout(start, 2000); return; }
     render().catch(function () {}); hookSearch();
+    setTimeout(addCreatedButton, 500); setTimeout(addCreatedButton, 4000);
   }
   setTimeout(start, 1500);
 })();
