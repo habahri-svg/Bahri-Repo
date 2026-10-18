@@ -127,7 +127,7 @@
     pad.append(el("h2", "", "All your platforms"), el("p", "sub", "Pick one to open it. Star the ones you use most and they move to the top."));
     var s = el("input", "in"); s.type = "search"; s.id = "platSearch"; s.placeholder = "Search platforms"; s.setAttribute("aria-label", "Search platforms");
     s.oninput = function () { q = s.value; render(); };
-    pad.append(s, el("div", "")); pad.append(switchesCard()); var root = el("div"); root.id = "platRoot"; pad.append(root); c.append(pad); p.append(c);
+    pad.append(s, el("div", "")); pad.append(switchesCard()); if (window.wyzLifeImportCard) pad.append(window.wyzLifeImportCard()); var root = el("div"); root.id = "platRoot"; pad.append(root); c.append(pad); p.append(c);
     $("p-conn").parentNode.insertBefore(p, $("p-conn"));
     tab.onclick = function () { show("t-plat"); };
     tabs.push(["t-plat", "p-plat"]);
