@@ -565,10 +565,10 @@ function applyPageName(){
   bar.title="You are using version "+v.version+(when?", updated "+when:"")+". If it looks old, refresh the page.";
 })();
 /* colour palette and light/dark look, saved per device and applied before first paint by a tiny script in index.html */
-const PAL_META={ocean:"#104b70",ivory:"#16324e",marina:"#0f6466",dune:"#7a3a22",graphite:"#1f2633",rose:"#b35a85",lavender:"#7761bd",mint:"#3a9877",peach:"#b95a30",skyblue:"#3b7fc0",butter:"#9a8014"};
+const PAL_META={apple:"#f5f5f7",ocean:"#104b70",ivory:"#16324e",marina:"#0f6466",dune:"#7a3a22",graphite:"#1f2633",rose:"#b35a85",lavender:"#7761bd",mint:"#3a9877",peach:"#b95a30",skyblue:"#3b7fc0",butter:"#9a8014"};
 function lookNow(){try{return JSON.parse(localStorage.getItem("wyz-look")||"{}")}catch(e){return {}}}
 function applyLook(l){
-  const r=document.documentElement,p=PAL_META[l.p]?l.p:"ocean";
+  const r=document.documentElement,p=PAL_META[l.p]?l.p:"apple";
   r.setAttribute("data-palette",p);
   if(l.m==="light"||l.m==="dark")r.setAttribute("data-theme",l.m);else r.removeAttribute("data-theme");
   document.querySelectorAll("#swatches .swatch,.lookc").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.pal===p)));
@@ -589,7 +589,7 @@ function applyOwnColours(l){
 }
 const COLS=[["colHeader","cH","#104b70"],["colMain","c1","#104b70"],["colAccent","c2","#b8923c"],["colBg","cB","#f4f8fc"],["colPanel","cP","#ffffff"],["colText","cT","#0e2238"]];
 COLS.forEach(([id,k])=>{$(id).oninput=()=>saveLook({[k]:$(id).value})});
-$("colReset").onclick=()=>{saveLook({c1:"",c2:"",cH:"",cB:"",cP:"",cT:"",p:"ocean"})};
+$("colReset").onclick=()=>{saveLook({c1:"",c2:"",cH:"",cB:"",cP:"",cT:"",p:"apple"})};
 function saveLook(patch){const l=Object.assign({},lookNow(),patch);try{localStorage.setItem("wyz-look",JSON.stringify(l))}catch(e){}applyLook(l)}
 document.querySelectorAll("#swatches .swatch").forEach(b=>b.onclick=()=>saveLook({p:b.dataset.pal,c1:"",c2:"",cH:"",cB:"",cP:"",cT:""}));
 $("lookMode").onchange=()=>saveLook({m:$("lookMode").value});
