@@ -222,6 +222,11 @@
     },
     {
       "version": "3.85",
+      "path": "previous/v3.85/",
+      "label": "Show or hide button in the top bar, Focus banner, steadier inbox sorting"
+    },
+    {
+      "version": "3.88",
       "path": "",
       "label": "Current"
     }
