@@ -71,7 +71,34 @@ async function numbers() {
   });
   const cur = Object.keys(byCur).sort(function (a, b) { return byCur[b] - byCur[a]; })[0] || "AED", revenue = byCur[cur] || 0;
   const occ = listings.length ? Math.round(100 * booked / (listings.length * days)) : 0;
-  return { ready: true, date: today, listings: listings.length, checkIns: ins.map(pick), checkOuts: outs.map(pick), inHouse: house.length, occupancy: occ, revenue: Math.round(revenue), currency: cur || "AED", month: today.slice(0, 7), city: city || "", at: Date.now() };
+  const win = async function (from, to) {
+    return (await all("/reservations?arrivalEndDate=" + to + "&departureStartDate=" + from + "&sortOrder=arrivalDate"))
+      .filter(function (r) { return !SKIP.test(String(r.status || "")) && (!city || ids.has(r.listingMapId)); });
+  };
+  const plus = function (d, n) { return new Date(Date.parse(d) + n * 86400000).toISOString().slice(0, 10); };
+  const revOf = function (rows, from, to) {
+    let v = 0;
+    rows.forEach(function (r) {
+      if (/owner/i.test(String(r.status || "")) || (r.currency || "AED") !== cur) return;
+      const n = Math.max(1, +r.nights || nightsIn(r.arrivalDate, r.departureDate, r.arrivalDate, r.departureDate));
+      v += (+r.totalPrice || 0) * nightsIn(r.arrivalDate, r.departureDate, from, to) / n;
+    });
+    return Math.round(v);
+  };
+  const occToday = listings.length ? Math.round(100 * house.length / listings.length) : 0;
+  let occ30 = null, lastYear = null;
+  try {
+    const t30 = plus(today, 29), rows30 = await win(today, t30);
+    let nn = 0; rows30.forEach(function (r) { nn += nightsIn(r.arrivalDate, r.departureDate, today, t30); });
+    occ30 = listings.length ? Math.min(100, Math.round(100 * nn / (listings.length * 30))) : 0;
+  } catch (e) { occ30 = null; }
+  try {
+    const ly0 = (+today.slice(0, 4) - 1) + today.slice(4, 8) + "01";
+    const lyEnd = new Date(Date.UTC(+today.slice(0, 4) - 1, +today.slice(5, 7), 0)).toISOString().slice(0, 10);
+    const rowsLy = await win(ly0, lyEnd);
+    lastYear = revOf(rowsLy, ly0, lyEnd);
+  } catch (e) { lastYear = null; }
+  return { ready: true, date: today, listings: listings.length, checkIns: ins.map(pick), checkOuts: outs.map(pick), inHouse: house.length, occupancy: occ, occToday: occToday, occ30: occ30, lastYear: lastYear, revenue: Math.round(revenue), currency: cur || "AED", month: today.slice(0, 7), city: city || "", at: Date.now() };
 }
 
 module.exports = async function handler(req, res) {
