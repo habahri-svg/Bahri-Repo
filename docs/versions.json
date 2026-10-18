@@ -227,6 +227,11 @@
     },
     {
       "version": "3.88",
+      "path": "previous/v3.88/",
+      "label": "Apple look: clean, light, one blue accent, as the default"
+    },
+    {
+      "version": "3.89",
       "path": "",
       "label": "Current"
     }
