@@ -734,8 +734,17 @@
   function getOModel() { return ls.get(KEY.omodel) || OMODELS[0]; }
   function modelLabel() { return MODEL_LIST.filter(function (x) { return x[0] === getModel(); })[0][1].replace(/ \(.*/, ""); }
   var NAMES = { claude: "Claude", chatgpt: "ChatGPT" };
+  /* The second AI slot is the FREE AI when it holds a Google Gemini key (starts with AIza) or the server has GEMINI_API_KEY. Otherwise it is ChatGPT (paid). */
+  var GMODEL = "gemini-3.6-flash";
+  var sharedFree = false;
+  var isFree = function (p) { if (p !== "chatgpt") return false; var k = ls.get(KEY.openai); return k ? /^AIza/.test(k) : sharedFree; };
+  var isPaid = function (p) { return !isFree(p); };
+  function refreshNames() { NAMES.chatgpt = isFree("chatgpt") ? "Free AI (Gemini)" : "ChatGPT"; }
+  refreshNames();
+  function freeFirst() { return ls.get("wyz-ai-freefirst") !== "0"; }
   function niceError(p, status, d) {
     if (/credit balance|insufficient_quota|exceeded your current quota|billing/i.test(d)) return p === "chatgpt" ? "The OpenAI account has no credit left. Add credit at platform.openai.com, under Billing." : "The Anthropic account has no credit left. Add credit under Billing at console.anthropic.com.";
+    if (p === "chatgpt" && isFree(p) && status === 429) return "The free AI is at its free limit for now. Try again in a minute, or use the free chat.";
     if (/model/i.test(d) && /not.?found|invalid|unknown|does not exist|access/i.test(d)) return "That " + NAMES[p] + " model isn't available on this account. Pick another one in Connections.";
     return d ? String(d).slice(0, 160) : NAMES[p] + " answered " + status;
   }
@@ -743,7 +752,19 @@
     var s = String(txt || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
     try { return JSON.parse(s); } catch (e) {}
     var a = s.indexOf("{"), b = s.lastIndexOf("}");
-    if (a >= 0 && b > a) return JSON.parse(s.slice(a, b + 1));
+    if (a >= 0 && b > a) {
+      var body = s.slice(a, b + 1);
+      try { return JSON.parse(body); } catch (e1) {
+        /* A long answer sometimes breaks in the middle of a list. Keep every complete item before the break and close the list. */
+        var pos = +((/position (\d+)/.exec(String(e1 && e1.message)) || [])[1]);
+        var cut = isFinite(pos) ? body.lastIndexOf("}", pos) : -1;
+        while (cut > 0) {
+          try { return JSON.parse(body.slice(0, cut + 1) + "]}"); } catch (e2) {}
+          cut = body.lastIndexOf("}", cut - 1);
+        }
+        throw e1;
+      }
+    }
     throw cerr("tool_error", "The AI's answer wasn't readable");
   }
   /* Shared AI: the site owner's key sits on the server (api/claude.js and api/chatgpt.js). Signed-in people use it with no key of their own. */
@@ -757,22 +778,22 @@
   function autoRestore(p) { if (ls.get(KEY.auto) === p && chosen() !== p) { ls.set(KEY.provider, p); ls.del(KEY.auto); announce(); } }
   function announce() { try { window.dispatchEvent(new CustomEvent("wyz-ai-status")); } catch (e) {} }
   function detectShared() {
-    var probe = function (p, url) { return fetch(url, { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : { ok: false }; }).then(function (j) { shared[p] = !!(j && j.ok); missing[p] = (j && Array.isArray(j.missing)) ? j.missing : []; }, function () { shared[p] = false; missing[p] = []; }); };
-    return Promise.all([probe("claude", "/api/claude"), probe("chatgpt", "/api/chatgpt")]).then(function () { return shared.claude || shared.chatgpt; });
+    var probe = function (p, url) { return fetch(url, { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : { ok: false }; }).then(function (j) { shared[p] = !!(j && j.ok); missing[p] = (j && Array.isArray(j.missing)) ? j.missing : []; if (p === "chatgpt") sharedFree = !!(j && j.ok && /Gemini/i.test(String(j.label || ""))); }, function () { shared[p] = false; missing[p] = []; }); };
+    return Promise.all([probe("claude", "/api/claude"), probe("chatgpt", "/api/chatgpt")]).then(function () { refreshNames(); return shared.claude || shared.chatgpt; });
   }
   var keyOf = function (p) { return ls.get(p === "chatgpt" ? KEY.openai : KEY.ai); };
   var avail = function (p) { return !!(keyOf(p) || shared[p]); };
   function chosen() { return ls.get(KEY.provider) === "chatgpt" ? "chatgpt" : "claude"; }
-  function active() { var p = chosen(); if (avail(p)) return p; var o = p === "claude" ? "chatgpt" : "claude"; return avail(o) ? o : ""; }
+  function active() { if (freeFirst() && avail("chatgpt") && isFree("chatgpt")) return "chatgpt"; var p = chosen(); if (avail(p)) return p; var o = p === "claude" ? "chatgpt" : "claude"; return avail(o) ? o : ""; }
   function modeOf(p) { p = p || active(); return !p ? "" : keyOf(p) ? "key" : shared[p] ? "shared" : ""; }
   function textOf(j) { return (j.content || []).filter(function (b) { return b.type === "text"; }).map(function (b) { return b.text; }).join(""); }
 
-  async function callShared(p, messages) {
+  async function callShared(p, messages, o) {
     var t = await ensure();
     var r = await fetch(p === "chatgpt" ? "/api/chatgpt" : "/api/claude", {
       method: "POST",
       headers: { "content-type": "application/json", Authorization: "Bearer " + t },
-      body: JSON.stringify({ model: p === "chatgpt" ? getOModel() : getModel(), messages: messages, max_tokens: 8000 })
+      body: JSON.stringify({ model: p === "chatgpt" ? (isFree(p) ? "" : getOModel()) : getModel(), messages: messages, max_tokens: 8000, json: !!(o && o.json) })
     });
     var detail = "";
     if (!r.ok) { try { detail = (await r.json()).error || ""; } catch (e) {} }
@@ -780,8 +801,22 @@
     if (!r.ok) throw cerr("tool_error", detail || NAMES[p] + " answered " + r.status);
     return { text: textOf(await r.json()) };
   }
-  async function callDirect(p, messages) {
+  async function callDirect(p, messages, o) {
     var r, key = keyOf(p);
+    if (p === "chatgpt" && /^AIza/.test(String(key))) {
+      var gm = /^gemini-/.test(getOModel()) ? getOModel() : GMODEL;
+      var gtext = function (c) { return typeof c === "string" ? c : (Array.isArray(c) ? c.map(function (x) { return x && x.text ? x.text : ""; }).join("\n") : ""); };
+      r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(gm) + ":generateContent", { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": key }, body: JSON.stringify({ contents: messages.map(function (m) { return { role: m.role === "assistant" ? "model" : "user", parts: [{ text: gtext(m.content) }] }; }), generationConfig: (o && o.json) ? { responseMimeType: "application/json" } : undefined }) });
+      var gd = "";
+      if (!r.ok) { try { var ge = (await r.json()).error || {}; gd = String(ge.message || ""); } catch (x) {} }
+      if (r.status === 400 && /API key/i.test(gd) || r.status === 403) throw cerr("not_granted", NAMES[p] + " rejected the API key");
+      if (r.status === 429) throw cerr("rate_limited", niceError(p, 429, gd));
+      if (!r.ok) throw cerr("tool_error", gd ? gd.slice(0, 160) : NAMES[p] + " answered " + r.status);
+      var gj = await r.json(), gp = (gj.candidates && gj.candidates[0] && gj.candidates[0].content && gj.candidates[0].content.parts) || [];
+      var gt = gp.map(function (x) { return x.text || ""; }).join("");
+      if (!gt) throw cerr("tool_error", "The free AI sent back nothing");
+      return { text: gt };
+    }
     if (p === "chatgpt") {
       r = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", headers: { "content-type": "application/json", Authorization: "Bearer " + key }, body: JSON.stringify({ model: getOModel(), messages: messages }) });
     } else {
@@ -804,8 +839,8 @@
       var messages = typeof input === "string" ? [{ role: "user", content: input }] : input;
       var files = messages.some(function (m) { return Array.isArray(m.content); });
       var other = p === "claude" ? "chatgpt" : "claude";
-      var canSwitch = !(opts && opts.noFallback) && !files && avail(other);
-      var run = function (pp) { return keyOf(pp) ? callDirect(pp, messages) : callShared(pp, messages); };
+      var canSwitch = !(opts && opts.noFallback) && !files && avail(other) && !(isFree(p) && isPaid(other));   /* never spend paid credit by itself when the free AI is the one asked */
+      var run = function (pp) { return keyOf(pp) ? callDirect(pp, messages, opts) : callShared(pp, messages, opts); };
       if (canSwitch && down[p] && down[p].until > Date.now() && !(down[other] && down[other].until > Date.now())) {
         try { var r0 = await run(other); r0.usedOther = other; r0.skipped = p; if (down[p].credit) autoSwitch(p, other); return r0; }
         catch (e0) { if (!creditLike(e0)) throw e0; down[other] = { until: Date.now() + 2 * 60000, why: String(e0.message || "").slice(0, 160), credit: /credit|billing|quota/i.test(String(e0.message || "")) }; announce(); throw e0; }
@@ -835,7 +870,7 @@
       return r;
     };
     sample.json = async function (input, opts) {
-      var r = await call(String(input) + "\n\nReturn valid JSON only. No code fences and no commentary.", opts);
+      var r = await call(String(input) + "\n\nReturn valid JSON only. No code fences and no commentary.", Object.assign({}, opts, { json: true }));
       try { if (window.WYZ_USAGE) setTimeout(function () { window.WYZ_USAGE.refresh(false); }, 2500); } catch (e) {}
       return parseJson(r.text);
     };
@@ -870,7 +905,8 @@
       set: function (k) { ls.set(KEY.ai, String(k || "").trim()); }, clear: function () { ls.del(KEY.ai); }, has: function () { return !!ls.get(KEY.ai); },
       /* ChatGPT */
       omodels: OMODELS, getOModel: getOModel, setOModel: function (m) { ls.set(KEY.omodel, String(m || "").trim()); },
-      setOpenAI: function (k) { ls.set(KEY.openai, String(k || "").trim()); }, clearOpenAI: function () { ls.del(KEY.openai); }, hasOpenAI: function () { return !!ls.get(KEY.openai); },
+      setOpenAI: function (k) { ls.set(KEY.openai, String(k || "").trim()); refreshNames(); announce(); }, clearOpenAI: function () { ls.del(KEY.openai); refreshNames(); announce(); },
+      isFree: isFree, isPaid: isPaid, freeFirst: freeFirst, setFreeFirst: function (on) { ls.set("wyz-ai-freefirst", on ? "1" : "0"); announce(); }, gmodel: GMODEL, hasOpenAI: function () { return !!ls.get(KEY.openai); },
       label: function (p) { p = p || active(); return !p ? "" : p === "chatgpt" ? "ChatGPT " + getOModel() : "Claude " + modelLabel(); },
       /* other AIs, opened by link */
       links: links,

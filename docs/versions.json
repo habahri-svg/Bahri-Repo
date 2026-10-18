@@ -1,16 +1,6 @@
 {
   "versions": [
     {
-      "version": "3.82",
-      "path": "previous/v3.82/",
-      "label": "AI usage meter: Claude and ChatGPT in percent, alerts at 25, 50 and 75"
-    },
-    {
-      "version": "3.83",
-      "path": "previous/v3.83/",
-      "label": "Created files button: every PDF and HTML made by ChatGPT and Claude, with date and time"
-    },
-    {
       "version": "3.84",
       "path": "previous/v3.84/",
       "label": "Free AI first: Google Gemini free tier, never switches to a paid AI by itself"
@@ -32,6 +22,11 @@
     },
     {
       "version": "3.90",
+      "path": "previous/v3.90/",
+      "label": "Live ops strip: occupied today, next 30 days, vs last year"
+    },
+    {
+      "version": "3.93",
       "path": "",
       "label": "Current"
     }

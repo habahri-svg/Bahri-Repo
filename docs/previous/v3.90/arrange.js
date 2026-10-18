@@ -26,7 +26,7 @@
   var txt = function (n) { return (n.textContent || "").replace(/\s+/g, " ").trim(); };
   var keyOf = function (c) { return c.id || ("grp:" + txt(c)); };
   var labelOf = function (c) { var t = txt(c); return /Undo/.test(t) && /Redo/.test(t) ? "Undo, Redo, History" : (t || keyOf(c)); };
-  var items = function () { return [].filter.call(hero.children, function (c) { return c.id !== "fresh" && c.id !== "arrangeBtn" && c.nodeType === 1; }); };
+  var items = function () { return [].filter.call(hero.children, function (c) { return c.id !== "fresh" && c.id !== "arrangeBtn" && c.id !== "showHideBtn" && c.nodeType === 1; }); };
   var arr = function (k) { return (state && Array.isArray(state[k])) ? state[k] : []; };
 
   function applyButtons() {
@@ -44,6 +44,7 @@
     var tb = $("toolbar"); if (tb) tb.classList.toggle("arr-hidden", !!(state && state.hideChips));
   }
   function applyAll() { try { applyButtons(); applySections(); } catch (e) {} }
+  window.WYZ_ARRANGE = { apply: function () { applyAll(); }, items: function () { return items(); }, keyOf: keyOf, labelOf: labelOf };
 
   /* the button that opens the panel */
   function addOpener() {

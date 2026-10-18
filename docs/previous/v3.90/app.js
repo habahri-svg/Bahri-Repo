@@ -298,9 +298,9 @@ function onbRender(){
     p("No API key? Use your own ChatGPT or Claude account. Write it for me and Ask open it with the request filled in, and you paste the answer back.");
     const cr=el("div","acts");cr.append(onbBtn("Use my ChatGPT account",()=>{useChat("chatgpt");onbGo(onbI+1)},"solid"),onbBtn("Use my Claude account",()=>{useChat("claude");onbGo(onbI+1)},"solid"));body.append(cr);
     p("Have an API key? It makes everything automatic. Paste it below. It's stored on this device only and sent only to that company.");
-    const sel=el("select","in");sel.id="onbProv";sel.setAttribute("aria-label","Which AI");sel.append(new Option("Claude (sk-ant-...)","claude"),new Option("ChatGPT (sk-...)","chatgpt"));body.append(sel);
+    const sel=el("select","in");sel.id="onbProv";sel.setAttribute("aria-label","Which AI");sel.append(new Option("Claude (sk-ant-...)","claude"),new Option("Free AI: Gemini (AIza...) or ChatGPT (sk-...)","chatgpt"));body.append(sel);
     const lk=onbLink("https://console.anthropic.com/settings/keys","Get my Claude key");body.append(lk);
-    sel.onchange=()=>{const g=sel.value==="chatgpt";lk.href=g?"https://platform.openai.com/api-keys":"https://console.anthropic.com/settings/keys";lk.textContent=g?"Get my OpenAI key":"Get my Claude key";inp.placeholder=g?"sk-...":"sk-ant-..."};
+    sel.onchange=()=>{const g=sel.value==="chatgpt";lk.href=g?"https://aistudio.google.com/apikey":"https://console.anthropic.com/settings/keys";lk.textContent=g?"Get my free Gemini key":"Get my Claude key";inp.placeholder=g?"AIza... (free) or sk-...":"sk-ant-..."};
     const inp=el("input","in");inp.id="onbKey";inp.type="password";inp.placeholder="sk-ant-...";inp.autocomplete="off";inp.setAttribute("aria-label","API key");body.append(inp);
     acts.append(onbBtn("Connect",async function(){
       const b=this;b.disabled=true;b.textContent="Checking your key...";$("onbMsg").textContent="";
@@ -488,19 +488,20 @@ async function connectAI(p,raw){
   const key=String(raw||"").trim(),A=Connectors.ai,name=A.names[p];
   if(!key)return {ok:false,msg:"Paste the key first."};
   if(p==="claude"&&!/^sk-ant-/.test(key))return {ok:false,msg:"Claude keys start with sk-ant-. Copy the key again."};
-  if(p==="chatgpt"&&!/^sk-/.test(key))return {ok:false,msg:"OpenAI keys start with sk-. Copy the key again."};
+  if(p==="chatgpt"&&!/^sk-/.test(key)&&!/^AIza[0-9A-Za-z_-]{20,}$/.test(key))return {ok:false,msg:"A free Google Gemini key starts with AIza, an OpenAI key starts with sk-. Copy the key again."};
   const had=A.active();
   p==="claude"?A.set(key):A.setOpenAI(key);sample=Connectors.makeSample();
   try{await sample("Reply with the single word OK.",{provider:p,cache:false,noFallback:true})}
   catch(e){p==="claude"?A.clear():A.clearOpenAI();sample=Connectors.makeSample();
     return {ok:false,msg:e&&e.code==="not_granted"?name+" rejected that key. Check it and try again.":e&&e.code==="rate_limited"?name+" is busy. Try again in a minute.":"Couldn't use "+name+" ("+clip((e&&e.message)||"unknown reason",110)+")."}}
   if(!had)A.setChosen(p);
+  if(p==="chatgpt"&&A.isFree("chatgpt"))A.setFreeFirst(true);
   state.claudeOk=1;persist();renderSetup();renderAI();
   if(threads.length)triage(board&&board.sig||"",true);followups(true);
   return {ok:true};
 }
 function askKey(p){
-  const k=prompt(p==="chatgpt"?"Paste your OpenAI API key (starts with sk-). It is stored on this device only.":"Paste your Claude API key (starts with sk-ant-). It is stored on this device only.");
+  const k=prompt(p==="chatgpt"?"Paste a FREE Google Gemini key (starts with AIza, get it at https://aistudio.google.com/apikey) or an OpenAI key (starts with sk-, paid). It is stored on this device only. On Google's free tier, prompts may be used to improve Google's products, so keep confidential matters out of it.":"Paste your Claude API key (starts with sk-ant-). It is stored on this device only.");
   if(!k||!k.trim())return;
   connectAI(p,k).then(r=>{if(!r.ok)alert(r.msg)});
 }
@@ -564,10 +565,10 @@ function applyPageName(){
   bar.title="You are using version "+v.version+(when?", updated "+when:"")+". If it looks old, refresh the page.";
 })();
 /* colour palette and light/dark look, saved per device and applied before first paint by a tiny script in index.html */
-const PAL_META={ocean:"#104b70",ivory:"#16324e",marina:"#0f6466",dune:"#7a3a22",graphite:"#1f2633",rose:"#b35a85",lavender:"#7761bd",mint:"#3a9877",peach:"#b95a30",skyblue:"#3b7fc0",butter:"#9a8014"};
+const PAL_META={apple:"#f5f5f7",ocean:"#104b70",ivory:"#16324e",marina:"#0f6466",dune:"#7a3a22",graphite:"#1f2633",rose:"#b35a85",lavender:"#7761bd",mint:"#3a9877",peach:"#b95a30",skyblue:"#3b7fc0",butter:"#9a8014"};
 function lookNow(){try{return JSON.parse(localStorage.getItem("wyz-look")||"{}")}catch(e){return {}}}
 function applyLook(l){
-  const r=document.documentElement,p=PAL_META[l.p]?l.p:"ocean";
+  const r=document.documentElement,p=PAL_META[l.p]?l.p:"apple";
   r.setAttribute("data-palette",p);
   if(l.m==="light"||l.m==="dark")r.setAttribute("data-theme",l.m);else r.removeAttribute("data-theme");
   document.querySelectorAll("#swatches .swatch,.lookc").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.pal===p)));
@@ -588,7 +589,7 @@ function applyOwnColours(l){
 }
 const COLS=[["colHeader","cH","#104b70"],["colMain","c1","#104b70"],["colAccent","c2","#b8923c"],["colBg","cB","#f4f8fc"],["colPanel","cP","#ffffff"],["colText","cT","#0e2238"]];
 COLS.forEach(([id,k])=>{$(id).oninput=()=>saveLook({[k]:$(id).value})});
-$("colReset").onclick=()=>{saveLook({c1:"",c2:"",cH:"",cB:"",cP:"",cT:"",p:"ocean"})};
+$("colReset").onclick=()=>{saveLook({c1:"",c2:"",cH:"",cB:"",cP:"",cT:"",p:"apple"})};
 function saveLook(patch){const l=Object.assign({},lookNow(),patch);try{localStorage.setItem("wyz-look",JSON.stringify(l))}catch(e){}applyLook(l)}
 document.querySelectorAll("#swatches .swatch").forEach(b=>b.onclick=()=>saveLook({p:b.dataset.pal,c1:"",c2:"",cH:"",cB:"",cP:"",cT:""}));
 $("lookMode").onchange=()=>saveLook({m:$("lookMode").value});
@@ -600,21 +601,24 @@ function renderAI(){
   const st=(p,id,rm)=>{const m=A.mode(p),has=A.avail(p);$(id).textContent=m==="shared"?"Connected through the shared account. Nothing to paste.":m==="key"?"Connected with your own key (stored on this device only).":"Not connected.";$(rm).hidden=m!=="key"};
   st("claude","aiClaudeSt","aiClaudeRm");st("chatgpt","aiGptSt","aiGptRm");
   $("aiProv").value=A.chosen();
+  try{$("aiProv").options[1].text=A.names.chatgpt;$("aiGptName").textContent=A.isFree("chatgpt")?"Free AI (Gemini)":"Free AI (Gemini) or ChatGPT";
+    $("aiFreeRow").hidden=!A.isFree("chatgpt");$("aiFreeFirst").checked=A.freeFirst()}catch(e){}
   const act=A.active();
   $("aiNote").textContent=!act?"No AI is connected yet. Connect one below.":act!==A.chosen()?A.names[A.chosen()]+" isn't connected, so answers come from "+A.names[act]+" for now.":"";
   const ms=$("modelSel");if(!ms.options.length)A.models.forEach(([id,label])=>ms.append(new Option(label,id)));ms.value=A.getModel();
-  const dl=$("omodelList");if(!dl.childNodes.length)A.omodels.forEach(m=>dl.append(new Option(m)));$("omodelIn").value=A.getOModel();
+  const dl=$("omodelList");if(!dl.childNodes.length)A.omodels.forEach(m=>dl.append(new Option(m)));$("omodelIn").value=A.isFree("chatgpt")&&!/^gemini-/.test(A.getOModel())?"":A.getOModel();
   const ll=$("linkList");ll.replaceChildren();
   A.links().forEach(l=>{const r=el("div","tplrow");r.append(el("b","",l.name),el("span","status",l.url));const b=el("button","btn small ghost","Remove");b.type="button";b.onclick=()=>{A.removeLink(l.id);renderAI()};r.append(b);ll.append(r)});
   const pr=$("linkPresets");if(!pr.childNodes.length)[["Perplexity","https://www.perplexity.ai/search?q={prompt}"],["Microsoft Copilot","https://copilot.microsoft.com/?q={prompt}"],["Grok","https://grok.com/?q={prompt}"],["Gemini","https://gemini.google.com/app"]].forEach(([n,u])=>{const c=el("button","chip","+ "+n);c.type="button";c.onclick=()=>{if(!A.links().some(x=>x.name===n))A.addLink(n,u);renderAI()};pr.append(c)});
   try{renderThrPick()}catch(e){}
   try{renderAIStat()}catch(e){}
 }
-$("aiProv").onchange=()=>{Connectors.ai.setChosen($("aiProv").value);renderAI();if(threads.length&&sample)triage(board&&board.sig||"",true)};
+$("aiProv").onchange=()=>{Connectors.ai.setChosen($("aiProv").value);if($("aiProv").value==="claude"&&Connectors.ai.isFree("chatgpt"))Connectors.ai.setFreeFirst(false);else if($("aiProv").value==="chatgpt"&&Connectors.ai.isFree("chatgpt"))Connectors.ai.setFreeFirst(true);renderAI();if(threads.length&&sample)triage(board&&board.sig||"",true)};
 $("modelSel").onchange=()=>{Connectors.ai.setModel($("modelSel").value)};
 $("omodelIn").addEventListener("change",()=>{Connectors.ai.setOModel($("omodelIn").value)});
 $("aiClaudeKey").onclick=async()=>{const b=$("aiClaudeKey");b.disabled=true;$("aiMsg").className="status";$("aiMsg").textContent="Checking your key...";const r=await connectAI("claude",$("aiClaudeIn").value);b.disabled=false;$("aiMsg").className="status"+(r.ok?"":" err");$("aiMsg").textContent=r.ok?"Claude is connected.":r.msg;if(r.ok)$("aiClaudeIn").value=""};
 $("aiGptKey").onclick=async()=>{const b=$("aiGptKey");b.disabled=true;$("aiMsg").className="status";$("aiMsg").textContent="Checking your key...";const r=await connectAI("chatgpt",$("aiGptIn").value);b.disabled=false;$("aiMsg").className="status"+(r.ok?"":" err");$("aiMsg").textContent=r.ok?"ChatGPT is connected.":r.msg;if(r.ok)$("aiGptIn").value=""};
+$("aiFreeFirst").onchange=()=>{Connectors.ai.setFreeFirst($("aiFreeFirst").checked);renderAI()};
 $("aiClaudeRm").onclick=()=>removeAiKey("claude");$("aiGptRm").onclick=()=>removeAiKey("chatgpt");
 $("linkAdd").onclick=()=>{const n=$("linkName").value.trim(),u=$("linkUrl").value.trim();if(!n||!/^https:\/\/\S+\.\S+/.test(u)){$("aiMsg").className="status err";$("aiMsg").textContent="Give it a name and a full web address starting with https://";return}Connectors.ai.addLink(n,u);$("linkName").value="";$("linkUrl").value="";$("aiMsg").className="status";$("aiMsg").textContent=n+" added. It now shows in the Instruct AI list.";renderAI()};
 const gateUi=()=>{};
@@ -709,7 +713,7 @@ async function triage(sig,force){
     state.claudeOk=1;board={sig,v2:1,items,headline:String(r&&r.headline||""),at:Date.now()};persist();renderSetup();renderBoard();setFresh("ok");
   }catch(err){
     const c=err&&err.code;
-    {const hb=heuristicBoard(sig,false);hb.headline=(c==="not_granted"?"Your Claude API key was rejected, so your inbox is sorted by simple rules. ":c==="rate_limited"?"Claude is busy, so your inbox is sorted by simple rules for now. ":"Couldn't use Claude just now ("+clip((err&&err.message)||"unknown reason",110)+"), so your inbox is sorted by simple rules. ")+hb.headline;board=hb}
+    {const hb=heuristicBoard(sig,false);hb.headline=(c==="not_granted"?"Your Claude API key was rejected, so your inbox is sorted by simple rules. ":c==="rate_limited"?"Claude is busy, so your inbox is sorted by simple rules for now. ":"Couldn't use "+(Connectors.ai.names[Connectors.ai.active()]||"the AI")+" just now ("+clip((err&&err.message)||"unknown reason",110)+"), so your inbox is sorted by simple rules. ")+hb.headline;board=hb}
     renderBoard();setFresh("ok");
   }
 }
@@ -1212,12 +1216,13 @@ async function creditFallback(run){
   try{return await run(first)}
   catch(e){
     const other=first==="claude"?"chatgpt":"claude";
-    if(/no credit|credit left|billing|quota/i.test((e&&e.message)||"")&&Connectors.ai.avail(other)){const r=await run(other);r.usedOther=other;r.skipped=first;return r}
+    const toPaid=Connectors.ai.isFree(first)&&Connectors.ai.isPaid(other);   /* the free AI never hands over to a paid one by itself */
+    if(/no credit|credit left|billing|quota/i.test((e&&e.message)||"")&&Connectors.ai.avail(other)&&!toPaid){const r=await run(other);r.usedOther=other;r.skipped=first;return r}
     if(/no credit|credit left|billing|quota/i.test((e&&e.message)||""))creditOutAt=Date.now();
     throw e;
   }
 }
-const isCreditErr=e=>/no credit|credit left|billing|quota/i.test((e&&e.message)||"");
+const isCreditErr=e=>/no credit|credit left|billing|quota|free limit/i.test((e&&e.message)||"");
 function freePrompt(){
   if(thr.mode==="new"){
     return "Write an email for "+(myName||"me")+" at "+BR.co+", "+BR.desc+".\nIt is to: "+($("thrTo").value.trim()||"someone")+".\nWhat it should say: "+($("thrBrief").value.trim()||"(describe it here)")+"\n\nPlain text only, short, warm, professional, with contractions. No em dashes. Give a subject line first, then the email body.";
@@ -2506,12 +2511,12 @@ $("goCheck").onclick=()=>{
 $("aiTest").onclick=async()=>{
   const out=$("aiTestOut"),btn=$("aiTest");out.replaceChildren();btn.disabled=true;btn.textContent="Testing...";
   const A=Connectors.ai;
-  const rows=[["claude","Claude"],["chatgpt","ChatGPT"]],res={};
+  const rows=[["claude",A.names.claude],["chatgpt",A.names.chatgpt]],res={};
   for(const [id,name] of rows){
     const line=el("p","status");out.append(line);
     if(!A.avail(id)){line.className="status err";const ms=A.missing(id);line.textContent=name+": not connected. "+(ms.length?"Vercel is missing "+ms.join(" and ")+". Add "+(ms.length>1?"them":"it")+" in Vercel under Settings, Environment Variables (tick Production), then open Deployments and press Redeploy. A new setting only works after a redeploy. Or paste your own key above.":(id==="claude"?"The owner has not added ANTHROPIC_API_KEY in Vercel, or you have not pasted your own key above.":"The owner has not added OPENAI_API_KEY in Vercel, or you have not pasted your own key above."));continue}
     const mode=A.mode(id)==="key"?"your own key":"the shared key";
-    const model=id==="claude"?A.modelLabel():A.getOModel();
+    const model=id==="claude"?A.modelLabel():(A.isFree(id)?A.gmodel:A.getOModel());
     line.textContent=name+" ("+model+", "+mode+"): testing...";
     try{
       const s=Connectors.makeSample();
@@ -2526,7 +2531,7 @@ $("aiTest").onclick=async()=>{
   for(const [p,o] of [["claude","chatgpt"],["chatgpt","claude"]]){
     if(res[p]==="credit"&&res[o]==="ok"&&A.chosen()===p){A.autoSwitch(p,o);out.append(el("p","status","✅ "+A.names[o]+" is now your main AI, because "+A.names[p]+" has no credit. "+A.names[p]+" takes over again by itself once its credit is fixed."))}
   }
-  btn.disabled=false;btn.textContent="Test Claude and ChatGPT now";
+  btn.disabled=false;btn.textContent="Test "+A.names.claude+" and "+A.names.chatgpt+" now";
 };
 
 /* ---------- AI status line at the top: which AI is connected and whether it works ---------- */
@@ -2537,9 +2542,10 @@ function renderAIStat(){
     const s=el("span","",(has?(d?"⚠ ":"✅ "):"⛔ ")+name+(has?(d?(d.credit?" no credit":" problem"):" ready"):" not connected"));
     s.title=has?(d?d.why:"Connected ("+(A.mode(p)==="key"?"your own key":"shared account")+"). Press Test under Settings to be sure."):"Not connected. See Settings.";return s;
   };
-  bar.append(el("b","","AI"),document.createTextNode(" "),one("claude","Claude"),document.createTextNode(" · "),one("chatgpt","ChatGPT"));
+  bar.append(el("b","","AI"),document.createTextNode(" "),one("claude",A.names.claude),document.createTextNode(" · "),one("chatgpt",A.names.chatgpt));
   const c=A.down("claude"),g=A.down("chatgpt");
-  if(c&&A.avail("chatgpt")&&!g)bar.append(document.createTextNode(" · ChatGPT is answering instead"));
+  if(c&&A.avail("chatgpt")&&!g)bar.append(document.createTextNode(" · "+A.names.chatgpt+" is answering instead"));
+  else if(g&&A.isFree("chatgpt"))bar.append(document.createTextNode(" · the free AI is at its limit, use the free chat"));
   else if(g&&A.avail("claude")&&!c)bar.append(document.createTextNode(" · Claude is answering instead"));
   else if(c&&g)bar.append(document.createTextNode(" · both need attention, see Settings"));
 }
