@@ -69,6 +69,30 @@
     var stt = statusOf(n); if (stt) { var dot = el("span", "platdot " + stt[0], stt[1]); main.append(dot); }
     wrap.append(main, star); return wrap;
   }
+  /* Switches: one place to turn alerts and briefs on or off, and to pause everything. Each feature also keeps its own switch where it lives. */
+  function switchesCard() {
+    var box = el("div", "platgrp"); box.append(el("h3", "", "Alerts and briefs"));
+    var msg = el("p", "sub", "Both start off. Nothing is sent until you switch it on, and you can switch it off here at any time.");
+    var l1 = el("label", "srcrow"), c1 = el("input"); c1.type = "checkbox"; c1.id = "swAlerts";
+    var t1 = el("span", ""); t1.style.flex = "1"; t1.append(el("b", "", "Critical email alerts"), el("span", "status", " On this device. Free."));
+    l1.append(c1, t1);
+    c1.onchange = function () { var a = $("alertsOn"); if (!a) return; a.checked = c1.checked; if (a.onchange) a.onchange(); setTimeout(function () { c1.checked = !!(typeof state !== "undefined" && state.alertsOn); }, 400); };
+    var acts = el("div", "acts");
+    var b1 = el("button", "btn small", "Phone brief 8am and 6pm: set up or turn off"); b1.type = "button";
+    b1.onclick = function () { var s = document.querySelector('#modeSw button[data-mode="life"]'); if (s) s.click(); setTimeout(function () { var c = $("life-notify"); if (c) c.scrollIntoView({ behavior: "smooth", block: "center" }); }, 500); };
+    var b2 = el("button", "btn small ghost", "Pause everything"); b2.type = "button";
+    b2.onclick = function () {
+      c1.checked = false; c1.onchange();
+      var n = $("life-notify"); if (n) Array.prototype.forEach.call(n.querySelectorAll("button"), function (b) { if (/turn off here/i.test(b.textContent)) b.click(); });
+      msg.textContent = "Paused on this device: alerts are off and the phone brief is unsubscribed. WhatsApp alerts and Wafeq or PriceLabs are not connected, so nothing of theirs is running.";
+    };
+    acts.append(b1, b2);
+    var note = el("p", "status", "WhatsApp alerts to your phone and live Wafeq and PriceLabs data are not built yet. They need Meta and provider keys and they can cost per message, so they stay off until you give the keys and say go.");
+    box.append(msg, l1, acts, note);
+    var sync = function () { c1.checked = !!(typeof state !== "undefined" && state.alertsOn); };
+    sync(); window.addEventListener("hashchange", sync);
+    return box;
+  }
   function statusOf(n) {
     if (n === "Hostaway") { var h = window.wyzHA; if (!h || !h.viewer) return null; return h.ready ? ["ok", "Connected"] : ["bad", "Check the key"]; }
     if (n === "Wafeq" || n === "PriceLabs") return ["off", "Not connected yet"];
@@ -103,7 +127,7 @@
     pad.append(el("h2", "", "All your platforms"), el("p", "sub", "Pick one to open it. Star the ones you use most and they move to the top."));
     var s = el("input", "in"); s.type = "search"; s.id = "platSearch"; s.placeholder = "Search platforms"; s.setAttribute("aria-label", "Search platforms");
     s.oninput = function () { q = s.value; render(); };
-    pad.append(s, el("div", "")); var root = el("div"); root.id = "platRoot"; pad.append(root); c.append(pad); p.append(c);
+    pad.append(s, el("div", "")); pad.append(switchesCard()); var root = el("div"); root.id = "platRoot"; pad.append(root); c.append(pad); p.append(c);
     $("p-conn").parentNode.insertBefore(p, $("p-conn"));
     tab.onclick = function () { show("t-plat"); };
     tabs.push(["t-plat", "p-plat"]);
