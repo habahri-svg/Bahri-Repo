@@ -13,7 +13,7 @@
     "Booked nights": "ليالٍ محجوزة", "Refresh": "تحديث", "Advise me": "انصحني", "What should I do?": "ماذا أفعل؟", "Advise": "انصح", "Point at something": "أشر إلى عنصر",
     "Close": "إغلاق", "Tap an item": "اختر عنصراً", "What:": "ماذا:", "When:": "متى:", "How:": "كيف:", "Risk:": "المخاطرة:",
     "SAMOCO legal": "ساموكو: قانوني", "Kuwait company": "شركة الكويت", "A09 villa": "فيلا A09", "Lebanon money": "أموال لبنان", "Inheritance": "الميراث",
-    "Karim": "كريم", "Health": "الصحة", "Tax and visas": "الضرائب والتأشيرات", "Thinking it through...": "جارٍ التفكير...",
+    "Karim": "كريم", "Whole team": "الفريق كله", "Team:": "الفريق:", "Lawyer": "محامٍ", "Doctor": "طبيب", "Trainer": "مدرب", "Financial": "مالي", "Business": "أعمال", "Family": "عائلة", "Health": "الصحة", "Tax and visas": "الضرائب والتأشيرات", "Thinking it through...": "جارٍ التفكير...",
     "Connected": "متصل", "Not connected yet": "غير متصل بعد", "Check the key": "تحقق من المفتاح",
     "I'm not a licensed lawyer, doctor or financial adviser. Confirm with a professional before you act.": "لست محامياً أو طبيباً أو مستشاراً مالياً مرخصاً. استشر مختصاً قبل أن تتصرف."
   };
