@@ -59,4 +59,5 @@ live.version = nowV;
 const lowerOrSame = archived.filter((v) => cmp(v.version, nowV) < 0).sort((a, b) => cmp(a.version, b.version));
 const higher = archived.filter((v) => cmp(v.version, nowV) >= 0).sort((a, b) => cmp(a.version, b.version));
 fs.writeFileSync(vf, JSON.stringify({ versions: lowerOrSame.concat([live], higher) }, null, 2) + "\n");
+try { const n = require("./prune-versions").prune(); if (n) console.log("Pruned " + n + " older versions (keeping the last 5)."); } catch (e) { console.warn("Prune skipped: " + e.message); }
 console.log("Archived version " + version + " into docs/previous/v" + version + "/ (" + (local.length + 1) + " files).");

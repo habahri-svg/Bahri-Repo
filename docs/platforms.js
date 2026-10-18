@@ -66,8 +66,15 @@
     var star = el("button", "platstar", on ? "★" : "☆"); star.type = "button";
     star.setAttribute("aria-label", (on ? "Unpin " : "Pin ") + n); star.title = on ? "Unpin" : "Pin to the top";
     star.onclick = function () { var i = pins.indexOf(n); if (i >= 0) pins.splice(i, 1); else pins.push(n); savePins(); render(); };
+    var stt = statusOf(n); if (stt) { var dot = el("span", "platdot " + stt[0], stt[1]); main.append(dot); }
     wrap.append(main, star); return wrap;
   }
+  function statusOf(n) {
+    if (n === "Hostaway") { var h = window.wyzHA; if (!h || !h.viewer) return null; return h.ready ? ["ok", "Connected"] : ["bad", "Check the key"]; }
+    if (n === "Wafeq" || n === "PriceLabs") return ["off", "Not connected yet"];
+    return null;
+  }
+  window.addEventListener("wyz-ha", function () { try { render(); } catch (e) {} });
   function section(title, items, root) {
     if (!items.length) return;
     var s = el("div", "platgrp"); s.append(el("h3", "", title));
@@ -101,7 +108,7 @@
     tab.onclick = function () { show("t-plat"); };
     tabs.push(["t-plat", "p-plat"]);
     var st = el("style"); st.textContent =
-      ".platgrp{margin-top:14px}.platgrp h3{margin:0 0 8px}.platgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}" +
+      ".platdot{font-size:12px;margin-top:4px;color:var(--soft)}.platdot.ok{color:#1d8348}.platdot.bad{color:#c0392b}.platgrp{margin-top:14px}.platgrp h3{margin:0 0 8px}.platgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}" +
       ".platcard{position:relative;display:flex}.platmain{flex:1;display:flex;flex-direction:column;gap:2px;text-align:left;text-decoration:none;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 38px 12px 14px;font:inherit;cursor:pointer;min-height:58px}" +
       ".platmain:hover,.platmain:focus-visible{border-color:var(--navy);background:var(--sky)}.platmain span{color:var(--soft);font-size:13px}" +
       ".platstar{position:absolute;top:6px;right:6px;border:0;background:none;font-size:20px;line-height:1;cursor:pointer;color:var(--gold);padding:4px 6px}" +

@@ -68,7 +68,7 @@
     var prompt = "You are the personal consultant of " + me + " (CEO advisor at WYZ Rent, Dubai; principal at SAMOCO). Act as consultant, lawyer, doctor and personal trainer as the topic needs. Today is " + new Date().toDateString() + " (Dubai).\n" +
       "Decision or step: " + (q || "(see the selected item)") + "\nPage: " + pageName() + (picked ? "\nSelected item: " + picked : "") +
       "\n\nGive exactly three short lines. WHAT to do. WHEN to do it (a concrete date or deadline). HOW to do it (the first practical step, with an official https link only if you are sure it is correct). Add one short RISK line if there is a real risk, else empty. Plain words, contractions, no em dashes, no semicolons. Never invent facts, names, amounts or links. If key information is missing, say exactly what is missing in the RISK line. Add caveat true if the topic is legal, medical or financial.\n" +
-      "Return JSON only: {\"what\":\"\",\"when\":\"\",\"how\":\"\",\"risk\":\"\",\"caveat\":false}";
+      ""+(document.documentElement.lang === "ar" ? "Write the answer values in Arabic (keep official links as they are). " : "")+"Return JSON only: {\"what\":\"\",\"when\":\"\",\"how\":\"\",\"risk\":\"\",\"caveat\":false}";
     try {
       var a = await creditFallback(function (prov) { return sample.json(prompt, { cache: false, provider: prov }); });
       out.replaceChildren();

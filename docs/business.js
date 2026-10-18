@@ -39,6 +39,7 @@
   async function loadStrip(fresh) {
     var j;
     try { j = await call("/api/hostaway" + (fresh ? "?fresh=1" : "")); } catch (e) { return; }
+    window.wyzHA = { ready: !!(j && j.viewer && j.ready && !j.error), viewer: !!(j && j.viewer), error: (j && j.error) || "", at: Date.now() }; try { window.dispatchEvent(new Event("wyz-ha")); } catch (e) {}
     if (!j || !j.viewer) { if (strip) strip.remove(); return; }
     var box = stripBox(); box.replaceChildren(); var pad = el("div", "pad"); box.append(pad);
     var head = el("div", "headrow"); head.append(el("h2", "", "Today at " + (CFG.COMPANY || "WYZ Rent")));
