@@ -8,6 +8,11 @@ It is a progressive web app, plain HTML, CSS and JavaScript. There is no build s
 - Live transcript with speaker tags, bookmarks and a live translation line.
 - Two ways to transcribe. **On this device** is free and live and uses the phone's own speech recognition, one language at a time. **Cloud Whisper** is the most accurate and handles Arabic and English mixed together.
 - AI summary, key points, decisions, action items and topics, in Arabic or English whatever language was spoken. Six templates: meeting, lecture, interview, sales call, study notes, voice memo.
+- Clearer transcripts: audio is cut in pauses between sentences, never mid-word. Names and the last words said are passed to the speech model as context. The larger, more accurate Whisper model is used by default (Settings can switch to Fast). The record screen warns when the voice is too quiet or too loud and lists tips. A saved note can be cleaned up with AI, and the original restored.
+- **Automatic Arabic and English switching.** Cloud Whisper in Auto mode listens to both languages, hears each sentence in whichever language it is spoken, keeps English words in English letters inside Arabic speech, and tags every line AR or EN. If Auto mistakes an Arabic dialect for another language, it redoes that piece as Arabic.
+- **Outline** with tappable chapter times, **Insights** (talk share per speaker, words, questions, Arabic and English mix), a one-tap **follow-up email** draft, and **Add to calendar** for action items that have a real date.
+- **Star** notes and filter by Starred. **Custom vocabulary** for names and terms. **Large text** for live captions. Copy any line with its time.
+- **Export** to text, Word, Markdown and subtitles, and **Back up and restore** all notes as a file, to keep them safe or move them between devices.
 - Ask AI about one note, or across every note.
 - Find in any transcript: type a word, part of a word or a single letter and every match is highlighted with its time. Use the arrows to jump between matches, type a time like 12:40 to go straight there, or tap a marked moment or a time in an AI answer. With saved audio, playback jumps to the same moment. Arabic search ignores diacritics and alef spellings. Library search opens the note at the match.
 - Import audio or video files, paste text, search every word, translate a transcript, export to text, PDF or SRT subtitles.
@@ -33,6 +38,8 @@ The key stays in your browser. Free tiers have rate limits, so a very long recor
 - Cloud Whisper sends audio to the AI provider in short chunks. Keep the screen on and the app open while recording, since phones pause web pages in the background. The app asks the phone to keep the screen awake.
 - Imported files are limited to 24 MB by the free tier.
 - Speakers: type the names before recording, then tap the name of whoever is talking (tap it again to rename). Lines are credited by the time you tapped. For finished notes, Detect speakers (AI) guesses who said what from the conversation, so check the result. A phone cannot reliably tell voices apart from audio alone.
+- Automatic switching needs Cloud Whisper. On-device recognition handles one language at a time. A single sentence that mixes two languages is handled on a best-effort basis.
+- Not included, because they need a server of their own: a bot that joins Zoom, Meet or Teams calls, shareable links, and automatic sync between devices. Use Back up and restore to move notes.
 - Needs a recent browser: current Chrome on Android, or Safari on a recent iPadOS or iOS.
 
 ## Run it locally

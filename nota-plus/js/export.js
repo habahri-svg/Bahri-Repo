@@ -61,3 +61,56 @@ export function printHtml(n, lang) {
   }
   return h;
 }
+
+export function noteToMarkdown(n, lang) {
+  const sm = n.summary?.[lang];
+  const out = [`# ${n.title}`, `${fmtDate(n.createdAt)} · ${fmtDur(n.duration)}`, ''];
+  if (sm) {
+    if (sm.overview) out.push(`## ${t('overview')}`, sm.overview, '');
+    if (sm.key_points?.length) out.push(`## ${t('keyPoints')}`, ...sm.key_points.map((x) => '- ' + x), '');
+    if (sm.decisions?.length) out.push(`## ${t('decisions')}`, ...sm.decisions.map((x) => '- ' + x), '');
+    if (sm.chapters?.length) out.push(`## ${t('outline')}`, ...sm.chapters.map((c) => `- [${fmtClock(c.t)}] ${c.title}`), '');
+    if (sm.action_items?.length) {
+      out.push(`## ${t('tabActions')}`, ...sm.action_items.map((a) => `- [${a.done ? 'x' : ' '}] ${a.text}${a.owner || a.due ? ' (' + [a.owner, a.due || a.iso].filter(Boolean).join(', ') + ')' : ''}`), '');
+    }
+  }
+  out.push(`## ${t('tabTranscript')}`);
+  for (const sg of n.segments || []) out.push(`**${speakerName(n, sg.speaker)}** [${fmtClock(sg.t)}]: ${sg.text}`, '');
+  return out.join('\n');
+}
+
+// Word opens an HTML file saved as .doc, so no library is needed.
+export function noteToDoc(n, lang) {
+  return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>${esc(n.title)}</title></head><body dir="${lang === 'ar' ? 'rtl' : 'ltr'}" style="font-family:Calibri,Arial,sans-serif">${printHtml(n, lang)}</body></html>`;
+}
+
+const icsEsc = (x) =>
+  String(x || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\r?\n/g, '\\n');
+
+// Calendar file with one all-day event per action item that has a real date.
+export function actionsToIcs(n, lang) {
+  const items = (n.summary?.[lang]?.action_items || []).filter((a) => a.iso);
+  if (!items.length) return '';
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Nota+//EN', 'CALSCALE:GREGORIAN'];
+  items.forEach((a, i) => {
+    const next = new Date(a.iso + 'T00:00:00Z');
+    next.setUTCDate(next.getUTCDate() + 1);
+    lines.push(
+      'BEGIN:VEVENT',
+      `UID:${n.id}-${i}@nota-plus`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART;VALUE=DATE:${a.iso.replace(/-/g, '')}`,
+      `DTEND;VALUE=DATE:${next.toISOString().slice(0, 10).replace(/-/g, '')}`,
+      `SUMMARY:${icsEsc(a.text)}`,
+      `DESCRIPTION:${icsEsc([a.owner ? 'Owner: ' + a.owner : '', n.title].filter(Boolean).join(' - '))}`,
+      'END:VEVENT'
+    );
+  });
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n');
+}

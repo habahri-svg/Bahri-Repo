@@ -26,13 +26,19 @@ const P = {
   more: '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>',
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.5-7 8-7s8 3 8 7"/>',
   up: '<path d="M6 15l6-6 6 6"/>',
+  copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+  calendar: '<rect x="4" y="5" width="16" height="16" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
+  star: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
+  type: '<path d="M4 7V5h16v2M9 19h6M12 5v14"/>',
   send: '<path d="M4 12l16-8-6 16-3-7z"/>'
 };
 const FILLED = {
   pause: '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>',
   play: '<path d="M8 5v14l11-7z"/>',
   stop: '<rect x="5" y="5" width="14" height="14" rx="2"/>',
-  bookmarkF: '<path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"/>'
+  bookmarkF: '<path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"/>',
+  starF: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>'
 };
 
 export function icon(name, size = 24, cls = '') {
@@ -139,6 +145,7 @@ export function noteListHtml() {
   const q = S.q.trim();
   const qt = q.split(/\s+/).map(normText).filter(Boolean);
   const list = S.notes.filter((n) => {
+    if (S.filter === 'star') return n.starred && (!qt.length || qt.every((w) => haystack(n).includes(w)));
     if (S.filter !== 'all' && KIND[n.template || 'meeting'] !== S.filter) return false;
     if (!qt.length) return true;
     const h = haystack(n);
@@ -153,7 +160,7 @@ export function noteListHtml() {
     .map(
       (n) => `<a class="card note" href="#/note/${n.id}${q ? '?find=' + encodeURIComponent(q) : ''}">
       <span class="ico">${icon('wave', 20)}</span>
-      <span class="grow"><span class="title" dir="auto">${esc(n.title)}</span>
+      <span class="grow"><span class="title" dir="auto">${n.starred ? `<span class="starmark" aria-label="${t('starred')}">${icon('starF', 14)}</span>` : ''}${esc(n.title)}</span>
       <span class="meta">${fmtDate(n.createdAt)} · ${fmtDur(n.duration)}</span>
       <span class="snip" dir="auto">${esc(snippet(n, q))}</span></span>
       <span class="badge">${n.lang === 'mixed' ? 'EN + AR' : (n.lang || 'en').toUpperCase()}</span></a>`
@@ -162,7 +169,7 @@ export function noteListHtml() {
 }
 
 export function libraryView() {
-  const chips = [['all', t('all')], ['meeting', t('meetings')], ['lecture', t('lectures')], ['memo', t('memos')]]
+  const chips = [['all', t('all')], ['star', t('starred')], ['meeting', t('meetings')], ['lecture', t('lectures')], ['memo', t('memos')]]
     .map(([id, l]) => `<button class="chip${S.filter === id ? ' on' : ''}" data-action="filter" data-id="${id}" aria-pressed="${S.filter === id}">${l}</button>`)
     .join('');
   return `<div class="screen">
@@ -196,7 +203,7 @@ function seg(items, current, action) {
 
 function langItems(engine) {
   const a = [['en', t('english')], ['ar', t('arabic')]];
-  return engine === 'cloud' ? [['auto', t('auto')], ...a] : a;
+  return engine === 'cloud' ? [['auto', t('autoBoth')], ...a] : a;
 }
 
 export function recordSetupView() {
@@ -226,6 +233,7 @@ export function recordSetupView() {
         <p class="hint">${t('speakersHint')}</p></section>
       <label class="switch"><input type="checkbox" data-setup="liveTranslate" ${u.liveTranslate ? 'checked' : ''}><span>${t('liveTranslate')}</span></label>
       <label class="switch"><input type="checkbox" data-setup="saveAudio" ${u.saveAudio ? 'checked' : ''}><span>${t('saveAudio')}${u.engine === 'device' ? `<small>${t('saveAudioHint')}</small>` : ''}</span></label>
+      <details class="card tips"><summary>${t('tipsTitle')}</summary><ul>${[1, 2, 3, 4, 5, 6].map((i) => `<li>${t('tip' + i)}</li>`).join('')}</ul></details>
       <button class="btn big rec" data-action="start-rec">${icon('mic', 24)}<span>${t('startRecording')}</span></button>
     </div>
   </div>`;
@@ -236,7 +244,7 @@ export function liveLinesHtml(r) {
   const lines = r.segments
     .map(
       (s) => `<div class="line${s.marked ? ' marked' : ''}">
-      <div class="who sp${s.speaker}"><i></i><b>${esc(speakerName(names, s.speaker))}</b><time>${fmtClock(s.t)}</time>${s.marked ? `<em>${icon('bookmarkF', 14)}${t('marked')}</em>` : ''}</div>
+      <div class="who sp${s.speaker}"><i></i><b>${esc(speakerName(names, s.speaker))}</b><time>${fmtClock(s.t)}</time><span class="lg">${(s.lang || '').toUpperCase()}</span>${s.marked ? `<em>${icon('bookmarkF', 14)}${t('marked')}</em>` : ''}</div>
       <div class="txt" dir="auto">${esc(s.text)}</div>
       ${s.tr ? `<div class="tr" dir="auto">${esc(s.tr)}</div>` : ''}</div>`
     )
@@ -261,11 +269,12 @@ export function recordLiveView() {
       ${seg(langItems(r.kind), r.lang, 'set-lang-live')}
       <div class="row between">
         <span class="hint" id="rec-hint">${cloud ? t('hintCloud') : t('hintDevice')}</span>
-        <button class="chip dk${r.liveTranslate ? ' on' : ''}" data-action="toggle-translate" aria-pressed="${!!r.liveTranslate}">${icon('translate', 16)}<span>${r.liveTranslate ? t('translateOn') : t('translateOff')}</span></button>
+        <div class="row gap"><button class="chip dk${S.largeText ? ' on' : ''}" data-action="toggle-large" aria-pressed="${!!S.largeText}" aria-label="${t('largeText')}">${icon('type', 16)}</button>
+        <button class="chip dk${r.liveTranslate ? ' on' : ''}" data-action="toggle-translate" aria-pressed="${!!r.liveTranslate}">${icon('translate', 16)}<span>${r.liveTranslate ? t('translateOn') : t('translateOff')}</span></button></div>
       </div>
       <div class="bars" id="rec-bars" aria-hidden="true">${'<i></i>'.repeat(40)}</div>
     </div>
-    <div class="log" id="rec-lines" aria-live="off" aria-label="${t('tabTranscript')}">${liveLinesHtml(r)}</div>
+    <div class="log${S.largeText ? ' large' : ''}" id="rec-lines" aria-live="off" aria-label="${t('tabTranscript')}">${liveLinesHtml(r)}</div>
     <div class="spk bar" id="rec-spk" role="group" aria-label="${t('speaker')}">${Array.from({ length: r.speakerCount }, (_, i) => `<button class="chip dk spc sp${i}${r.speaker === i ? ' on' : ''}" data-action="pick-speaker" data-i="${i}" aria-pressed="${r.speaker === i}"><i></i>${esc(speakerName(names, i))}</button>`).join('')}${r.speakerCount < 6 ? `<button class="chip dk" data-action="add-speaker" aria-label="${t('addSpeaker')}">+</button>` : ''}</div>
     <div class="ainotes"><div class="cap">${icon('sparkle', 14)} ${t('detectedTasks')}</div><div id="rec-ai">${detectedHtml()}</div></div>
     <div class="controls">
@@ -285,6 +294,29 @@ export function detectedHtml() {
 
 function list(items, dir) {
   return `<ul dir="${dir}">${items.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>`;
+}
+
+// Who spoke how much, from the words in each line. Works with or without saved audio.
+export function insights(n) {
+  const by = {};
+  let words = 0;
+  let questions = 0;
+  for (const s of n.segments || []) {
+    const w = (s.text.match(/\S+/g) || []).length;
+    const r = (by[s.speaker] = by[s.speaker] || { words: 0, q: 0 });
+    r.words += w;
+    words += w;
+    if (/[?؟]\s*$/.test(s.text.trim())) {
+      r.q++;
+      questions++;
+    }
+  }
+  const rows = Object.entries(by)
+    .map(([sp, r]) => ({ sp: +sp, words: r.words, q: r.q, pct: words ? Math.round((r.words / words) * 100) : 0 }))
+    .sort((a, b) => b.words - a.words);
+  const ar = (n.segments || []).filter((s) => s.lang === 'ar').length;
+  const tot = (n.segments || []).length;
+  return { rows, words, questions, arPct: tot ? Math.round((ar / tot) * 100) : 0 };
 }
 
 function summaryHtml(n, lang) {
@@ -307,7 +339,20 @@ function summaryHtml(n, lang) {
     ${sec(t('keyPoints'), sm.key_points?.length ? list(sm.key_points, dir) : '')}
     ${sec(t('decisions'), sm.decisions?.length ? `<div class="decision">${sm.decisions.map((d) => `<p>${esc(d)}</p>`).join('')}</div>` : '')}
     ${sec(t('topics'), sm.topics?.length ? `<div class="tags">${sm.topics.map((x) => `<span>${esc(x)}</span>`).join('')}</div>` : '')}
-    </div>`;
+    ${sec(t('outline'), sm.chapters?.length ? `<div class="outline">${sm.chapters.map((c) => `<div class="chap"><button class="ts" data-action="goto-time" data-t="${c.t}">[${fmtClock(c.t)}]</button><span dir="auto">${esc(c.title)}</span></div>`).join('')}</div>` : '')}
+    ${insightsHtml(n)}
+    </div>
+    <button class="btn ghost" data-action="email">${icon('mail', 18)}<span>${t('draftEmail')}</span></button>`;
+}
+
+function insightsHtml(n) {
+  if ((n.segments || []).length < 2) return '';
+  const ins = insights(n);
+  const bars = ins.rows
+    .map((r) => `<div class="ins"><span class="who sp${r.sp}"><i></i><b>${esc(speakerName(n, r.sp))}</b></span><span class="bar"><i class="sp${r.sp}" style="width:${Math.max(r.pct, 2)}%"></i></span><span class="num">${r.pct}%</span></div>`)
+    .join('');
+  return `<section><h3>${t('insights')}</h3><div class="insights" dir="ltr">${bars}</div>
+    <p class="muted">${ins.words} ${t('words')} · ${ins.questions} ${t('questionsAsked')} · AR ${ins.arPct}% · EN ${100 - ins.arPct}%</p></section>`;
 }
 
 function actionsHtml(n, lang) {
@@ -318,9 +363,9 @@ function actionsHtml(n, lang) {
     .map(
       (a, i) => `<div class="card task${a.done ? ' done' : ''}">
       <button role="checkbox" aria-checked="${!!a.done}" class="check" data-action="toggle-task" data-i="${i}" aria-label="${esc(a.text)}"><span>${a.done ? icon('check', 16) : ''}</span></button>
-      <div class="grow"><div class="ttl" dir="auto">${esc(a.text)}</div>${a.owner || a.due ? `<div class="meta">${esc([a.owner, a.due].filter(Boolean).join(' · '))}</div>` : ''}</div></div>`
+      <div class="grow"><div class="ttl" dir="auto">${esc(a.text)}</div>${a.owner || a.due || a.iso ? `<div class="meta">${esc([a.owner, a.due, a.iso].filter(Boolean).join(' · '))}</div>` : ''}</div></div>`
     )
-    .join('')}<button class="btn ghost" data-action="copy-tasks">${t('copyTasks')}</button></div>`;
+    .join('')}<div class="row gap wrap"><button class="btn ghost" data-action="copy-tasks">${t('copyTasks')}</button><button class="btn ghost" data-action="export-ics">${icon('calendar', 18)}<span>${t('addCalendar')}</span></button></div></div>`;
 }
 
 function highlight(text, q) {
@@ -354,7 +399,7 @@ export function linesHtml(n) {
     .map(
       (s, i) => `<div class="line light${s.marked ? ' marked' : ''}${hits.has(i) ? ' hit' : ''}${S.curSeg === i ? ' cur' : ''}" data-t="${s.t}" data-seg="${i}">
       <div class="who sp${s.speaker}"><button class="lnk" data-action="rename-speaker" data-i="${s.speaker}"><b>${esc(speakerName(n, s.speaker))}</b></button>
-      <button class="lnk" data-action="seek" data-t="${s.t}" aria-label="${t('playFrom')} ${fmtClock(s.t)}"><time>${fmtClock(s.t)}</time></button>${s.marked ? `<em>${icon('bookmarkF', 14)}</em>` : ''}<button class="lnk lspk" data-action="line-speaker" data-seg="${i}" aria-label="${t('changeSpeaker')}">${icon('user', 16)}</button></div>
+      <button class="lnk" data-action="seek" data-t="${s.t}" aria-label="${t('playFrom')} ${fmtClock(s.t)}"><time>${fmtClock(s.t)}</time></button><span class="lg">${(s.lang || '').toUpperCase()}</span>${s.marked ? `<em>${icon('bookmarkF', 14)}</em>` : ''}<button class="lnk lspk" data-action="copy-line" data-seg="${i}" aria-label="${t('copyLine')}">${icon('copy', 16)}</button><button class="lnk lspk2" data-action="line-speaker" data-seg="${i}" aria-label="${t('changeSpeaker')}">${icon('user', 16)}</button></div>
       <div class="txt" dir="auto">${highlight(s.text, q)}</div>
       ${s.tr ? `<div class="tr" dir="auto">${highlight(s.tr, q)}</div>` : ''}</div>`
     )
@@ -442,9 +487,9 @@ export function noteView(n) {
   </div>`;
 }
 
-export function menuHtml() {
+export function menuHtml(n) {
   const a = (id, label, cls = '') => `<button class="menuitem ${cls}" data-action="${id}">${label}</button>`;
-  return `<div class="sheet" role="dialog" aria-modal="true">${a('rename', t('rename'))}${a('generate', t('regenerate'))}${a('translate-all', t('translateAll'))}${a('export-txt', t('exportTxt'))}${a('export-srt', t('exportSrt'))}${a('delete', t('delete'), 'danger')}${a('close-modal', t('cancel'))}</div>`;
+  return `<div class="sheet" role="dialog" aria-modal="true">${a('rename', t('rename'))}${a('generate', t('regenerate'))}${a('translate-all', t('translateAll'))}${a('polish', t('polishTranscript'))}${n && (n.segments || []).some((s) => s.raw != null) ? a('undo-polish', t('undoPolish')) : ''}${a('star', n && n.starred ? t('unstar') : t('star'))}${a('export-doc', t('exportDoc'))}${a('export-md', t('exportMd'))}${a('export-txt', t('exportTxt'))}${a('export-srt', t('exportSrt'))}${a('delete', t('delete'), 'danger')}${a('close-modal', t('cancel'))}</div>`;
 }
 
 // ---------- ask across all notes ----------
@@ -482,8 +527,13 @@ export function settingsView() {
         <label class="lbl">${t('summaryLang')}<select class="select" data-setting="summaryLang">${opt('en', s.summaryLang, 'English')}${opt('ar', s.summaryLang, 'العربية')}</select></label>
         <label class="lbl">${t('defaultTemplate')}<select class="select" data-setting="template">${TEMPLATE_IDS.map((id) => opt(id, s.template, t('tpl_' + id))).join('')}</select></label>
         <label class="lbl">${t('defaultEngine')}<select class="select" data-setting="engine">${opt('auto', s.engine, t('engAuto'))}${opt('device', s.engine, t('engineDevice'))}${opt('cloud', s.engine, t('engineCloud'))}</select></label>
+        <label class="lbl">${t('sttQuality')}<select class="select" data-setting="sttQuality">${opt('best', s.sttQuality || 'best', t('qualityBest'))}${opt('fast', s.sttQuality || 'best', t('qualityFast'))}</select></label>
         <label class="lbl">${t('arabicDialect')}<select class="select" data-setting="arLocale">${ar.map(([v, l]) => opt(v, s.arLocale, l)).join('')}</select></label>
         <label class="lbl">${t('englishAccent')}<select class="select" data-setting="enLocale">${en.map(([v, l]) => opt(v, s.enLocale, l)).join('')}</select></label></section>
+      <section class="card stack tight"><h3>${t('vocab')}</h3><p class="muted">${t('vocabHint')}</p>
+        <textarea class="field" rows="3" data-setting="vocab" placeholder="${t('vocabPh')}" aria-label="${t('vocab')}">${esc(s.vocab || '')}</textarea></section>
+      <section class="card stack tight"><h3>${t('backup')}</h3><p class="muted">${t('backupHint')}</p>
+        <div class="row gap wrap"><button class="btn small" data-action="backup">${t('backupBtn')}</button><button class="btn small ghost" data-action="restore">${t('restoreBtn')}</button></div></section>
       <details class="card"><summary>${t('advanced')}</summary><div class="stack tight">
         <label class="lbl">${t('baseUrl')}<input class="field" data-setting="baseUrl" value="${esc(s.baseUrl)}" dir="ltr" autocapitalize="off" spellcheck="false"></label>
         <label class="lbl">${t('sttModel')}<input class="field" data-setting="sttModel" value="${esc(s.sttModel)}" dir="ltr" autocapitalize="off" spellcheck="false"></label>

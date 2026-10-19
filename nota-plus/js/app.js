@@ -1,18 +1,18 @@
 import { S } from './state.js';
 import { t, setLang, getLang } from './i18n.js';
-import { $, esc, uid, fmtClock, langOf, arabicRatio, download, copyText, isIOS, isStandalone, parseClock } from './util.js';
+import { $, esc, uid, fmtClock, langOf, arabicRatio, download, copyText, isIOS, isStandalone, parseClock, levelAdvice } from './util.js';
 import { loadSettings, saveSettings, notesDb, audioDb, requestPersistence, storageEstimate, saveDraft, loadDraft, clearDraft } from './store.js';
 import { runChecks, reportText } from './selfcheck.js';
-import { summarize, quickSummary, translateTexts, answer, buildGlobalContext, transcribeBlob, testKey, friendlyError, detectActions, detectSpeakers, transcriptText } from './ai.js';
+import { summarize, quickSummary, translateTexts, polishTexts, followUpEmail, answer, buildGlobalContext, transcribeBlob, testKey, friendlyError, detectActions, detectSpeakers, transcriptText } from './ai.js';
 import { deviceSupported } from './stt.js';
 import { Recorder } from './recorder.js';
 import * as V from './views.js';
-import { noteToText, noteToSrt, printHtml } from './export.js';
+import { noteToText, noteToSrt, printHtml, noteToMarkdown, noteToDoc, actionsToIcs } from './export.js';
 
 const app = $('#app');
 const paint = (html) => (app.innerHTML = html);
 // Keep in step with VERSION in sw.js. Shown in Settings so a stale copy of the app is easy to spot.
-const APP_VERSION = 'v8';
+const APP_VERSION = 'v10';
 window.NOTA_VERSION = APP_VERSION;
 const HIDE_INSTALL = 'nota-plus.hideInstall';
 const WELCOME_DONE = 'nota-plus.welcomeDone';
@@ -290,6 +290,8 @@ let tick = null;
 let raf = null;
 let frame = 0;
 const levels = new Array(40).fill(0);
+const levelHist = [];
+let lastAdvice = '';
 
 function startTicker() {
   stopTicker();
@@ -323,15 +325,19 @@ function paintBars() {
   if (!wrap || !r) return;
   if (++frame % 4) return;
   let lvl = 0;
-  if (r.analyser && !r.paused) {
-    const buf = new Uint8Array(r.analyser.fftSize);
-    r.analyser.getByteTimeDomainData(buf);
-    let sum = 0;
-    for (const v of buf) {
-      const d = (v - 128) / 128;
-      sum += d * d;
+  const raw = r.readLevel();
+  if (raw != null) {
+    lvl = Math.min(1, raw * 4);
+    levelHist.push({ rms: raw, peak: r.peak || 0 });
+    if (levelHist.length > 60) levelHist.shift();
+    // tell the speaker when the voice is too quiet or too loud, the biggest cause of poor transcripts
+    const hint = $('#rec-hint');
+    const advice = levelAdvice(levelHist);
+    if (hint && advice !== lastAdvice) {
+      lastAdvice = advice;
+      hint.textContent = advice === 'quiet' ? t('tooQuiet') : advice === 'loud' ? t('tooLoud') : r.kind === 'cloud' ? t('hintCloud') : t('hintDevice');
+      hint.classList.toggle('warnhint', !!advice);
     }
-    lvl = Math.min(1, Math.sqrt(sum / buf.length) * 4);
   }
   wrap.classList.toggle('pulse', !r.analyser && !r.paused);
   levels.push(lvl);
@@ -562,6 +568,31 @@ async function pasteText() {
   const segs = parts.map((p, i) => ({ t: i, text: p, lang: langOf(p), speaker: 0 }));
   const note = newNote({ title: defaultTitle(), segments: segs, duration: 0 });
   await saveNew(note, null);
+}
+
+const fileName = (n) => (n.title || 'note').replace(/[\\/:*?"<>|]+/g, '-').slice(0, 60);
+
+// Adds the notes of a backup file that this device does not have yet. Audio is not part of a backup.
+async function restoreFile(file) {
+  try {
+    const data = JSON.parse(await file.text());
+    if (!data || data.app !== 'nota-plus' || !Array.isArray(data.notes)) throw new Error('bad');
+    const have = new Set(S.notes.map((x) => x.id));
+    let added = 0;
+    for (const n of data.notes) {
+      if (!n || typeof n.id !== 'string' || !Array.isArray(n.segments) || have.has(n.id)) continue;
+      n.hasAudio = false;
+      await notesDb.put(n);
+      S.notes.push(n);
+      have.add(n.id);
+      added++;
+    }
+    S.notes.sort((a, b) => b.createdAt - a.createdAt);
+    toast(`${added} ${t('restored')}`);
+    render();
+  } catch {
+    toast(t('badBackup'));
+  }
 }
 
 // ---------- find and jump inside a note ----------
@@ -918,7 +949,120 @@ const A = {
     }
   },
   menu() {
-    modal(V.menuHtml());
+    modal(V.menuHtml(N()));
+  },
+  star() {
+    closeModal();
+    const n = N();
+    n.starred = !n.starred;
+    persist(n);
+    renderNote();
+  },
+  'export-doc'() {
+    closeModal();
+    download(fileName(N()) + '.doc', noteToDoc(N(), S.sumLang), 'application/msword');
+  },
+  'export-md'() {
+    closeModal();
+    download(fileName(N()) + '.md', noteToMarkdown(N(), S.sumLang), 'text/markdown');
+  },
+  'export-ics'() {
+    const ics = actionsToIcs(N(), S.sumLang);
+    if (!ics) return toast(t('noDatedTasks'));
+    download(fileName(N()) + '.ics', ics, 'text/calendar');
+  },
+  async 'copy-line'(el) {
+    const sg = N().segments[+el.dataset.seg];
+    const ok = await copyText(`[${fmtClock(sg.t)}] ${V.speakerName(N(), sg.speaker)}: ${sg.text}`);
+    toast(ok ? t('copied') : t('errGeneric'));
+  },
+  'toggle-large'() {
+    S.largeText = !S.largeText;
+    render();
+  },
+  async email() {
+    const n = N();
+    if (!S.settings.apiKey) return needKey();
+    if (!n.summary?.[S.sumLang]) return toast(t('noSummary'));
+    wait(t('writingEmail'));
+    try {
+      const e = await followUpEmail(S.settings, n, S.sumLang);
+      modal(`<div class="dialog"><h3>${t('draftEmail')}</h3>
+        <input id="em-sub" value="${esc(e.subject)}" aria-label="Subject" dir="auto">
+        <textarea id="em-body" rows="11" dir="auto" aria-label="Email">${esc(e.body)}</textarea>
+        <div class="row gap wrap end"><button type="button" class="btn ghost" data-action="close-modal">${t('close')}</button><button type="button" class="btn ghost" data-action="copy-email">${t('copyEmail')}</button><button type="button" class="btn" data-action="open-mail">${t('openMail')}</button></div></div>`);
+    } catch (err) {
+      toast(friendlyError(err, t));
+    } finally {
+      wait(null);
+    }
+  },
+  async 'copy-email'() {
+    toast((await copyText(`${$('#em-sub').value}\n\n${$('#em-body').value}`)) ? t('copied') : t('errGeneric'));
+  },
+  'open-mail'() {
+    location.href = `mailto:?subject=${encodeURIComponent($('#em-sub').value)}&body=${encodeURIComponent($('#em-body').value)}`;
+  },
+  async backup() {
+    const name = `nota-plus-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    const text = JSON.stringify({ app: 'nota-plus', version: 1, exportedAt: new Date().toISOString(), notes: S.notes });
+    try {
+      const file = new File([text], name, { type: 'application/json' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: name }); // the iPad and iPhone share sheet can save to Files
+        return;
+      }
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;
+    }
+    download(name, text, 'application/json');
+    toast(t('backupDone'));
+  },
+  restore() {
+    $('#restore').click();
+  },
+  async polish() {
+    closeModal();
+    const n = N();
+    if (!S.settings.apiKey) return needKey();
+    const key = n.id + ':polish';
+    if (S.busy[key]) return;
+    S.busy[key] = true;
+    toast(t('polishing'));
+    try {
+      const names = Object.values(n.speakers || {}).filter(Boolean);
+      await polishTexts(S.settings, n.segments.map((s) => s.text), names, (start, got) => {
+        got.forEach((tx, k) => {
+          const sg = n.segments[start + k];
+          if (tx !== sg.text) {
+            sg.raw = sg.raw ?? sg.text; // keep the original so it can be restored
+            sg.text = tx;
+          }
+        });
+      });
+      toast(t('polishDone'));
+      if (Object.keys(n.summary || {}).length) generateSummary(n, S.sumLang); // better text, better summary
+    } catch (e) {
+      toast(friendlyError(e, t));
+    } finally {
+      delete S.busy[key];
+      await persist(n);
+      S.noteTab = 'transcript';
+      refreshNote(n);
+    }
+  },
+  async 'undo-polish'() {
+    closeModal();
+    const n = N();
+    n.segments.forEach((sg) => {
+      if (sg.raw != null) {
+        sg.text = sg.raw;
+        delete sg.raw;
+      }
+    });
+    await persist(n);
+    renderNote();
+    toast(t('polishUndone'));
   },
   'translate-all'() {
     closeModal();
@@ -1159,7 +1303,7 @@ function onInput(e) {
   } else if (el.dataset.setting === 'apiKey') {
     S.settings.apiKey = el.value.replace(/[^\x21-\x7E]/g, '');
     saveSettings(S.settings);
-  } else if (el.dataset.setting === 'baseUrl' || el.dataset.setting === 'sttModel' || el.dataset.setting === 'chatModel') {
+  } else if (['baseUrl', 'sttModel', 'chatModel', 'vocab'].includes(el.dataset.setting)) {
     S.settings[el.dataset.setting] = el.value.trim();
     saveSettings(S.settings);
   }
@@ -1230,6 +1374,11 @@ async function boot() {
   document.addEventListener('submit', onSubmit);
   document.addEventListener('change', onChange);
   document.addEventListener('input', onInput);
+  $('#restore').addEventListener('change', (e) => {
+    const f = e.target.files[0];
+    e.target.value = '';
+    if (f) restoreFile(f);
+  });
   $('#file').addEventListener('change', (e) => {
     const f = e.target.files[0];
     e.target.value = '';

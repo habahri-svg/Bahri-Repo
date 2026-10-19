@@ -160,8 +160,12 @@ const isGhost = (text) => GHOSTS.includes(text.toLowerCase().replace(/[.!?،,؟\
 const MIN_BYTES = 1500; // a fraction of a second of speech is already bigger than this
 
 export class CloudEngine {
-  constructor({ stream, lang, chunkMs = 10000, elapsed, transcribe, onSegments, onError }) {
-    Object.assign(this, { stream, lang, chunkMs, elapsed, transcribe, onSegments, onError });
+  // chunkMs is the longest a piece may get. With a level meter, pieces are cut in a pause between sentences,
+  // not in the middle of a word, once they are at least minMs long.
+  constructor({ stream, lang, chunkMs = 15000, minMs = 5000, level, hint, elapsed, transcribe, onSegments, onError }) {
+    Object.assign(this, { stream, lang, chunkMs, minMs, level, hint, elapsed, transcribe, onSegments, onError });
+    this.hist = [];
+    this.watch = null;
     this.running = false;
     this.pending = new Set();
     this.failed = [];
@@ -210,6 +214,7 @@ export class CloudEngine {
 
   _stopCur(wait) {
     clearTimeout(this.timer);
+    clearInterval(this.watch);
     const cur = this.cur;
     this.cur = null;
     if (!cur || cur.state === 'inactive') return Promise.resolve();
@@ -236,7 +241,7 @@ export class CloudEngine {
     const mime = pickMime();
     let rec;
     try {
-      rec = new MediaRecorder(this.stream, mime ? { mimeType: mime } : undefined);
+      rec = new MediaRecorder(this.stream, { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: 64000 });
     } catch (e) {
       this.dead = true;
       this.onError({ code: 'recorder', message: e.message });
@@ -260,22 +265,42 @@ export class CloudEngine {
       return;
     }
     this.cur = rec;
-    // start the next recorder before stopping this one so no audio falls in a gap
-    this.timer = setTimeout(() => {
+    const born = Date.now();
+    const rotate = () => {
       if (!this.running || this.cur !== rec) return;
-      this._cycle();
+      clearInterval(this.watch);
+      clearTimeout(this.timer);
+      this._cycle(); // start the next recorder before stopping this one so no audio falls in a gap
       try {
         rec.stop();
       } catch {}
-    }, this.chunkMs);
+    };
+    this.timer = setTimeout(rotate, this.chunkMs); // never longer than chunkMs
+    if (this.level) {
+      let quietSince = 0;
+      this.hist = [];
+      this.watch = setInterval(() => {
+        const v = this.level();
+        if (v == null) return;
+        this.hist.push(v);
+        if (this.hist.length > 40) this.hist.shift();
+        const floor = Math.min(...this.hist); // the room's background level
+        const quiet = v < Math.max(0.012, floor * 2.2);
+        const now = Date.now();
+        if (quiet) quietSince = quietSince || now;
+        else quietSince = 0;
+        if (now - born >= this.minMs && quietSince && now - quietSince >= 650) rotate();
+      }, 150);
+    }
   }
 
   async _handle(blob, t0, last = false) {
     if (blob.size < MIN_BYTES) return;
+    const hint = this.hint ? this.hint() : '';
     let r;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        r = await this.transcribe(blob, this.lang);
+        r = await this.transcribe(blob, this.lang, hint);
         break;
       } catch (e) {
         const rate = e.status === 429;
@@ -296,6 +321,7 @@ export class CloudEngine {
     for (const s of r.segments) {
       if (!s.text || s.nsp > 0.6) continue;
       if (s.nsp > 0.25 && isGhost(s.text)) continue;
+      if (hint && s.nsp > 0.15 && s.text.length > 8 && hint.includes(s.text)) continue; // the model echoing its hint on silence
       out.push({ t: t0 + s.start, text: s.text, lang: langOf(s.text) });
     }
     if (!r.segments.length && r.text && !isGhost(r.text)) out.push({ t: t0, text: r.text, lang: langOf(r.text) });

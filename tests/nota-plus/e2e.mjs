@@ -461,7 +461,7 @@ try {
   await page.click('[data-action=test-key]');
   check('good key shows OK and the model', await waitFor(async () => /llama/.test(await text(page, '#key-status')), 3000), await text(page, '#key-status'));
   check('storage info shows note count', /\d+/.test(await text(page, '#storage-info')), await text(page, '#storage-info'));
-  check('version is shown', (await text(page, '#app-version')).includes('v8'), await text(page, '#app-version'));
+  check('version is shown', (await text(page, '#app-version')).includes('v10'), await text(page, '#app-version'));
   await page.click('[data-action=run-checks]');
   check('self-check finishes all steps', await waitFor(async () => (await page.locator('.checks .chk').count()) >= 9 && (await page.locator('.checks .chk.run').count()) === 0, 15000));
   const failed = await page.locator('.checks .chk.fail').allInnerTexts();
