@@ -12,7 +12,7 @@ import { noteToText, noteToSrt, printHtml, noteToMarkdown, noteToDoc, actionsToI
 const app = $('#app');
 const paint = (html) => (app.innerHTML = html);
 // Keep in step with VERSION in sw.js. Shown in Settings so a stale copy of the app is easy to spot.
-const APP_VERSION = 'v10';
+const APP_VERSION = 'v11';
 window.NOTA_VERSION = APP_VERSION;
 // Read-only debug peek used by the test suite and when diagnosing a device by hand from the browser console.
 window.__nota = () => ({ version: APP_VERSION, rec: S.rec && !S.rec.stopped ? { kind: S.rec.kind, analyser: !!S.rec.analyser, health: { ...S.rec.health }, verdict: S.rec.healthState(), segs: S.rec.segments.length } : null, errors: S.errors.slice(-5) });

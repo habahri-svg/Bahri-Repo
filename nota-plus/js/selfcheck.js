@@ -1,4 +1,5 @@
 import { S } from './state.js';
+import { t } from './i18n.js';
 import { deviceSupported, pickMime } from './stt.js';
 import { testKey, transcribeBlob, ping } from './ai.js';
 import { notesDb } from './store.js';
@@ -27,6 +28,19 @@ function silentWav(seconds = 1.5, rate = 16000) {
 }
 
 const msg = (e) => (e && (e.message || e.name)) || String(e);
+
+// Can the browser reach the wider internet at all? A no-cors ping resolves whenever the network lets it through.
+async function webReachable() {
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 5000);
+    await fetch('https://www.gstatic.com/generate_204', { mode: 'no-cors', cache: 'no-store', signal: ctl.signal });
+    clearTimeout(timer);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export const CHECKS = [
   {
@@ -112,6 +126,11 @@ export const CHECKS = [
         const m = await testKey(S.settings);
         return { s: 'ok', d: `Key accepted. Chat model ${m.chat}, speech model ${m.stt}` };
       } catch (e) {
+        // "Failed to fetch" means the request never arrived. Find out whether the whole internet is down or only the AI service is blocked.
+        if (e && (e.name === 'TypeError' || e.name === 'AbortError')) {
+          const web = await webReachable();
+          return { s: 'fail', d: web ? t('keyBlockedNet') : t('errNet'), stop: true };
+        }
         return { s: 'fail', d: `${e.status || ''} ${msg(e)}`.trim(), stop: true };
       }
     }
