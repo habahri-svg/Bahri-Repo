@@ -98,6 +98,14 @@ td input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent)
 .alert:last-child { border-bottom: 0; }
 .alert:hover { background: var(--wash); }
 .alert .sw { margin-top: 3px; }
+svg .grab { fill: transparent; cursor: grab; touch-action: none; }
+svg .grab:active { cursor: grabbing; }
+.dragtip { position: fixed; z-index: 30; pointer-events: none; background: var(--navy); color: #ffffff; border-radius: 8px; padding: 6px 10px; font-size: 12.5px; box-shadow: 0 4px 14px rgba(11,42,91,.3); white-space: nowrap; }
+.steps { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 9px; }
+.steps li { display: flex; gap: 10px; align-items: flex-start; }
+.steps .n { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--gold-fill); color: var(--navy); font-weight: 700; display: flex; align-items: center; justify-content: center; font-size: 12px; margin-top: 1px; }
+.steps b { display: block; color: var(--navy); }
+.steps .d { color: var(--ink2); font-size: 13px; }
 .sbars { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 6px; align-items: end; height: 160px; margin-top: 12px; }
 .sbar { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; height: 100%; font-size: 11px; color: var(--ink2); }
 .sbar i { display: block; width: 100%; border-radius: 4px 4px 0 0; background: var(--navy); }
@@ -182,18 +190,24 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
 
   <div class="main">
     <div class="col">
+      <div class="panel">
+        <div class="head"><h2>Your nightly rate against the market and PriceLabs</h2><span class="note" id="chartNote"></span></div>
+        <p class="note">Dot = what you charge now. Diamond = our market price. Hollow square = PriceLabs recommendation. Drag a dot left or right to try a new price, or click a row for details.</p>
+        <div class="chart" id="chart"></div>
+        <div class="legend"><span><i class="l-dot"></i>Rate now (colour = band)</span><span><i class="l-dia"></i>Our market price</span><span><i class="l-sq"></i>PriceLabs recommendation</span><span>Line = gap to market</span></div>
+        <div class="legend" id="bandKey"></div>
+      </div>
+
       <div class="panel" id="alertsPanel">
         <div class="head"><h2>Alerts</h2><span class="stat" id="alertCount"></span></div>
         <p class="note">Alerts appear only here on the dashboard. Click one to open that apartment.</p>
         <div id="alerts"></div>
       </div>
 
-      <div class="panel">
-        <div class="head"><h2>Your nightly rate against the market and PriceLabs</h2><span class="note" id="chartNote"></span></div>
-        <p class="note">Dot = what you charge now. Diamond = our market price. Hollow square = PriceLabs recommendation. Click a row for details.</p>
-        <div class="chart" id="chart"></div>
-        <div class="legend"><span><i class="l-dot"></i>Rate now (colour = band)</span><span><i class="l-dia"></i>Our market price</span><span><i class="l-sq"></i>PriceLabs recommendation</span><span>Line = gap to market</span></div>
-        <div class="legend" id="bandKey"></div>
+      <div class="panel" id="planPanel">
+        <div class="head"><h2>Today's plan</h2><span class="stat ok">AI guide · example</span></div>
+        <p class="note">Example of what the AI guide will write from your live data. It only advises. You approve every change, and nothing is sent by dragging.</p>
+        <ol class="steps" id="plan"></ol>
       </div>
 
       <div class="panel">
@@ -232,6 +246,12 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
       </div>
 
       <div class="panel">
+        <div class="head"><h2>AI guide prompt</h2><button class="btn" id="copyBtn2">Copy prompt</button></div>
+        <p class="note">The system prompt for the dashboard's AI guide. Abbas wires it into the AI guide endpoint, and Karim shows the answer in Today's plan and in each apartment's step-by-step section.</p>
+        <pre id="prompt2"></pre>
+      </div>
+
+      <div class="panel">
         <div class="head"><h2>Prompt for Karim and Abbas</h2><button class="btn" id="copyBtn">Copy prompt</button></div>
         <p class="note">Fill in the blanks in square brackets, then send. I assumed Karim builds the dashboard and Abbas builds the data, scoring and PriceLabs connection. Swap the names if needed.</p>
         <pre id="prompt"></pre>
@@ -239,6 +259,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
     </div>
 
     <aside class="panel detail" id="detail" aria-live="polite"></aside>
+    <div class="dragtip" id="dragTip" hidden></div>
   </div>
 </div>
 
@@ -272,7 +293,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
     ['CW 1BR', 'City Walk Building 6A · 1 bed', 'City Walk', 1, 1200, 980, 1000, 880]
   ];
   var COMPS = [22, 18, 26, 10, 24, 15];
-  var units = [], hist = [], S = { bld: 'all', sort: 'dev', sel: 0, sent: 0, confirm: null, bulk: null };
+  var units = [], hist = [], S = { bld: 'all', sort: 'dev', sel: 0, sent: 0, confirm: null, bulk: null, pending: null, geom: null };
 
   // recompute everything that depends on the current rent
   function derive(u) {
@@ -316,6 +337,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
 
   // simulated send: Proposed -> Approved -> Sent -> Confirmed
   function send(u, v, eff) {
+    S.pending = null;
     var rec = { id: hist.length, uid: u.id, name: u.name, old: u.now, nw: v, eff: eff, st: 'Approved', at: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
     hist.unshift(rec); u.status = rec; S.sent++;
     renderAll();
@@ -370,20 +392,64 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
       var y = m.t + i * rowH + rowH / 2, xn = X(u.now), xf = X(u.fair), gap = u.fair - u.now;
       if (u.id === S.sel) s += '<rect class="rowsel" x="0" y="' + (y - rowH / 2) + '" width="' + W + '" height="' + rowH + '" rx="6"/>';
       s += '<text class="strong" x="' + (m.l - 10) + '" y="' + (y + 4) + '" text-anchor="end">' + esc(u.name) + '</text>';
-      s += '<line x1="' + xn + '" x2="' + xf + '" y1="' + y + '" y2="' + y + '" stroke="var(--ink2)" stroke-width="2.5" stroke-linecap="round"/>';
+      s += '<line data-line="' + u.id + '" x1="' + xn + '" x2="' + xf + '" y1="' + y + '" y2="' + y + '" stroke="var(--ink2)" stroke-width="2.5" stroke-linecap="round"/>';
       if (u.pl != null) s += '<rect x="' + (X(u.pl) - 5.5) + '" y="' + (y - 5.5) + '" width="11" height="11" fill="var(--surface)" stroke="var(--gold)" stroke-width="2.2"/>';
       s += '<path d="M' + xf + ' ' + (y - 7) + ' L' + (xf + 7) + ' ' + y + ' L' + xf + ' ' + (y + 7) + ' L' + (xf - 7) + ' ' + y + ' Z" fill="var(--navy)"/>';
-      s += '<circle class="dot b' + u.band + (u.id === S.sel ? ' sel' : '') + '" cx="' + xn + '" cy="' + y + '" r="8"/>';
+      s += '<circle data-dot="' + u.id + '" class="dot b' + u.band + (u.id === S.sel ? ' sel' : '') + '" cx="' + xn + '" cy="' + y + '" r="8"/>';
       if (wide) {
         var txt = u.band === 2 ? 'On target' : gap > 0 ? 'Leaving ' + money(gap) + ' a night' : 'Over by ' + money(-gap) + ' a night';
         s += '<text class="ink" x="' + (W - m.r + 14) + '" y="' + (y + 4) + '">' + BAND[u.band].arrow + ' ' + txt + (u.agree ? '' : '  ⚠') + '</text>';
       }
       s += '<rect class="rowhit" data-id="' + u.id + '" x="0" y="' + (y - rowH / 2) + '" width="' + W + '" height="' + rowH + '"><title>' + esc(u.name) + ': ' + money(u.now) + ' now, ' + money(u.fair) + ' market' + (u.pl != null ? ', PriceLabs ' + money(u.pl) : '') + '</title></rect>';
+      s += '<circle class="grab" data-id="' + u.id + '" cx="' + xn + '" cy="' + y + '" r="13"><title>Drag to try a new price</title></circle>';
     });
+    S.geom = { W: W, lo: lo, hi: hi, l: m.l, pw: pw };
     el.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="Chart of rent now, our market price and PriceLabs recommendation for ' + L.length + ' units">' + s + '</svg>';
     el.querySelectorAll('.rowhit').forEach(function (r) { r.addEventListener('click', function () { pick(+r.getAttribute('data-id'), true); }); });
     $('#bandKey').innerHTML = BAND.map(function (b, i) { return '<span><i class="sw b' + i + '"></i>' + b.arrow + ' ' + b.label + ' <span class="note">(' + b.rule + ')</span></span>'; }).join('');
   }
+
+  // ----- drag a dot to try a new price -----
+  (function () {
+    var el = $('#chart'), drag = null;
+    el.addEventListener('pointerdown', function (e) {
+      var g = e.target.closest ? e.target.closest('.grab') : null; if (!g) return;
+      var u = units[+g.getAttribute('data-id')]; if (!u) return;
+      drag = { u: u, v: u.now, moved: false };
+      try { el.setPointerCapture(e.pointerId); } catch (x) {}
+      e.preventDefault();
+    });
+    el.addEventListener('pointermove', function (e) {
+      if (!drag || !S.geom) return;
+      var svg = el.querySelector('svg'); if (!svg) return;
+      var rect = svg.getBoundingClientRect(), x = (e.clientX - rect.left) * (S.geom.W / rect.width);
+      var v = S.geom.lo + (x - S.geom.l) / S.geom.pw * (S.geom.hi - S.geom.lo);
+      var lo = Math.ceil(drag.u.fair * FLOOR / 10) * 10, hi = Math.floor(drag.u.fair * CEIL / 10) * 10;
+      v = Math.max(lo, Math.min(hi, Math.round(v / 10) * 10));
+      if (v !== drag.v) drag.moved = true;
+      drag.v = v;
+      var px = S.geom.l + (v - S.geom.lo) / (S.geom.hi - S.geom.lo) * S.geom.pw, id = drag.u.id;
+      var dot = svg.querySelector('[data-dot="' + id + '"]'), ln = svg.querySelector('[data-line="' + id + '"]'), gr = svg.querySelector('.grab[data-id="' + id + '"]');
+      if (dot) dot.setAttribute('cx', px);
+      if (gr) gr.setAttribute('cx', px);
+      if (ln) ln.setAttribute('x1', px);
+      var tip = $('#dragTip'); tip.hidden = false;
+      tip.innerHTML = '<b>' + esc(drag.u.name) + '</b> ' + money(v) + ' (' + signedMoney(v - drag.u.now) + ' a night)';
+      tip.style.left = Math.max(8, Math.min(innerWidth - 230, e.clientX + 14)) + 'px';
+      tip.style.top = Math.max(8, e.clientY - 46) + 'px';
+    });
+    function end(e) {
+      if (!drag) return;
+      var d = drag; drag = null; $('#dragTip').hidden = true;
+      try { el.releasePointerCapture(e.pointerId); } catch (x) {}
+      if (d.moved && d.v !== d.u.now) {
+        S.sel = d.u.id; S.pending = { uid: d.u.id, v: d.v }; S.confirm = null; renderAll();
+        if (innerWidth <= 1060) $('#detail').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else pick(d.u.id, true);
+    }
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', function () { if (drag) { drag = null; $('#dragTip').hidden = true; renderChart(); } });
+  })();
 
   // ----- table -----
   function moveText(u) {
@@ -449,6 +515,55 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
     document.querySelectorAll('#hist [data-u]').forEach(function (b) { b.addEventListener('click', function () { undo(hist[+b.getAttribute('data-u')]); }); });
   }
 
+  // ----- AI guide (rule-based example of what the AI writes) -----
+  function guideUnit(u) {
+    if (!u.agree) return [
+      ['Pause and check the sources', 'Our market price (' + money(u.fair) + ') and PriceLabs (' + money(u.pl) + ') differ by ' + pct((u.pl - u.fair) / u.fair) + '. Do not change this price yet.'],
+      ['Find out why', 'Open the comparable listings and your PriceLabs settings (base, minimum and maximum price). Look for a different size, view or season in the comparisons.'],
+      ['Decide', 'If PriceLabs has a reason you accept, follow it. If our comparables look right, correct the PriceLabs base price. Write down which one you chose.'],
+      ['Come back tomorrow', 'The dashboard suggests a rate once the two sources agree within 7%.']];
+    if (u.conf === 'Low' && u.band !== 2) return [
+      ['Do not send yet', 'Only ' + u.comps + ' similar listings were found, so the score is a rough guide.'],
+      ['Get more comparables', 'Ask Abbas to widen the area or size range, or wait for more listings.'],
+      ['If you must act, go small', 'Move at most half the suggested change (' + money(u.sug) + ' is the target) and watch bookings for 7 days.'],
+      ['Re-check', 'Come back when there are 12 or more comparables.']];
+    if (u.band <= 1) return [
+      ['Check the numbers', 'Your rate ' + money(u.now) + ' is ' + pct(u.dev) + ' under our market price ' + money(u.fair) + (u.pl != null ? ' and under PriceLabs ' + money(u.pl) : '') + '. The two sources agree and there are ' + u.comps + ' comparables (' + u.conf + ').'],
+      ['Choose the new rate', 'The target is ' + money(u.sug) + '. Changes are capped at 15%, so start with ' + money(u.step) + ' (' + signedMoney(u.step - u.now) + ' a night).' + (u.step < u.sug ? ' Move to ' + money(u.sug) + ' at the next review.' : '')],
+      ['Check the limits', "Inside 70% to 130% of market, above your PriceLabs minimum, and under today's change limit."],
+      ['Set it', 'Drag the dot on the chart or use the slider, then press Approve and send to PriceLabs. Only open dates from tomorrow change.'],
+      ['Watch for 7 days', 'Look at bookings and enquiries each morning. If the next 14 nights drop below 50% booked, go back halfway to the old rate. If they stay full, continue.'],
+      ['Next review', 'In 7 days.' + (u.step < u.sug ? ' If bookings held up, move to ' + money(u.sug) + '.' : ' Then leave it for 14 days.')]];
+    if (u.band === 2) return [
+      ['Leave it as it is', 'Your rate ' + money(u.now) + ' is within 5% of our market price ' + money(u.fair) + '.'],
+      ['Check the season', 'Peak months can carry a higher rate. Make sure PriceLabs is raising dates in peak weeks.'],
+      ['Re-check in 14 days', 'Come back sooner if an alert appears.']];
+    return [
+      ['Check demand', 'Look at the next 30 nights. If fewer than half are booked, the price is probably too high.'],
+      ['Choose the new rate', 'The target is ' + money(u.sug) + ', a cut of ' + money(u.now - u.sug) + ' a night. Changes are capped at 15%.'],
+      ['Check the limits', "Above your PriceLabs minimum, inside 70% to 130% of market, under today's change limit."],
+      ['Set it', 'Drag the dot or use the slider, then press Approve and send to PriceLabs. Existing bookings keep their price.'],
+      ['Watch for 7 days', 'If bookings improve, hold. If not, check the photos, the title and the minimum stay before cutting again.'],
+      ['Next review', 'In 7 days.']];
+  }
+  function planList() {
+    var L = units.filter(function (u) { return S.bld === 'all' || u.bld === S.bld; }), out = [];
+    var dis = L.filter(function (u) { return !u.agree; });
+    var up = L.filter(function (u) { return u.agree && u.conf !== 'Low' && u.step > u.now; }), dn = L.filter(function (u) { return u.agree && u.conf !== 'Low' && u.step < u.now; });
+    var blocked = L.filter(function (u) { return u.agree && u.conf === 'Low' && u.step !== u.now; }), keep = L.filter(function (u) { return u.band === 2 && u.agree; });
+    function names(a, f) { return a.map(f).join(', '); }
+    if (dis.length) out.push(['Resolve the disagreement first', names(dis, function (u) { return u.name + ' (PriceLabs ' + pct((u.pl - u.fair) / u.fair, true) + ' vs ours)'; }) + '. Do not change these until the two sources agree.']);
+    if (up.length) out.push(['Approve the raises that are ready', names(up, function (u) { return u.name + ' to ' + money(u.step); }) + '. Together ' + signedMoney(up.reduce(function (s, u) { return s + (u.step - u.now); }, 0)) + ' a night.']);
+    if (dn.length) out.push(['Review the cuts', names(dn, function (u) { return u.name + ' to ' + money(u.sug); }) + '.']);
+    if (blocked.length) out.push(['Get more comparables before changing', names(blocked, function (u) { return u.name + ' (' + u.comps + ' comparables)'; }) + '.']);
+    if (keep.length) out.push(['Leave alone', names(keep, function (u) { return u.name; }) + '. They are within 5% of market.']);
+    out.push(['Tomorrow morning', 'Check bookings and enquiries on every apartment you changed, and look at the Alerts panel.']);
+    return out;
+  }
+  function renderPlan() {
+    $('#plan').innerHTML = planList().map(function (p, i) { return '<li><span class="n">' + (i + 1) + '</span><div><b>' + esc(p[0]) + '</b><span class="d">' + esc(p[1]) + '</span></div></li>'; }).join('');
+  }
+
   // ----- alerts (dashboard only) -----
   function renderAlerts() {
     var L = units.filter(function (u) { return S.bld === 'all' || u.bld === S.bld; }).slice().sort(function (a, b) { return a.dev - b.dev; }), out = [];
@@ -510,7 +625,8 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
     else if (u.band <= 1) why = 'Your nightly rate is ' + pct(u.dev) + ' under similar ' + (u.beds === 0 ? 'studios' : u.beds + '-bedroom holiday homes') + '. You could earn ' + money(gap) + ' more a night, about ' + money(yearly) + ' a year if booked ' + Math.round(OCC * 100) + '% of nights. A single change is capped at ' + pct(CAP) + ', so ' + (u.step < u.sug ? 'the first step is ' + money(u.step) + ' and the next review moves it to ' + money(u.sug) + '.' : 'one step to ' + money(u.step) + ' reaches the target.');
     else if (u.band === 2) why = 'Your nightly rate is in line with the market. Leave it alone and focus on apartments with a bigger gap.';
     else why = 'Your nightly rate is ' + pct(u.dev) + ' above similar holiday homes. Expect fewer bookings at this price. A cut of ' + money(-gap) + ' a night would bring it back in line.';
-    var start = Math.min(Math.max(u.step, Math.round(u.fair * FLOOR / 10) * 10), Math.round(u.fair * CEIL / 10) * 10);
+    var minv = Math.ceil(u.fair * FLOOR / 10) * 10, maxv = Math.floor(u.fair * CEIL / 10) * 10, start = Math.min(Math.max(u.step, minv), maxv);
+    if (S.pending && S.pending.uid === u.id) start = Math.min(Math.max(S.pending.v, minv), maxv);
     el.innerHTML =
       '<div class="d-title">' + esc(u.full) + '</div><div class="sm">' + (u.beds === 0 ? 'Studio' : u.beds + ' bed') + (u.size ? ' · ' + num(u.size) + ' sqft' : ' · size not listed') + '</div>' +
       '<div class="d-price"><span class="big">' + money(u.now) + '</span><span class="sm">per night now</span></div>' +
@@ -521,9 +637,10 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
       '<div class="why"><span class="tag">What this means</span>' + why + '</div>' +
       '<div class="sec"><h2>Market and PriceLabs against your nightly rate, last 12 months</h2><div class="chart" id="dTrend"></div></div>' +
       '<div class="sec"><h2>Review and send to PriceLabs</h2><div class="scen"><div class="row"><span class="now" id="scNow"></span><span id="scPill"></span></div>' +
-      '<input type="range" id="scRange" min="' + Math.round(u.fair * FLOOR / 10) * 10 + '" max="' + Math.round(u.fair * CEIL / 10) * 10 + '" step="10" value="' + start + '" aria-label="New nightly rate for ' + esc(u.name) + '">' +
-      '<div class="scale"><span>' + num(Math.round(u.fair * FLOOR / 10) * 10) + '</span><span>drag to try a price (AED per night)</span><span>' + num(Math.round(u.fair * CEIL / 10) * 10) + '</span></div><div class="msg" id="scMsg" style="margin-top:6px"></div></div>' +
+      '<input type="range" id="scRange" min="' + Math.ceil(u.fair * FLOOR / 10) * 10 + '" max="' + Math.floor(u.fair * CEIL / 10) * 10 + '" step="10" value="' + start + '" aria-label="New nightly rate for ' + esc(u.name) + '">' +
+      '<div class="scale"><span>' + num(Math.ceil(u.fair * FLOOR / 10) * 10) + '</span><span>drag to try a price (AED per night)</span><span>' + num(Math.floor(u.fair * CEIL / 10) * 10) + '</span></div><div class="msg" id="scMsg" style="margin-top:6px"></div></div>' +
       '<div class="push" id="pushBox"></div></div>' +
+      '<div class="sec"><h2>Step by step for this apartment</h2><p class="note">AI guide, example text. In the real product Claude writes this from your live data.</p><ol class="steps">' + guideUnit(u).map(function (g, i) { return '<li><span class="n">' + (i + 1) + '</span><div><b>' + esc(g[0]) + '</b><span class="d">' + esc(g[1]) + '</span></div></li>'; }).join('') + '</ol></div>' +
       '<div class="sec"><h2>Similar apartments compared</h2><table class="mini"><thead><tr><th>Size</th><th class="num">Rate</th><th class="num">Per sqft</th></tr></thead><tbody>' +
       comps(u).map(function (c) { return '<tr style="cursor:default"><td>' + num(c[0]) + ' sqft</td><td class="num">' + money(c[1]) + '</td><td class="num">' + money(c[2]) + '</td></tr>'; }).join('') + '</tbody></table></div>';
     var tw = $('#dTrend'); tw.innerHTML = trend(u, Math.max(240, tw.clientWidth || 320));
@@ -532,6 +649,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
       var v = +$('#scRange').value, d = (v - u.fair) / u.fair, b = bandOf(d), ch = v - u.now;
       $('#scNow').textContent = money(v); $('#scPill').innerHTML = pill(b);
       var msg = ch === 0 ? 'Same as today.' : '<span class="' + (ch > 0 ? 'gain' : 'loss') + '">' + signedMoney(ch) + ' / night · ' + signedMoney(ch * 365 * OCC) + ' / year at ' + Math.round(OCC * 100) + '% booked</span>';
+      if (S.pending && S.pending.uid === u.id) msg += '<br><span class="sm">You set this price by dragging on the chart. Nothing is sent until you approve.</span>';
       $('#scMsg').innerHTML = msg;
       var c = validate(u, v), ok = allOk(c), cf = S.confirm && S.confirm.uid === u.id && S.confirm.v === v, last = u.status;
       var tl = '';
@@ -547,10 +665,10 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
       var n = $('#no'); if (n) n.addEventListener('click', function () { S.confirm = null; scen(); });
       var y = $('#yes'); if (y) y.addEventListener('click', function () { S.confirm = null; send(u, v, eff); });
     }
-    $('#scRange').addEventListener('input', function () { S.confirm = null; scen(); }); scen();
+    $('#scRange').addEventListener('input', function () { S.confirm = null; S.pending = null; scen(); }); scen();
   }
 
-  function pick(id, scroll) { S.sel = id; S.confirm = null; renderAll(); if (scroll && innerWidth <= 1060) $('#detail').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  function pick(id, scroll) { S.sel = id; S.confirm = null; S.pending = null; renderAll(); if (scroll && innerWidth <= 1060) $('#detail').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 
   // ----- CSV import -----
   var SAMPLE_CSV = 'unit,building,beds,size_sqft,nightly_rate,market_rate,pricelabs_rec\nA-1,Marina Tower,1,750,820,960,940\nA-2,Marina Tower,2,1100,1450,1400,1420\nB-1,Downtown Loft,1,700,900,880,890\nB-2,Downtown Loft,2,1250,1900,1650,1700';
@@ -577,16 +695,21 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
   $('#sampleBtn').addEventListener('click', function () { build(SAMPLE); S.bld = 'all'; S.sel = 0; renderAll(); $('#csvMsg').textContent = ''; });
 
   // ----- prompt -----
-  var PROMPT = "PROJECT\nRent Watch for WyzRent holiday homes in Dubai. A dashboard for the owner. For each apartment it shows the nightly rate we charge today, compares it with (1) the short-term rental market and (2) PriceLabs, says whether we are below, on or above the market, suggests a new nightly rate, and lets the owner approve the change and send it to PriceLabs from the dashboard. All prices are in AED per night. Approved mockup and sample report: [paste the two links here].\n\nWHO DOES WHAT\nKarim: dashboard (front end). Abbas: data, scoring, and the Hostaway and PriceLabs connections (back end). Agree the data shapes in section 1 on day one so you can work in parallel.\n\nDECISIONS ALREADY MADE\nThe owner creates the Hostaway and PriceLabs API credentials in their own dashboards and adds them as server secrets. Nobody sends credentials in chat or commits them. Yearly estimates assume 75% of nights booked (make it a setting). Alerts are shown on the dashboard only, in an Alerts panel with a count. No email or WhatsApp alerts.\n\n1. DATA SHAPES\nApartment: { id, building, name, beds, size_sqft (may be unknown), floor, view, hostaway_listing_id, pricelabs_listing_id, nightly_rate_now (AED), min_price, max_price, status }\nBooking (from Hostaway): { reservation_id, apartment_id, check_in, check_out, nightly_rate, channel, status }\nMarketScore: { fair_nightly, fair_low, fair_high, deviation_pct, band, confidence, comps_count, reasons: [text], trend_12m: [12 monthly fair prices], occupancy_30d, adr_30d }\nPriceLabsSnapshot: { apartment_id, taken_at, base_price, min_price, max_price, recommended_price, overrides: [{date, price}] }\nPriceChange: { id, apartment_id, old_price, new_price, scope: base_price | date_override, date_range, reason, source_prices: {market, pricelabs}, status: proposed | approved | sent | confirmed | failed | cancelled | undone, proposed_by, approved_by, approved_at, pricelabs_response, readback_price, created_at }\ndeviation_pct = (nightly_rate_now - fair_nightly) / fair_nightly. Bands: far below <= -15%, below -15% to -5%, on target within 5%, above 5% to 15%, far above > 15%.\n\n2. ABBAS: DATA, SCORING, HOSTAWAY, PRICELABS\nA. Hostaway (read-only first). Hostaway is the source of truth for apartments, calendar and bookings. Hostaway API credentials (typically a client ID and secret created by an admin in the Hostaway dashboard, exchanged for an access token) go only in the environment variables HOSTAWAY_CLIENT_ID and HOSTAWAY_CLIENT_SECRET, never in code, the browser, logs or chat. Confirm the exact steps, endpoints and limits in Hostaway's API documentation. Pull listings, calendar rates and availability, and reservations. From reservations compute occupancy and average daily rate for the last 30 and 90 days.\nB. PriceLabs. Confirm first, in PriceLabs documentation or with their support, in one page: which read endpoints give us listings, base, minimum and maximum price, recommended price and overrides; which write operations our plan allows (base price, min and max, date-specific overrides); rate limits. The key goes only in PRICELABS_API_KEY. If writing is not allowed, build the fallback: an export file of approved prices for manual upload, with the same approval and history. Price changes always go through PriceLabs, never straight into the Hostaway calendar, so the two systems do not overwrite each other.\nC. Market data. PriceLabs market data if the API provides it, otherwise a licensed short-term-rental data provider or partner feed. Do not scrape any site whose terms forbid it. Most listing platforms forbid scraping, so check each site's terms and prefer licensed data. Respect rate limits.\nD. Fair nightly rate per apartment. Compare like with like: same area or building, same bedrooms, similar size, view and amenities, and the same dates (same weekdays and season). Median of comparable listings with at least 8 comps, then a regression on log(nightly rate) with bedrooms, size, floor, view, building, season, weekday or weekend, and lead time. Fall back to comps when data is thin. Measure error on held-out data (MAPE), show it in the dashboard, target under 12%. Confidence: High 20 or more comps, Medium 12 to 19, Low below 12.\nE. Compare with PriceLabs. For each apartment return rate now, our market price, the PriceLabs recommendation and the percent difference between the last two. If they differ by more than 7%, set SOURCES_DISAGREE and make no automatic suggestion. Use occupancy as a second signal: a rate below market with occupancy above 90% means raise with confidence. A rate above market with occupancy below 50% means lower.\nF. Suggested price. On target: keep. Below market: 97% of the average of our market price and the PriceLabs recommendation. Above market: 103% of that average. Cap any single change at 15%. When the gap is bigger, propose the capped step now and the next step at the next review. Keep the result inside 70% to 130% of our market price and inside the PriceLabs minimum and maximum.\nG. Price change workflow (server side). POST /price-changes creates a proposal. POST /price-changes/:id/approve records the approver. A background worker (1) re-runs all guardrails, (2) calls PriceLabs to set the price for open dates from tomorrow, (3) reads the price back, (4) sets the status to confirmed or failed with the reason. Existing bookings keep their price. Use idempotency keys so a retry never sends twice. POST /price-changes/:id/undo restores the old price. GET /price-changes lists history.\nH. Guardrails, all enforced on the server: single-step cap; floor and ceiling; block when confidence is Low; block when SOURCES_DISAGREE until a person marks it reviewed; no change to dates less than 2 days away without extra confirmation; daily limit of 20 changes per owner; 5 minute delay before sending so a batch can be cancelled; every attempt in an audit log.\nI. Endpoints: GET /portfolio (apartments with scores, occupancy and PriceLabs numbers), GET /apartments/:id (comps, 12-month trend, bookings), GET /season (monthly demand index), plus the price-change endpoints above. GET /alerts for the dashboard Alerts panel: rate far below market (with occupancy above 90% once Hostaway data is connected); rate above market (with occupancy below 50% for the next 30 days); PriceLabs and our price disagree by more than 7%; fewer than 12 comparables. Each alert names the apartment, the gap in AED a night, and links to its detail panel.\nJ. Security: login required, roles (viewer, approver), data encrypted at rest, secrets only in the server environment, tests with fixed sample data including fake Hostaway and PriceLabs servers.\n\n3. KARIM: DASHBOARD\nA. Build the screens in the approved mockup: summary tiles, three-price chart (dot = rate now, diamond = our market price, hollow square = PriceLabs), \"What to do next\" table with tick boxes and totals, change history with undo, demand through the year, apartment detail with the 12-month line and \"Try a new rate\" slider, and CSV import.\nB. Show every price as AED per night (example: AED 1,150). Sizes in sqft, and show \"not listed\" when unknown. Studio shows as Studio.\nC. The \"Review and send to PriceLabs\" panel (see page 4 of the sample report): current price in PriceLabs, proposed price with percent change, what dates it applies to, reason, guardrail checks with tick or cross, status line (Proposed, Awaiting approval, Sent, Confirmed or Failed), buttons \"Approve and send to PriceLabs\" and \"Cancel\" with a second confirmation. Show server errors in plain words.\nD. Bulk: ticked changes open one review screen with each change, whether it passes the guardrails, and the total effect per night and per year. Failing changes are skipped, not sent.\nE. Alerts panel at the top of the page with a count, newest and most important first, each one clickable. History page: who, when, old and new price, status, and an Undo button while undo is possible. Show \"last updated\" time and the data source (Hostaway, PriceLabs, market data) on every page.\nF. Colours and wording: dark blue and gold on white. Blue = we charge less than the market, grey = on target, red = we charge more, in every chart. Every colour comes with a word and an arrow (colour-blind safe, no red and green pairs). Works at 400 px phone width with no sideways page scroll. Loading, empty and error states.\n\nDONE WHEN\nReal apartments, bookings and market data replace the sample data. Scores match a hand-checked sample of all apartments. MAPE is shown and under 12%, or we know why not. A test price change is approved on the dashboard, appears in PriceLabs, is read back as confirmed, and undo restores it. A change that breaks a guardrail is refused with a clear message. The page loads in under 2 seconds. No credentials are in the repo.";
-  $('#prompt').textContent = PROMPT;
-  $('#copyBtn').addEventListener('click', function () {
-    var btn = $('#copyBtn');
-    function done(t) { btn.textContent = t; setTimeout(function () { btn.textContent = 'Copy prompt'; }, 1800); }
-    function fallback() { var r = document.createRange(); r.selectNodeContents($('#prompt')); var sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); done('Selected, press copy'); }
-    try { navigator.clipboard.writeText(PROMPT).then(function () { done('Copied'); }, fallback); } catch (e) { fallback(); }
-  });
+  var PROMPT = "PROJECT\nRent Watch for WyzRent holiday homes in Dubai. A dashboard for the owner. For each apartment it shows the nightly rate we charge today, compares it with (1) the short-term rental market and (2) PriceLabs, says whether we are below, on or above the market, suggests a new nightly rate, and lets the owner approve the change and send it to PriceLabs from the dashboard. All prices are in AED per night. Approved mockup and sample report: [paste the two links here].\n\nWHO DOES WHAT\nKarim: dashboard (front end). Abbas: data, scoring, and the Hostaway and PriceLabs connections (back end). Agree the data shapes in section 1 on day one so you can work in parallel.\n\nDECISIONS ALREADY MADE\nThe owner creates the Hostaway and PriceLabs API credentials in their own dashboards and adds them as server secrets. Nobody sends credentials in chat or commits them. Yearly estimates assume 75% of nights booked (make it a setting). Alerts are shown on the dashboard only, in an Alerts panel with a count. No email or WhatsApp alerts.\n\n1. DATA SHAPES\nApartment: { id, building, name, beds, size_sqft (may be unknown), floor, view, hostaway_listing_id, pricelabs_listing_id, nightly_rate_now (AED), min_price, max_price, status }\nBooking (from Hostaway): { reservation_id, apartment_id, check_in, check_out, nightly_rate, channel, status }\nMarketScore: { fair_nightly, fair_low, fair_high, deviation_pct, band, confidence, comps_count, reasons: [text], trend_12m: [12 monthly fair prices], occupancy_30d, adr_30d }\nPriceLabsSnapshot: { apartment_id, taken_at, base_price, min_price, max_price, recommended_price, overrides: [{date, price}] }\nPriceChange: { id, apartment_id, old_price, new_price, scope: base_price | date_override, date_range, reason, source_prices: {market, pricelabs}, status: proposed | approved | sent | confirmed | failed | cancelled | undone, proposed_by, approved_by, approved_at, pricelabs_response, readback_price, created_at }\ndeviation_pct = (nightly_rate_now - fair_nightly) / fair_nightly. Bands: far below <= -15%, below -15% to -5%, on target within 5%, above 5% to 15%, far above > 15%.\n\n2. ABBAS: DATA, SCORING, HOSTAWAY, PRICELABS\nA. Hostaway (read-only first). Hostaway is the source of truth for apartments, calendar and bookings. Hostaway API credentials (typically a client ID and secret created by an admin in the Hostaway dashboard, exchanged for an access token) go only in the environment variables HOSTAWAY_CLIENT_ID and HOSTAWAY_CLIENT_SECRET, never in code, the browser, logs or chat. Confirm the exact steps, endpoints and limits in Hostaway's API documentation. Pull listings, calendar rates and availability, and reservations. From reservations compute occupancy and average daily rate for the last 30 and 90 days.\nB. PriceLabs. Confirm first, in PriceLabs documentation or with their support, in one page: which read endpoints give us listings, base, minimum and maximum price, recommended price and overrides; which write operations our plan allows (base price, min and max, date-specific overrides); rate limits. The key goes only in PRICELABS_API_KEY. If writing is not allowed, build the fallback: an export file of approved prices for manual upload, with the same approval and history. Price changes always go through PriceLabs, never straight into the Hostaway calendar, so the two systems do not overwrite each other.\nC. Market data. PriceLabs market data if the API provides it, otherwise a licensed short-term-rental data provider or partner feed. Do not scrape any site whose terms forbid it. Most listing platforms forbid scraping, so check each site's terms and prefer licensed data. Respect rate limits.\nD. Fair nightly rate per apartment. Compare like with like: same area or building, same bedrooms, similar size, view and amenities, and the same dates (same weekdays and season). Median of comparable listings with at least 8 comps, then a regression on log(nightly rate) with bedrooms, size, floor, view, building, season, weekday or weekend, and lead time. Fall back to comps when data is thin. Measure error on held-out data (MAPE), show it in the dashboard, target under 12%. Confidence: High 20 or more comps, Medium 12 to 19, Low below 12.\nE. Compare with PriceLabs. For each apartment return rate now, our market price, the PriceLabs recommendation and the percent difference between the last two. If they differ by more than 7%, set SOURCES_DISAGREE and make no automatic suggestion. Use occupancy as a second signal: a rate below market with occupancy above 90% means raise with confidence. A rate above market with occupancy below 50% means lower.\nF. Suggested price. On target: keep. Below market: 97% of the average of our market price and the PriceLabs recommendation. Above market: 103% of that average. Cap any single change at 15%. When the gap is bigger, propose the capped step now and the next step at the next review. Keep the result inside 70% to 130% of our market price and inside the PriceLabs minimum and maximum.\nG. Price change workflow (server side). POST /price-changes creates a proposal. POST /price-changes/:id/approve records the approver. A background worker (1) re-runs all guardrails, (2) calls PriceLabs to set the price for open dates from tomorrow, (3) reads the price back, (4) sets the status to confirmed or failed with the reason. Existing bookings keep their price. Use idempotency keys so a retry never sends twice. POST /price-changes/:id/undo restores the old price. GET /price-changes lists history.\nH. Guardrails, all enforced on the server: single-step cap; floor and ceiling; block when confidence is Low; block when SOURCES_DISAGREE until a person marks it reviewed; no change to dates less than 2 days away without extra confirmation; daily limit of 20 changes per owner; 5 minute delay before sending so a batch can be cancelled; every attempt in an audit log.\nI. Endpoints: GET /portfolio (apartments with scores, occupancy and PriceLabs numbers), GET /apartments/:id (comps, 12-month trend, bookings), GET /season (monthly demand index), plus the price-change endpoints above. GET /alerts for the dashboard Alerts panel: rate far below market (with occupancy above 90% once Hostaway data is connected); rate above market (with occupancy below 50% for the next 30 days); PriceLabs and our price disagree by more than 7%; fewer than 12 comparables. Each alert names the apartment, the gap in AED a night, and links to its detail panel.\nI2. AI guide endpoint: POST /ai/guide with one apartment or the whole portfolio. The server builds the input JSON from its own data, calls Claude with the AI guide prompt in section 4 (key only in ANTHROPIC_API_KEY, model name in a setting so it can be changed), validates that the answer is valid JSON in the required format, recomputes every number in it from its own data, and discards or rewrites any step that does not match. If the call or the validation fails, return the rule-based guide instead. Cache each answer until the inputs change. Log every call without personal data.\nJ. Security: login required, roles (viewer, approver), data encrypted at rest, secrets only in the server environment, tests with fixed sample data including fake Hostaway and PriceLabs servers.\n\n3. KARIM: DASHBOARD\nA. Build the screens in the approved mockup: summary tiles, three-price chart (dot = rate now, diamond = our market price, hollow square = PriceLabs), \"What to do next\" table with tick boxes and totals, change history with undo, demand through the year, apartment detail with the 12-month line and \"Try a new rate\" slider, and CSV import.\nB. Show every price as AED per night (example: AED 1,150). Sizes in sqft, and show \"not listed\" when unknown. Studio shows as Studio.\nB2. Drag to price: the user can drag the rate-now dot on the chart left or right to try a new nightly price. The price snaps to AED 10, stays inside 70% to 130% of our market price, and shows live in a small label (price and change). On release the apartment opens in the review panel with that price filled in and the guardrail checks run. Nothing is sent by dragging. Works with mouse and touch. The slider in the review panel does the same thing. Keyboard users can adjust with arrow keys.\nB3. AI guide: a \"Today's plan\" panel (all apartments, in priority order) and a \"Step by step\" section inside each apartment, both from the AI guide endpoint, each with a clear label that it is AI guidance and the time it was written. Each step has a title, the action, the reason and what to check afterwards. Show the fallback rule-based guide if the AI is unavailable. The AI never sends anything.\nC. The \"Review and send to PriceLabs\" panel (see page 4 of the sample report): current price in PriceLabs, proposed price with percent change, what dates it applies to, reason, guardrail checks with tick or cross, status line (Proposed, Awaiting approval, Sent, Confirmed or Failed), buttons \"Approve and send to PriceLabs\" and \"Cancel\" with a second confirmation. Show server errors in plain words.\nD. Bulk: ticked changes open one review screen with each change, whether it passes the guardrails, and the total effect per night and per year. Failing changes are skipped, not sent.\nE. Alerts panel at the top of the page with a count, newest and most important first, each one clickable. History page: who, when, old and new price, status, and an Undo button while undo is possible. Show \"last updated\" time and the data source (Hostaway, PriceLabs, market data) on every page.\nF. Colours and wording: dark blue and gold on white. Blue = we charge less than the market, grey = on target, red = we charge more, in every chart. Every colour comes with a word and an arrow (colour-blind safe, no red and green pairs). Works at 400 px phone width with no sideways page scroll. Loading, empty and error states.\n\n4. AI GUIDE PROMPT\nThe full prompt for the AI guide is on the next pages of this document. Use it as the system prompt in the AI guide endpoint, with the apartment or portfolio JSON as the user message.\n\nDONE WHEN\nReal apartments, bookings and market data replace the sample data. Scores match a hand-checked sample of all apartments. MAPE is shown and under 12%, or we know why not. A test price change is approved on the dashboard, appears in PriceLabs, is read back as confirmed, and undo restores it. A change that breaks a guardrail is refused with a clear message. Dragging a dot opens the review panel with that price and sends nothing. The AI guide shows steps that match the numbers on screen, and falls back to the rule-based guide if the AI fails. The page loads in under 2 seconds. No credentials are in the repo.";
+  var AI_PROMPT = "ROLE\nYou are the pricing guide inside WyzRent's Rent Watch dashboard for holiday homes in Dubai. You help the owner decide whether to change a nightly rate (AED per night) and you give clear, logical, practical steps to follow. You never change prices yourself. The owner approves every change in the dashboard.\n\nWHAT YOU RECEIVE\nA JSON object for one apartment, or a list for the whole portfolio, with: name, building, beds, size, rate_now, our_market_price, pricelabs_recommendation, deviation_pct, band, sources_agree (true or false), pricelabs_gap_pct, comps_count, confidence, suggested_target, suggested_first_step, guardrails (cap_pct, floor_pct, ceiling_pct, pricelabs_min, pricelabs_max), occupancy_next_14, occupancy_next_30, adr_30, season_index (this month's demand), and recent_changes. Any field can be missing.\n\nRULES\n1. Use only the numbers in the input. Never invent a price, a percentage, a booking or a competitor. If something is missing, say it is missing.\n2. Respect the guardrails: no single change above cap_pct, nothing outside the floor and ceiling, never below pricelabs_min or above pricelabs_max. When confidence is Low or sources_agree is false, the steps are about investigating, not changing.\n3. Existing bookings keep their price. Changes affect open dates from tomorrow. Say so when it matters.\n4. Think about Dubai holiday-home demand: peak months (around December to February), weekends versus weekdays, events, and how many nights are still open. Mention the season only when the input includes it.\n5. Be practical. Each step is one concrete action the owner can do today, in the order to do it, with the reason and what to check afterwards.\n6. Prefer small, reversible steps. When unsure, recommend the smaller change and a check after 7 days.\n7. Plain English, short sentences, no jargon. Write money as AED with thousands separators, for example AED 1,150. Do not use em dashes.\n8. Never recommend sending automatically. The last step before any change is always: review the guardrail checks, then press Approve and send to PriceLabs.\n\nHOW TO THINK (do not show this)\nFirst decide the situation: sources disagree, low confidence, underpriced, on target or overpriced. Then pick the safest useful action for that situation. Then write the steps. Then check every number you wrote against the input.\n\nOUTPUT FORMAT\nReturn only valid JSON: { \"situation\": \"underpriced | on_target | overpriced | sources_disagree | low_confidence | portfolio\", \"headline\": \"one sentence\", \"priority\": \"high | medium | low\", \"steps\": [ { \"order\": 1, \"title\": \"short\", \"action\": \"what to do\", \"why\": \"reason using the input numbers\", \"check\": \"what to confirm afterwards\", \"who\": \"owner | dashboard | team\" } ], \"proposed_rate\": number or null, \"watch\": { \"what\": \"metric\", \"for_days\": number, \"if_worse\": \"what to do\", \"if_better\": \"what to do\" }, \"risks\": [\"short sentence\"], \"missing_data\": [\"short sentence\"] }. Between 3 and 7 steps. No text outside the JSON.\n\nPORTFOLIO MODE\nWhen the input is a list of apartments, set situation to \"portfolio\" and order the steps by priority: resolve disagreements first, then approve the changes that are ready, then review overpriced apartments, then blocked ones, then leave the rest alone. Name each apartment in its step.\n\nEXAMPLE (shortened)\nInput: PT 1BR·36, rate_now 1140, our_market_price 1350, pricelabs_recommendation 1320, sources_agree true, comps_count 22, suggested_target 1290, suggested_first_step 1290, cap_pct 15. Headline: \"PT 1BR·36 is 16% under market and can safely go to AED 1,290.\" Steps: 1 Check the numbers. 2 Choose AED 1,290, which reaches the target in one step. 3 Check the limits. 4 Drag the dot to AED 1,290 and approve. 5 Watch bookings for 7 days. Watch: next 14 nights booked. If below 50%, go back halfway. If full, continue.\n\nSERVER CHECKS (not part of the prompt)\nThe server validates the JSON, recomputes every number from its own data, and discards or rewrites any step that does not match. If the AI call fails, the dashboard shows the rule-based guide instead. The key lives only in the ANTHROPIC_API_KEY server secret.";
+  function wireCopy(btnSel, preSel, text) {
+    $(preSel).textContent = text;
+    $(btnSel).addEventListener('click', function () {
+      var btn = $(btnSel);
+      function done(m) { btn.textContent = m; setTimeout(function () { btn.textContent = 'Copy prompt'; }, 1800); }
+      function fallback() { var r = document.createRange(); r.selectNodeContents($(preSel)); var sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); done('Selected, press copy'); }
+      try { navigator.clipboard.writeText(text).then(function () { done('Copied'); }, fallback); } catch (e) { fallback(); }
+    });
+  }
+  wireCopy('#copyBtn', '#prompt', PROMPT);
+  wireCopy('#copyBtn2', '#prompt2', AI_PROMPT);
 
-  function renderAll() { renderControls(); renderKPIs(); renderAlerts(); renderChart(); renderTable(); renderHist(); renderCal(); renderDetail(); }
+  function renderAll() { renderControls(); renderKPIs(); renderAlerts(); renderPlan(); renderChart(); renderTable(); renderHist(); renderCal(); renderDetail(); }
   var raf; addEventListener('resize', function () { cancelAnimationFrame(raf); raf = requestAnimationFrame(function () { renderChart(); var u = units[S.sel], t = $('#dTrend'); if (u && t) t.innerHTML = trend(u, Math.max(240, t.clientWidth || 320)); }); });
   renderAll();
 })();
