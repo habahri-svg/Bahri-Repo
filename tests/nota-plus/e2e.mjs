@@ -827,8 +827,8 @@ try {
   await p6.click('a.fab');
   await p6.waitForSelector('[data-action=start-rec]');
   await p6.click('[data-action=start-rec]');
-  check('a silent microphone is flagged while recording', await waitFor(async () => /silent/i.test(await p6.locator('#rec-status').innerText()), 14000), await p6.locator('#rec-status').innerText());
-  check('and the screen says what to do', await waitFor(async () => /almost nothing/i.test(await p6.locator('#rec-hint').innerText()), 4000), await p6.locator('#rec-hint').innerText());
+  check('a silent microphone is flagged while recording', await waitFor(async () => !(await p6.locator('#rec-health').isHidden()) && /no sound/i.test(await p6.locator('#rec-health').innerText()), 16000), await p6.locator('#rec-health').innerText());
+  check('and the strip says what to check', /covered or muted/i.test(await p6.locator('#rec-health').innerText()), await p6.locator('#rec-health').innerText());
   await p6.screenshot({ path: `${OUT}/18-mic-silent.png` });
   await p6.click('[data-action=stop-rec]');
   check('after stopping, the note says the microphone heard almost nothing', await waitFor(async () => /heard almost nothing/i.test(await p6.locator('#note-body').innerText()), 10000), await p6.locator('#note-body').innerText().catch(() => ''));

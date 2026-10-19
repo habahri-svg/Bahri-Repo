@@ -13,6 +13,7 @@ It is a progressive web app, plain HTML, CSS and JavaScript. There is no build s
 - **Outline** with tappable chapter times, **Insights** (talk share per speaker, words, questions, Arabic and English mix), a one-tap **follow-up email** draft, and **Add to calendar** for action items that have a real date.
 - **Star** notes and filter by Starred. **Custom vocabulary** for names and terms. **Large text** for live captions. Copy any line with its time.
 - **Export** to text, Word, Markdown and subtitles, and **Back up and restore** all notes as a file, to keep them safe or move them between devices.
+- **Live capture health.** While recording, the app watches the whole chain (microphone, sound, sending, replies, words) and if nothing is being registered a strip says exactly which link broke and what to do, with a one-tap switch to Cloud Whisper when the phone's own recognition stays silent.
 - Ask AI about one note, or across every note.
 - Find in any transcript: type a word, part of a word or a single letter and every match is highlighted with its time. Use the arrows to jump between matches, type a time like 12:40 to go straight there, or tap a marked moment or a time in an AI answer. With saved audio, playback jumps to the same moment. Arabic search ignores diacritics and alef spellings. Library search opens the note at the match.
 - Import audio or video files, paste text, search every word, translate a transcript, export to text, PDF or SRT subtitles.
