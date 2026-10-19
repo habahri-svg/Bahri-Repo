@@ -106,8 +106,6 @@
   }
 
   /* ---------- Send to Command Center ---------- */
-  window.wyzWA = function () { return waData || []; };
-  window.wyzOpenWA = function (c) { openWA(c); };
   window.ccButton = function () {
     var b = el("button", "btn small", "📤 Command Center"); b.type = "button"; b.title = "Send this to the company Command Center as an action item";
     b.onclick = function () { openCC(); };
@@ -146,109 +144,13 @@
     host.append(ti, su, pr, dep, a, st);
   }
 
-  /* ---------- WhatsApp Business inbox ---------- */
-  var waData = null;
-  async function loadWA() {
-    var j; try { j = await call("/api/whatsapp"); } catch (e) { return; }
-    if (!j || !j.viewer) return;
-    var anchor = $("owedCard") || $("handoffCard"); if (!anchor || !anchor.parentNode) return;
-    var card = $("waCard"); if (!card) { card = el("div", "card note"); card.id = "waCard"; anchor.parentNode.insertBefore(card, anchor.nextSibling); }
-    card.replaceChildren(); var pad = el("div", "pad"); card.append(pad);
-    var head = el("div", "headrow"); head.append(el("h2", "", "💬 WhatsApp Business")); pad.append(head);
-    if (!j.ready) {
-      if (!j.owner || state.waHide) { card.remove(); return; }
-      var hook = location.origin + "/api/whatsapp";
-      pad.append(el("p", "status", "Show your WhatsApp Business messages here and answer them from the page. Still missing: " + j.missing.join(", ") + "."));
-      var ol = el("ol", "status"); ol.style.margin = "0"; ol.style.paddingLeft = "18px";
-      ["In Meta for Developers, create an app of type Business and add WhatsApp.", "In WhatsApp, API Setup, copy the Phone number ID. Create a permanent token for a System user in Business settings.",
-        "In Vercel add WHATSAPP_TOKEN, WHATSAPP_PHONE_ID, WHATSAPP_VERIFY_TOKEN (any secret word) and WHATSAPP_APP_SECRET (Meta app, Settings, Basic). Storage (Upstash Redis) must be on. Redeploy.",
-        "In WhatsApp, Configuration, set the webhook address to " + hook + " with the same verify word, and subscribe to messages. To see what you send from the WhatsApp Business phone app too (Coexistence), also subscribe to smb_message_echoes."].forEach(function (t) { ol.append(el("li", "", t)); });
-      pad.append(ol);
-      var a = el("div", "acts");
-      a.append(link("1. Meta apps", "https://developers.facebook.com/apps", "solid"), link("2. System users", "https://business.facebook.com/settings/system-users"), link("3. Vercel settings", VENV), link("🗄️ Upstash Redis", "https://vercel.com/marketplace/upstash"));
-      var cp = el("button", "btn small ghost", "Copy webhook address"); cp.type = "button"; cp.onclick = function () { navigator.clipboard.writeText(hook).then(function () { cp.textContent = "Copied"; }).catch(function () { cp.textContent = hook; }); };
-      var x = el("button", "btn small ghost", "Hide this"); x.type = "button"; x.onclick = function () { state.waHide = 1; persist(); card.remove(); };
-      a.append(cp, x); pad.append(a); return;
-    }
-    waData = j.chats || [];
-    var rf = el("button", "btn small ghost", "Refresh"); rf.type = "button"; rf.onclick = function () { rf.disabled = true; loadWA(); }; head.append(rf);
-    var ck = el("button", "btn small ghost", "Check connection"); ck.type = "button"; var ckOut = el("p", "status", "");
-    ck.onclick = async function () {
-      ck.disabled = true; ckOut.className = "status"; ckOut.textContent = "Checking with Meta...";
-      try {
-        var r = await call("/api/whatsapp?check=1"); var c = r && r.check;
-        if (!c) throw new Error((r && r.error) || "no answer");
-        var hook = r.hookAt ? "Meta last reached this page " + fmtWhen(r.hookAt) + "." : "Meta has not reached this page yet, so check the webhook address and the subscribed fields.";
-        if (c.ok) ckOut.textContent = "Connected to " + (c.number || "your number") + (c.name ? " (" + c.name + ")" : "") + (c.quality ? ", quality " + c.quality : "") + ". " + hook;
-        else { ckOut.className = "status err"; ckOut.textContent = "Meta refused the token or number (" + c.error + "). " + hook; }
-      } catch (e) { ckOut.className = "status err"; ckOut.textContent = "Couldn't check it (" + clip((e && e.message) || "unknown reason", 100) + ")."; }
-      ck.disabled = false;
-    };
-    if (j.owner) head.append(ck);
-    if (j.owner) pad.append(ckOut);
-    if (!waData.length) { pad.append(el("p", "status", "No WhatsApp messages yet. New ones show here as they arrive.")); return; }
-    waData.slice(0, 8).forEach(function (c) {
-      var r = el("div", "item"); var unans = c.last && c.last.dir === "in";
-      r.append(el("span", "dot " + (unans ? "reply" : "fyi")));
-      var m = el("div", "main");
-      m.append(el("span", "t", (c.name || "+" + c.wa) + (unans ? " · waiting for you" : "")), el("span", "s", clip(c.last ? c.last.text : "", 140)), el("span", "m", c.last ? fmtWhen(c.last.at) : ""));
-      var a2 = el("div", "acts"); var o = el("button", "btn small solid", "Open"); o.type = "button"; o.onclick = function () { openWA(c); }; a2.append(o); m.append(a2);
-      r.append(m); pad.append(r);
-    });
-  }
-  function waState(m) {
-    if (m.by === "phone app") return " · sent from the phone app";
-    var x = m.st && m.st.s;
-    if (x === "failed") return " · not delivered" + (m.st.err ? " (" + clip(m.st.err, 160) + ")" : "");
-    if (x === "read") return " · read";
-    if (x === "delivered") return " · delivered";
-    return " · sent, waiting for delivery";
-  }
-  function openWA(c) {
-    var host = infoOpen("💬 " + (c.name || "+" + c.wa));
-    var list = el("div"); list.style.cssText = "display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow:auto";
-    c.msgs.forEach(function (m) {
-      var b = el("div", "", m.text); b.style.cssText = "padding:8px 10px;border-radius:10px;max-width:85%;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;" + (m.dir === "out" ? "align-self:flex-end;background:var(--sky);" : "align-self:flex-start;border:1px solid var(--line);");
-      var t = el("div", "status", fmtWhen(m.at) + (m.dir === "out" ? waState(m) : "")); t.style.fontSize = "11px"; if (m.dir === "out" && m.st && m.st.s === "failed") t.className = "status err"; b.append(t); list.append(b);
-    });
-    host.append(list); setTimeout(function () { list.scrollTop = list.scrollHeight; }, 0);
-    var st = el("p", "status", "");
-    if (!c.canReply) { host.append(el("p", "status", "Their last message is more than 24 hours old, so WhatsApp only allows an approved template now. Answer on your phone instead.")); }
-    var ta = el("textarea", "in"); ta.rows = 3; ta.placeholder = "Your answer"; ta.setAttribute("aria-label", "Your answer");
-    var sg = el("button", "btn small ghost", "Suggest an answer"); sg.type = "button";
-    sg.onclick = async function () {
-      if (!sample) { st.textContent = "Connect Claude or ChatGPT first."; return; }
-      sg.disabled = true; sg.textContent = "Writing...";
-      try {
-        var tone = await toneExamples().catch(function () { return ""; });
-        var r = await creditFallback(function (prov) { return sample("Write a short WhatsApp reply for " + (myName || "me") + " at " + BR.co + ", " + BR.desc + ". Friendly, brief, plain text, no em dashes. Same language as their last message. Return only the message." + (tone ? "\n\n" + tone : "") + "\n\nChat (latest last):\n" + c.msgs.slice(-12).map(function (m) { return (m.dir === "out" ? "Me: " : (c.name || "Them") + ": ") + m.text; }).join("\n"), { cache: false, provider: prov }); });
-        ta.value = String(r.text || "").trim();
-      } catch (e) { st.className = "status err"; st.textContent = "Couldn't write one (" + clip((e && e.message) || "unknown reason", 80) + ")."; }
-      sg.disabled = false; sg.textContent = "Suggest an answer";
-    };
-    var go = el("button", "btn small solid", "Send"); go.type = "button"; var armed = 0;
-    go.onclick = async function () {
-      var t = ta.value.trim(); if (!t) { ta.focus(); return; }
-      if (!armed) { armed = 1; go.textContent = "Confirm: send on WhatsApp"; return; }
-      go.disabled = true; go.textContent = "Sending...";
-      try {
-        await call("/api/whatsapp", { method: "POST", body: JSON.stringify({ to: c.wa, text: t }) }).then(function (j) { if (j && j.error) throw new Error(j.error); });
-        c.msgs.push({ text: t, at: Date.now(), dir: "out" }); c.last = c.msgs[c.msgs.length - 1]; openWA(c); loadWA();
-      } catch (e) { armed = 0; go.disabled = false; go.textContent = "Send"; st.className = "status err"; st.textContent = clip((e && e.message) || "Couldn't send it.", 200); }
-    };
-    var wa = link("Open in WhatsApp", "https://wa.me/" + c.wa);
-    var a = el("div", "acts"); a.append(go, sg, wa);
-    host.append(ta, a, st);
-  }
-
   /* ---------- start once signed in ---------- */
   var started = false, tries = 0;
   function start() {
     var on = false; try { on = G.connected(); } catch (e) {}
     if (!on) { if (++tries < 400) setTimeout(start, 3000); return; }
     if (started) return; started = true;
-    loadStrip(false); loadPulse(); loadWA();
-    setInterval(function () { if (!document.hidden) loadWA(); }, 5 * 60000);
+    loadStrip(false); loadPulse();
     setInterval(function () { if (!document.hidden) loadStrip(false); }, 30 * 60000);
     setInterval(sendPulse, 10 * 60000); setTimeout(sendPulse, 20000);
   }
