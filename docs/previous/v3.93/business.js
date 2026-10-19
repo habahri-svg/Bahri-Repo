@@ -35,9 +35,11 @@
     else b.disabled = !list;
     return b;
   }
+  function vsLy(j) { if (j.lastYear == null || !j.lastYear) return "-"; var d = Math.round(100 * (j.revenue - j.lastYear) / j.lastYear); return (d > 0 ? "+" : "") + d + "%"; }
   async function loadStrip(fresh) {
     var j;
     try { j = await call("/api/hostaway" + (fresh ? "?fresh=1" : "")); } catch (e) { return; }
+    window.wyzHA = { ready: !!(j && j.viewer && j.ready && !j.error), viewer: !!(j && j.viewer), error: (j && j.error) || "", at: Date.now() }; try { window.dispatchEvent(new Event("wyz-ha")); } catch (e) {}
     if (!j || !j.viewer) { if (strip) strip.remove(); return; }
     var box = stripBox(); box.replaceChildren(); var pad = el("div", "pad"); box.append(pad);
     var head = el("div", "headrow"); head.append(el("h2", "", "Today at " + (CFG.COMPANY || "WYZ Rent")));
@@ -55,7 +57,7 @@
     pad.append(head);
     var row = el("div", "acts");
     row.append(tile("Check-ins today", j.checkIns.length, j.checkIns), tile("Check-outs today", j.checkOuts.length, j.checkOuts), tile("Guests in house", j.inHouse, null),
-      tile("Occupancy this month", j.occupancy + "%", null, j.listings + " listings" + (j.city ? " in " + j.city : "")), tile("Booked this month", money(j.revenue, j.currency), null, "Nights in " + j.month));
+      tile("Occupied today", (j.occToday == null ? "-" : j.occToday + "%"), null, j.inHouse + " of " + j.listings + " units"), tile("Next 30 days", (j.occ30 == null ? "-" : j.occ30 + "%"), null, "Booked nights"), tile("Occupancy this month", j.occupancy + "%", null, j.listings + " listings" + (j.city ? " in " + j.city : "")), tile("Booked this month", money(j.revenue, j.currency), null, "Nights in " + j.month), tile("Vs last year", vsLy(j), null, j.lastYear == null ? "No data" : "Last year " + money(j.lastYear, j.currency)));
     pad.append(row, el("span", "status", "From Hostaway, " + new Date(j.at).toLocaleTimeString("en-GB", { timeZone: "Asia/Dubai", hour: "2-digit", minute: "2-digit" }) + " Dubai time. Tap a number to see the guests."));
   }
 

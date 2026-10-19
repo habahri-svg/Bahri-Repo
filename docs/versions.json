@@ -1,11 +1,6 @@
 {
   "versions": [
     {
-      "version": "3.84",
-      "path": "previous/v3.84/",
-      "label": "Free AI first: Google Gemini free tier, never switches to a paid AI by itself"
-    },
-    {
       "version": "3.85",
       "path": "previous/v3.85/",
       "label": "Show or hide button in the top bar, Focus banner, steadier inbox sorting"
@@ -27,6 +22,11 @@
     },
     {
       "version": "3.93",
+      "path": "previous/v3.93/",
+      "label": "Whole-team adviser in Advise me: six experts acting as one"
+    },
+    {
+      "version": "3.94",
       "path": "",
       "label": "Current"
     }

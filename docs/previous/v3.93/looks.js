@@ -6,6 +6,7 @@
   if (typeof saveLook !== "function" || typeof el !== "function") return;
   var CLEAR = { c1: "", c2: "", cH: "", cB: "", cP: "", cT: "" };
   var LOOKS = [
+    { p: "apple", name: "Apple", desc: "Clean white, one blue accent", h1: "#f5f5f7", h2: "#f5f5f7", bg: "#f5f5f7", card: "#ffffff", main: "#0071e3", acc: "#0071e3" },
     { p: "ocean", name: "WYZ Classic", desc: "Deep navy and champagne gold", h1: "#104b70", h2: "#0e2238", bg: "#f4f8fc", card: "#ffffff", main: "#104b70", acc: "#b8923c" },
     { p: "ivory", name: "Ivory Gold", desc: "Warm ivory, navy and gold", h1: "#16324e", h2: "#0e2238", bg: "#faf7f1", card: "#ffffff", main: "#16324e", acc: "#b8923c" },
     { p: "marina", name: "Marina Teal", desc: "Sea teal with a coral touch", h1: "#0f6466", h2: "#0a3d40", bg: "#f2f8f7", card: "#ffffff", main: "#0f6466", acc: "#d08c60" },
@@ -18,7 +19,7 @@
     { p: "skyblue", name: "Pastel Sky", desc: "Baby blue and soft gold", h1: "#3b7fc0", h2: "#2b5f94", bg: "#eef6fd", card: "#fbfdff", main: "#2f72b3", acc: "#e3a553" },
     { p: "butter", name: "Pastel Butter", desc: "Soft lemon and olive gold", h1: "#9a8014", h2: "#6a5709", bg: "#fffbe9", card: "#fffef7", main: "#8a7210", acc: "#d98f3f" }
   ];
-  var current = function () { var l = lookNow(); return l.p && LOOKS.some(function (x) { return x.p === l.p; }) ? l.p : "ocean"; };
+  var current = function () { var l = lookNow(); return l.p && LOOKS.some(function (x) { return x.p === l.p; }) ? l.p : "apple"; };
 
   function card(x) {
     var b = el("button", "lookc"); b.type = "button"; b.dataset.pal = x.p; b.setAttribute("aria-pressed", String(current() === x.p));

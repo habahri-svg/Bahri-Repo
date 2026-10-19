@@ -8,9 +8,9 @@
 (function () {
   "use strict";
   if (typeof $ !== "function" || typeof el !== "function" || typeof show !== "function") return;
-  var MAP = { today: "t-today", settings: "t-conn", "my-life": "t-life", install: "t-inst" };
+  var MAP = { today: "t-today", settings: "t-conn", "my-life": "t-life", install: "t-inst", platforms: "t-plat" };
   var REV = {}; Object.keys(MAP).forEach(function (k) { REV[MAP[k]] = k; });
-  var TITLE = { settings: "Settings", install: "Install on phone or computer" };
+  var TITLE = { settings: "Settings", install: "Install on phone or computer", platforms: "Platforms" };
   var busy = false, orig = window.show;
 
   var st = document.createElement("style");
