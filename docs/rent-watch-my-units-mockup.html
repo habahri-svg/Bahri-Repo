@@ -1,0 +1,561 @@
+<title>My Units</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: summary tiles, then the three-price chart and a move table on the left, a sticky unit detail with the PriceLabs send panel on the right.
+   Blue = you charge less than the market, grey = on target, red = you charge more. Words and arrows always go with colour. */
+:root {
+  --bg: #f6f6f3; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #7a7872;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --accent: #256abf; --wash: #f0efec;
+  --c0: #1c5cab; --c1: #6da7ec; --c2: #c9c8c1; --c3: #f0a0a0; --c4: #e34948; --pl: #6250d6;
+  --good: #006300; --warn-bg: #fff4d6; --warn-ink: #5c4300; --err: #b3261e;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --muted: #9a988f;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --accent: #6da7ec; --wash: #242422;
+    --c0: #3987e5; --c1: #1c5cab; --c2: #4a4a46; --c3: #9c3f3e; --c4: #e66767; --pl: #9085e9;
+    --good: #0ca30c; --warn-bg: #3a2f10; --warn-ink: #f3d98a; --err: #f2b8b5; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --muted: #9a988f;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --accent: #6da7ec; --wash: #242422;
+  --c0: #3987e5; --c1: #1c5cab; --c2: #4a4a46; --c3: #9c3f3e; --c4: #e66767; --pl: #9085e9;
+  --good: #0ca30c; --warn-bg: #3a2f10; --warn-ink: #f3d98a; --err: #f2b8b5; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 14px; line-height: 1.45; }
+.wrap { max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; padding-block: 16px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .5; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, tr:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h1 { font-size: 26px; line-height: 1.15; margin: 0; letter-spacing: -0.01em; }
+h2 { font-size: 15px; margin: 0; }
+p { margin: 0; }
+.sub { color: var(--ink2); margin-top: 4px; }
+.sm { color: var(--ink2); font-size: 12.5px; }
+.note { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.banner { background: var(--warn-bg); color: var(--warn-ink); border-radius: 8px; padding: 8px 12px; font-size: 13px; }
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; min-width: 0; }
+.head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.top { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.sw { width: 12px; height: 12px; border-radius: 3px; flex: none; display: inline-block; }
+.b0 { background: var(--c0); } .b1 { background: var(--c1); } .b2 { background: var(--c2); } .b3 { background: var(--c3); } .b4 { background: var(--c4); }
+.pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 999px; padding: 2px 9px 2px 7px; font-size: 12.5px; white-space: nowrap; font-weight: 600; background: var(--surface); }
+.pill .sw { width: 10px; height: 10px; }
+.stat { display: inline-block; border-radius: 6px; padding: 1px 8px; font-size: 12px; font-weight: 600; border: 1px solid var(--axis); background: var(--surface); }
+.stat.ok { border-color: var(--good); color: var(--good); }
+.stat.bad { border-color: var(--err); color: var(--err); }
+.filters { display: flex; gap: 10px 16px; flex-wrap: wrap; align-items: center; }
+.field { display: flex; align-items: center; gap: 6px; color: var(--ink2); font-size: 13px; }
+select { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--axis); border-radius: 6px; padding: 6px 8px; }
+.seg { display: inline-flex; border: 1px solid var(--axis); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface); padding: 6px 10px; border-right: 1px solid var(--axis); }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+.kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.kpi .l { color: var(--ink2); font-size: 13px; display: flex; gap: 6px; align-items: center; }
+.kpi .v { font-size: 28px; font-weight: 650; line-height: 1.15; margin-top: 2px; }
+.kpi .s { color: var(--ink2); font-size: 12.5px; }
+
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 16px; align-items: start; }
+.col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.detail { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; }
+.chart { position: relative; width: 100%; }
+.chart svg { display: block; width: 100%; }
+svg text { font-family: var(--font); fill: var(--muted); font-size: 11.5px; }
+svg .ink { fill: var(--ink2); } svg .strong { fill: var(--ink); font-weight: 600; }
+svg .b0 { fill: var(--c0); } svg .b1 { fill: var(--c1); } svg .b2 { fill: var(--c2); } svg .b3 { fill: var(--c3); } svg .b4 { fill: var(--c4); }
+svg circle.dot { stroke: var(--surface); stroke-width: 1.5; }
+svg circle.sel { stroke: var(--ink); stroke-width: 2.5; }
+svg .rowhit { fill: transparent; cursor: pointer; }
+svg .rowhit:hover { fill: var(--wash); opacity: .6; }
+svg .rowsel { fill: var(--wash); }
+.legend { display: flex; gap: 6px 16px; flex-wrap: wrap; color: var(--ink2); font-size: 12.5px; margin-top: 8px; align-items: center; }
+.legend i { display: inline-block; vertical-align: middle; margin-right: 5px; }
+.l-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ink2); }
+.l-dia { width: 9px; height: 9px; background: var(--ink); transform: rotate(45deg); }
+.l-sq { width: 9px; height: 9px; border: 1.6px solid var(--ink); background: var(--surface); }
+
+.tablewrap { overflow-x: auto; margin-top: 8px; }
+table { width: 100%; border-collapse: collapse; min-width: 860px; }
+th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--axis); white-space: nowrap; }
+td { padding: 9px 8px; border-bottom: 1px solid var(--grid); vertical-align: middle; }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--wash); }
+tbody tr.sel { background: var(--wash); box-shadow: inset 3px 0 0 var(--accent); }
+tbody tr.warnrow { background: var(--warn-bg); }
+tbody tr.warnrow td { color: var(--warn-ink); }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+td input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
+.summary { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--wash); border-radius: 8px; padding: 10px 12px; margin-top: 10px; }
+
+.cal { display: grid; grid-template-columns: repeat(12, minmax(78px, 1fr)); gap: 4px; margin-top: 8px; min-width: 960px; }
+.calwrap { overflow-x: auto; }
+.cal .m { font-size: 12px; color: var(--muted); padding: 2px 4px; font-weight: 600; }
+.cal .cell { min-height: 64px; background: var(--wash); border-radius: 6px; padding: 4px; display: flex; flex-direction: column; gap: 3px; }
+.chip { display: flex; align-items: center; gap: 5px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; font-size: 12px; text-align: left; }
+.chip .sw { width: 9px; height: 9px; }
+
+.rb { position: relative; width: 100%; height: 26px; }
+.rb .track { position: absolute; left: 0; right: 0; top: 12px; height: 2px; background: var(--grid); }
+.rb .comps { position: absolute; top: 7px; height: 12px; border-radius: 6px; background: var(--axis); opacity: .75; }
+.rb .fair { position: absolute; top: 2px; width: 2px; height: 22px; background: var(--ink); transform: translateX(-1px); }
+.rb .ask { position: absolute; top: 5px; width: 16px; height: 16px; border-radius: 50%; transform: translateX(-8px); border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--ink2); }
+.rb .plm { position: absolute; top: 8px; width: 10px; height: 10px; transform: translateX(-5px); border: 1.8px solid var(--ink); background: var(--surface); }
+.scale { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink2); margin-top: 3px; font-variant-numeric: tabular-nums; }
+
+.d-title { font-size: 17px; font-weight: 650; }
+.d-price { display: flex; align-items: baseline; gap: 8px; margin: 10px 0 2px; }
+.d-price .big { font-size: 32px; font-weight: 700; line-height: 1.1; }
+.verdict { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-weight: 650; margin: 4px 0 12px; }
+.three { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 10px; }
+.three div { background: var(--wash); border-radius: 8px; padding: 6px 8px; font-size: 12px; color: var(--ink2); }
+.three b { display: block; font-size: 15px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.why { background: var(--wash); border-radius: 8px; padding: 10px 12px; margin: 12px 0; }
+.why .tag { font-size: 12px; color: var(--muted); display: block; margin-bottom: 2px; }
+.flagbox { background: var(--warn-bg); color: var(--warn-ink); border-radius: 8px; padding: 8px 10px; margin: 10px 0; font-size: 13px; }
+.sec { margin-top: 14px; }
+.scen { background: var(--wash); border-radius: 8px; padding: 12px; margin-top: 8px; }
+.scen input[type=range] { width: 100%; accent-color: var(--accent); }
+.scen .row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.scen .now { font-size: 24px; font-weight: 700; }
+.gain { color: var(--good); font-weight: 700; }
+.loss { color: var(--err); font-weight: 700; }
+.checks { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; }
+.checks li { display: flex; gap: 6px; }
+.checks .y { color: var(--good); font-weight: 700; } .checks .n { color: var(--err); font-weight: 700; }
+.push { border: 1.5px solid var(--ink); border-radius: 10px; padding: 12px; margin-top: 10px; }
+.push .kv { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 4px 8px; font-size: 12.5px; margin-top: 8px; }
+.push .kv span:nth-child(odd) { color: var(--muted); }
+.mini { min-width: 0; margin-top: 6px; }
+.mini th, .mini td { padding: 5px 4px; font-size: 12.5px; }
+.btn { background: var(--ink); color: var(--surface); border: 0; border-radius: 6px; padding: 8px 14px; font-weight: 600; }
+.btn.alt { background: none; color: var(--ink); border: 1px solid var(--axis); }
+.btnrow { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.timeline { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; font-size: 12px; }
+.timeline span { border: 1px solid var(--axis); border-radius: 999px; padding: 1px 9px; color: var(--muted); }
+.timeline span.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.timeline span.fail { background: var(--err); color: var(--surface); border-color: var(--err); }
+textarea { width: 100%; min-height: 110px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; color: var(--ink); background: var(--surface); border: 1px solid var(--axis); border-radius: 8px; padding: 10px; margin-top: 8px; }
+.msg { margin-top: 8px; font-size: 13px; }
+.msg.err { color: var(--err); } .msg.ok { color: var(--good); }
+pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); border-radius: 8px; padding: 12px; margin: 8px 0 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; line-height: 1.55; max-height: 460px; overflow: auto; }
+
+@media (max-width: 1060px) { .main { grid-template-columns: minmax(0, 1fr); } .detail { position: static; max-height: none; } }
+@media (max-width: 760px) { h1 { font-size: 22px; } }
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>My Units</h1>
+      <p class="sub">Are you charging too little or too much, how does it compare with the market and PriceLabs, and what should you change?</p>
+    </div>
+    <div class="filters">
+      <label class="field">Building <select id="bSel"></select></label>
+      <span class="field">Sort by
+        <span class="seg" id="sortSeg" role="group" aria-label="Sort units">
+          <button data-v="dev" aria-pressed="true">Biggest gap</button>
+          <button data-v="lease" aria-pressed="false">Lease ends soon</button>
+          <button data-v="name" aria-pressed="false">Unit name</button>
+        </span>
+      </span>
+    </div>
+  </div>
+
+  <div class="banner"><b>Made-up sample data, and sending is simulated.</b> <span id="stamp">Nothing in this mockup contacts PriceLabs. Try "Review and send" on any unit to see how an approved price change would flow.</span></div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="main">
+    <div class="col">
+      <div class="panel">
+        <div class="head"><h2>Your rent against the market and PriceLabs</h2><span class="note" id="chartNote"></span></div>
+        <p class="note">Dot = what you charge now. Diamond = our market price. Hollow square = PriceLabs recommendation. Click a row for details.</p>
+        <div class="chart" id="chart"></div>
+        <div class="legend"><span><i class="l-dot"></i>Rent now (colour = band)</span><span><i class="l-dia"></i>Our market price</span><span><i class="l-sq"></i>PriceLabs recommendation</span><span>Line = gap to market</span></div>
+        <div class="legend" id="bandKey"></div>
+      </div>
+
+      <div class="panel">
+        <div class="head"><h2>What to do next</h2><span class="note">Tick the moves you plan to make</span></div>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Apply</th><th>Unit</th><th class="num">Rent now</th><th class="num">Our market</th><th class="num">PriceLabs</th><th>Where you are</th><th>Lease ends</th><th>Suggested move</th><th class="num">Change / month</th></tr></thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+        <div class="summary" id="summary"></div>
+        <div id="bulk"></div>
+        <p class="note" style="margin-top:8px">Increases are capped at 10% per step and happen at lease renewal. Rent increases may also be limited by local law or by the lease. Check your rules before changing a rent.</p>
+      </div>
+
+      <div class="panel">
+        <div class="head"><h2>Change history</h2><span class="note">Everything sent to PriceLabs, with undo</span></div>
+        <div id="hist"></div>
+      </div>
+
+      <div class="panel">
+        <div class="head"><h2>When you can act: lease renewals</h2><span class="note">Next 12 months</span></div>
+        <p class="note">Each chip is a lease ending that month. That is your chance to change the rent.</p>
+        <div class="calwrap"><div class="cal" id="cal"></div></div>
+      </div>
+
+      <div class="panel">
+        <h2>Load my own units</h2>
+        <p class="note">Paste rows from a spreadsheet as comma-separated text. Required columns: unit, rent, market_rent. Optional: building, beds, size_m2, lease_end (like 2027-03), pricelabs_rec. In the real product market_rent and pricelabs_rec come from the scoring engine and your PriceLabs account.</p>
+        <textarea id="csv" aria-label="Units as CSV" spellcheck="false"></textarea>
+        <div class="btnrow">
+          <button class="btn" id="loadBtn">Load these units</button>
+          <button class="btn alt" id="sampleBtn">Reset to sample units</button>
+        </div>
+        <div class="msg" id="csvMsg" role="status"></div>
+      </div>
+
+      <div class="panel">
+        <div class="head"><h2>Prompt for Karim and Abbas</h2><button class="btn" id="copyBtn">Copy prompt</button></div>
+        <p class="note">Fill in the blanks in square brackets, then send. I assumed Karim builds the dashboard and Abbas builds the data, scoring and PriceLabs connection. Swap the names if needed.</p>
+        <pre id="prompt"></pre>
+      </div>
+    </div>
+
+    <aside class="panel detail" id="detail" aria-live="polite"></aside>
+  </div>
+</div>
+
+<script>
+(function () {
+  function $(s) { return document.querySelector(s); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function money(n) { return (n < 0 ? '−$' : '$') + Math.round(Math.abs(n)).toLocaleString('en-US'); }
+  function signedMoney(n) { return (n < 0 ? '−$' : n > 0 ? '+$' : '$') + Math.round(Math.abs(n)).toLocaleString('en-US'); }
+  function pct(d, sg) { var v = Math.round(Math.abs(d) * 100); return sg ? (d < 0 ? '−' : d > 0 ? '+' : '') + v + '%' : v + '%'; }
+  function mulberry(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; var t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  var BAND = [
+    { label: 'Far below market', arrow: '▼', rule: 'More than 15% under' }, { label: 'Below market', arrow: '▼', rule: '5% to 15% under' },
+    { label: 'On target', arrow: '●', rule: 'Within 5%' }, { label: 'Above market', arrow: '▲', rule: '5% to 15% over' },
+    { label: 'Far above market', arrow: '▲', rule: 'More than 15% over' }
+  ];
+  function bandOf(d) { return d <= -0.15 ? 0 : d <= -0.05 ? 1 : d < 0.05 ? 2 : d < 0.15 ? 3 : 4; }
+  function pill(b) { return '<span class="pill"><i class="sw b' + b + '"></i>' + BAND[b].arrow + ' ' + BAND[b].label + '</span>'; }
+  var MNAME = ['Oct 2026', 'Nov 2026', 'Dec 2026', 'Jan 2027', 'Feb 2027', 'Mar 2027', 'Apr 2027', 'May 2027', 'Jun 2027', 'Jul 2027', 'Aug 2027', 'Sep 2027', 'Oct 2027'];
+  var CAP = 0.10, DAILY = 20, AGREE = 0.07;
+
+  // name, building, beds, size, rent now, our market price, lease end (months from Oct 2026), PriceLabs recommendation
+  var SAMPLE = [
+    ['H-1A', 'Harbor Court', 2, 78, 1180, 1420, 5, 1390], ['H-2B', 'Harbor Court', 2, 72, 1350, 1480, 2, 1510], ['H-3C', 'Harbor Court', 3, 104, 1890, 1610, 6, 1540], ['H-4D', 'Harbor Court', 2, 80, 1510, 1560, 10, 1575],
+    ['O-1A', 'Old Town Lofts', 1, 44, 940, 1100, 3, 1120], ['O-2A', 'Old Town Lofts', 2, 70, 1290, 1300, 8, 1250], ['O-3B', 'Old Town Lofts', 2, 74, 1640, 1520, 4, 1490], ['O-4C', 'Old Town Lofts', 1, 42, 1130, 1090, 12, 1000],
+    ['R-1A', 'Riverside Flats', 1, 46, 1020, 1000, 1, 1010], ['R-2B', 'Riverside Flats', 3, 118, 2050, 1720, 11, 1860], ['R-3A', 'Riverside Flats', 2, 76, 1240, 1480, 2, 1470], ['R-4C', 'Riverside Flats', 1, 40, 980, 1110, 9, 1125]
+  ];
+  var units = [], hist = [], S = { bld: 'all', sort: 'dev', sel: 0, sent: 0, confirm: null, bulk: null };
+
+  // recompute everything that depends on the current rent
+  function derive(u) {
+    u.dev = (u.now - u.fair) / u.fair; u.band = bandOf(u.dev);
+    u.agree = u.pl == null || Math.abs(u.pl - u.fair) / u.fair <= AGREE;
+    var ref = u.pl == null ? u.fair : (u.fair + u.pl) / 2;
+    u.sug = !u.agree ? u.now : u.band <= 1 ? Math.round(ref * 0.97 / 10) * 10 : u.band === 2 ? u.now : Math.round(ref * 1.03 / 10) * 10;
+    u.step = u.sug > u.now ? Math.min(u.sug, Math.floor(u.now * (1 + CAP) / 10) * 10) : u.sug;
+    u.conf = u.comps >= 20 ? 'High' : u.comps >= 12 ? 'Medium' : 'Low';
+  }
+  function build(rows) {
+    units = rows.map(function (r, i) {
+      var u = { id: i, name: r[0], bld: r[1], beds: r[2], size: r[3], now: r[4], fair: r[5], ends: r[6], pl: r[7] == null ? null : r[7], comps: i === 0 ? 22 : i === 2 ? 10 : 14 + (i * 5) % 27, status: null };
+      derive(u); u.apply = u.band !== 2 && u.agree && u.step !== u.now; return u;
+    });
+    hist = []; S.sent = 0; S.confirm = null; S.bulk = null;
+  }
+  build(SAMPLE);
+
+  function sortedUnits() {
+    var L = units.filter(function (u) { return S.bld === 'all' || u.bld === S.bld; });
+    L.sort(function (a, b) { return S.sort === 'dev' ? a.dev - b.dev : S.sort === 'lease' ? a.ends - b.ends : a.name.localeCompare(b.name); });
+    return L;
+  }
+  function endLabel(u) { return u.ends >= 0 && u.ends < MNAME.length ? MNAME[u.ends] : 'Later'; }
+  function wOf(el) { return Math.max(260, el.clientWidth); }
+
+  // guardrails, the same rules the server will enforce
+  function validate(u, v) {
+    var ch = v - u.now;
+    return [
+      { ok: ch !== 0, t: 'New price is different from today' },
+      { ok: ch <= 0 || ch / u.now <= CAP + 1e-9, t: 'Increase within the ' + pct(CAP) + ' single-step cap' },
+      { ok: v >= u.fair * 0.8 && v <= u.fair * 1.2, t: 'Inside floor and ceiling (80% to 120% of market)' },
+      { ok: u.conf !== 'Low', t: 'Confidence is ' + u.conf + ' (' + u.comps + ' comparables)' },
+      { ok: u.agree, t: 'Our market price and PriceLabs agree within 7%' },
+      { ok: S.sent < DAILY, t: 'Under today\'s limit of ' + DAILY + ' changes' }
+    ];
+  }
+  function allOk(c) { return c.every(function (x) { return x.ok; }); }
+  function checkList(c) { return '<ul class="checks">' + c.map(function (x) { return '<li><span class="' + (x.ok ? 'y' : 'n') + '">' + (x.ok ? '✔' : '✖') + '</span><span>' + esc(x.t) + '</span></li>'; }).join('') + '</ul>'; }
+
+  // simulated send: Proposed -> Approved -> Sent -> Confirmed
+  function send(u, v, eff) {
+    var rec = { id: hist.length, uid: u.id, name: u.name, old: u.now, nw: v, eff: eff, st: 'Approved', at: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+    hist.unshift(rec); u.status = rec; S.sent++;
+    renderAll();
+    setTimeout(function () { rec.st = 'Sent'; renderAll(); }, 700);
+    setTimeout(function () { rec.st = 'Confirmed'; u.now = v; derive(u); u.apply = false; renderAll(); }, 1500);
+  }
+  function undo(rec) {
+    var u = units[rec.uid]; if (!u) return;
+    rec.st = 'Undone'; u.now = rec.old; derive(u); u.apply = u.band !== 2 && u.agree && u.step !== u.now; u.status = null; renderAll();
+  }
+
+  // ----- controls -----
+  function renderControls() {
+    var blds = []; units.forEach(function (u) { if (blds.indexOf(u.bld) < 0) blds.push(u.bld); });
+    $('#bSel').innerHTML = '<option value="all">All buildings</option>' + blds.map(function (b) { return '<option>' + esc(b) + '</option>'; }).join('');
+    $('#bSel').value = blds.indexOf(S.bld) < 0 ? 'all' : S.bld; S.bld = $('#bSel').value;
+    document.querySelectorAll('#sortSeg button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-v') === S.sort)); });
+  }
+  $('#bSel').addEventListener('change', function (e) { S.bld = e.target.value; renderAll(); });
+  document.querySelectorAll('#sortSeg button').forEach(function (b) { b.addEventListener('click', function () { S.sort = b.getAttribute('data-v'); renderAll(); }); });
+
+  // ----- KPIs -----
+  function renderKPIs() {
+    var L = units.filter(function (u) { return S.bld === 'all' || u.bld === S.bld; });
+    var below = L.filter(function (u) { return u.band <= 1; }), above = L.filter(function (u) { return u.band >= 3; }), ok = L.filter(function (u) { return u.band === 2; });
+    var dis = L.filter(function (u) { return !u.agree; });
+    var room = below.reduce(function (s, u) { return s + (u.fair - u.now); }, 0);
+    var nowTotal = L.reduce(function (s, u) { return s + u.now; }, 0), fairTotal = L.reduce(function (s, u) { return s + u.fair; }, 0);
+    $('#kpis').innerHTML =
+      '<div class="kpi"><div class="l"><i class="sw b1"></i>▼ Underpriced units</div><div class="v">' + below.length + '</div><div class="s">of ' + L.length + ' apartments</div></div>' +
+      '<div class="kpi"><div class="l">Room to raise rent</div><div class="v">' + signedMoney(room) + '</div><div class="s">per month, ' + signedMoney(room * 12) + ' per year</div></div>' +
+      '<div class="kpi"><div class="l"><i class="sw b3"></i>▲ Vacancy risk</div><div class="v">' + above.length + '</div><div class="s">units priced above market</div></div>' +
+      '<div class="kpi"><div class="l"><i class="sw b2"></i>● On target</div><div class="v">' + ok.length + '</div><div class="s">within 5% of market</div></div>' +
+      '<div class="kpi"><div class="l">⚠ Sources disagree</div><div class="v">' + dis.length + '</div><div class="s">PriceLabs and our price differ over 7%. Check first.</div></div>' +
+      '<div class="kpi"><div class="l">Monthly rent roll</div><div class="v">' + money(nowTotal) + '</div><div class="s">market would pay ' + money(fairTotal) + '</div></div>';
+  }
+
+  // ----- three-price chart -----
+  function renderChart() {
+    var L = sortedUnits(), el = $('#chart'), W = wOf(el), wide = W > 620, rowH = 34, m = { l: 66, r: wide ? 200 : 12, t: 26, b: 6 }, H = m.t + L.length * rowH + m.b;
+    $('#chartNote').textContent = L.length + ' unit' + (L.length === 1 ? '' : 's');
+    if (!L.length) { el.innerHTML = '<p class="sm" style="padding:16px 0">No units in this building.</p>'; return; }
+    var vals = []; L.forEach(function (u) { vals.push(u.now, u.fair); if (u.pl != null) vals.push(u.pl); });
+    var lo = Math.floor(Math.min.apply(null, vals) / 250) * 250 - 250, hi = Math.ceil(Math.max.apply(null, vals) / 250) * 250 + 250;
+    lo = Math.max(0, lo);
+    var pw = W - m.l - m.r, X = function (v) { return m.l + (v - lo) / (hi - lo) * pw; }, s = '';
+    for (var t = Math.ceil(lo / 250) * 250; t <= hi; t += 250) {
+      s += '<line x1="' + X(t) + '" x2="' + X(t) + '" y1="' + (m.t - 8) + '" y2="' + (H - m.b) + '" stroke="var(--grid)"/>';
+      if (W > 420 || (t / 250) % 2 === 0) s += '<text x="' + X(t) + '" y="12" text-anchor="middle">' + money(t) + '</text>';
+    }
+    L.forEach(function (u, i) {
+      var y = m.t + i * rowH + rowH / 2, xn = X(u.now), xf = X(u.fair), gap = u.fair - u.now;
+      if (u.id === S.sel) s += '<rect class="rowsel" x="0" y="' + (y - rowH / 2) + '" width="' + W + '" height="' + rowH + '" rx="6"/>';
+      s += '<text class="strong" x="' + (m.l - 10) + '" y="' + (y + 4) + '" text-anchor="end">' + esc(u.name) + '</text>';
+      s += '<line x1="' + xn + '" x2="' + xf + '" y1="' + y + '" y2="' + y + '" stroke="var(--ink2)" stroke-width="2.5" stroke-linecap="round"/>';
+      if (u.pl != null) s += '<rect x="' + (X(u.pl) - 5) + '" y="' + (y - 5) + '" width="10" height="10" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.7"/>';
+      s += '<path d="M' + xf + ' ' + (y - 7) + ' L' + (xf + 7) + ' ' + y + ' L' + xf + ' ' + (y + 7) + ' L' + (xf - 7) + ' ' + y + ' Z" fill="var(--ink)"/>';
+      s += '<circle class="dot b' + u.band + (u.id === S.sel ? ' sel' : '') + '" cx="' + xn + '" cy="' + y + '" r="8"/>';
+      if (wide) {
+        var txt = u.band === 2 ? 'On target' : gap > 0 ? 'Leaving ' + money(gap) + ' a month' : 'Over by ' + money(-gap) + ' a month';
+        s += '<text class="ink" x="' + (W - m.r + 14) + '" y="' + (y + 4) + '">' + BAND[u.band].arrow + ' ' + txt + (u.agree ? '' : '  ⚠') + '</text>';
+      }
+      s += '<rect class="rowhit" data-id="' + u.id + '" x="0" y="' + (y - rowH / 2) + '" width="' + W + '" height="' + rowH + '"><title>' + esc(u.name) + ': ' + money(u.now) + ' now, ' + money(u.fair) + ' market' + (u.pl != null ? ', PriceLabs ' + money(u.pl) : '') + '</title></rect>';
+    });
+    el.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="Chart of rent now, our market price and PriceLabs recommendation for ' + L.length + ' units">' + s + '</svg>';
+    el.querySelectorAll('.rowhit').forEach(function (r) { r.addEventListener('click', function () { pick(+r.getAttribute('data-id'), true); }); });
+    $('#bandKey').innerHTML = BAND.map(function (b, i) { return '<span><i class="sw b' + i + '"></i>' + b.arrow + ' ' + b.label + ' <span class="note">(' + b.rule + ')</span></span>'; }).join('');
+  }
+
+  // ----- table -----
+  function moveText(u) {
+    if (!u.agree) return '⚠ Review: sources disagree';
+    if (u.band <= 1) return '▲ Raise to ' + money(u.step) + (u.step < u.sug ? '<div class="sm">then ' + money(u.sug) + ' at next review</div>' : '');
+    if (u.band === 2) return '● Keep as is';
+    return '▼ Lower to ' + money(u.sug) + ' to avoid an empty unit';
+  }
+  function statusChip(u) { return u.status && u.status.st !== 'Undone' ? ' <span class="stat ' + (u.status.st === 'Confirmed' ? 'ok' : '') + '">' + u.status.st + '</span>' : ''; }
+  function renderTable() {
+    var L = sortedUnits();
+    $('#rows').innerHTML = L.length ? L.map(function (u) {
+      var ch = u.step - u.now, can = ch !== 0 && u.agree;
+      return '<tr tabindex="0" data-id="' + u.id + '" class="' + (u.id === S.sel ? 'sel ' : '') + (u.agree ? '' : 'warnrow') + '"><td><input type="checkbox" data-c="' + u.id + '" aria-label="Apply move for ' + esc(u.name) + '"' + (u.apply && can ? ' checked' : '') + (can ? '' : ' disabled') + '></td>' +
+        '<td><b>' + esc(u.name) + '</b><div class="sm">' + esc(u.bld) + '</div></td><td class="num">' + money(u.now) + '</td><td class="num">' + money(u.fair) + '</td>' +
+        '<td class="num">' + (u.pl == null ? '<span class="sm">not linked</span>' : money(u.pl) + (u.agree ? '' : '<div class="sm">' + pct((u.pl - u.fair) / u.fair, true) + ' vs ours</div>')) + '</td>' +
+        '<td>' + pill(u.band) + (u.band === 2 ? '' : ' <span class="sm">' + pct(u.dev) + (u.dev < 0 ? ' under' : ' over') + '</span>') + '</td>' +
+        '<td class="sm">' + endLabel(u) + '</td><td>' + moveText(u) + statusChip(u) + '</td><td class="num">' + (ch === 0 || !u.agree ? '<span class="sm">none</span>' : '<span class="' + (ch > 0 ? 'gain' : 'loss') + '">' + signedMoney(ch) + '</span>') + '</td></tr>';
+    }).join('') : '<tr><td colspan="9" class="sm" style="padding:18px 8px">No units in this building.</td></tr>';
+    document.querySelectorAll('#rows tr[data-id]').forEach(function (tr) {
+      function go(e) { if (e.target && e.target.type === 'checkbox') return; pick(+tr.getAttribute('data-id'), true); }
+      tr.addEventListener('click', go);
+      tr.addEventListener('keydown', function (e) { if (e.key === 'Enter') go(e); });
+    });
+    document.querySelectorAll('#rows input[data-c]').forEach(function (c) {
+      c.addEventListener('change', function () { units[+c.getAttribute('data-c')].apply = c.checked; S.bulk = null; renderSummary(); renderBulk(); });
+    });
+    renderSummary(); renderBulk();
+  }
+  function ticked() { return sortedUnits().filter(function (u) { return u.apply && u.agree && u.step !== u.now; }); }
+  function renderSummary() {
+    var L = ticked(), d = L.reduce(function (s, u) { return s + (u.step - u.now); }, 0);
+    $('#summary').innerHTML = '<span>' + L.length + ' move' + (L.length === 1 ? '' : 's') + ' ticked · effect on rent roll: <b class="' + (d >= 0 ? 'gain' : 'loss') + '">' + signedMoney(d) + ' / month</b> · <b class="' + (d >= 0 ? 'gain' : 'loss') + '">' + signedMoney(d * 12) + ' / year</b></span>' +
+      '<button class="btn" id="bulkBtn"' + (L.length ? '' : ' disabled') + '>Review and send ticked moves</button>';
+    $('#bulkBtn').addEventListener('click', function () { S.bulk = { confirm: false }; renderBulk(); });
+  }
+  function renderBulk() {
+    var el = $('#bulk');
+    if (!S.bulk) { el.innerHTML = ''; return; }
+    var L = ticked(), pass = [], rows = L.map(function (u) {
+      var c = validate(u, u.step), ok = allOk(c); if (ok) pass.push(u);
+      var bad = c.filter(function (x) { return !x.ok; }).map(function (x) { return x.t; }).join('; ');
+      return '<tr><td><b>' + esc(u.name) + '</b></td><td class="num">' + money(u.now) + '</td><td class="num">' + money(u.step) + '</td><td class="num"><span class="' + (u.step > u.now ? 'gain' : 'loss') + '">' + signedMoney(u.step - u.now) + '</span></td><td>' + (ok ? '<span class="stat ok">✔ Passes all checks</span>' : '<span class="stat bad">✖ ' + esc(bad) + '</span>') + '</td></tr>';
+    }).join('');
+    var tot = pass.reduce(function (s, u) { return s + (u.step - u.now); }, 0);
+    el.innerHTML = '<div class="push"><h2>Review ' + L.length + ' change' + (L.length === 1 ? '' : 's') + ' before sending to PriceLabs</h2><div class="tablewrap"><table class="mini" style="min-width:560px"><thead><tr><th>Unit</th><th class="num">Now</th><th class="num">New</th><th class="num">Change</th><th>Checks</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<p class="sm" style="margin-top:8px">' + pass.length + ' of ' + L.length + ' can be sent. Effect: <b class="' + (tot >= 0 ? 'gain' : 'loss') + '">' + signedMoney(tot) + ' / month, ' + signedMoney(tot * 12) + ' / year</b>. Failing changes are skipped.</p>' +
+      (S.bulk.confirm ? '<p style="margin-top:8px"><b>Send ' + pass.length + ' change' + (pass.length === 1 ? '' : 's') + ' to PriceLabs now?</b> A 5 minute delay lets you cancel in the real product.</p><div class="btnrow"><button class="btn" id="bulkYes">Yes, send</button><button class="btn alt" id="bulkNo">Back</button></div>'
+        : '<div class="btnrow"><button class="btn" id="bulkGo"' + (pass.length ? '' : ' disabled') + '>Approve and send to PriceLabs</button><button class="btn alt" id="bulkCancel">Cancel</button></div>') + '</div>';
+    var g = $('#bulkGo'); if (g) g.addEventListener('click', function () { S.bulk.confirm = true; renderBulk(); });
+    var n = $('#bulkNo'); if (n) n.addEventListener('click', function () { S.bulk.confirm = false; renderBulk(); });
+    var c = $('#bulkCancel'); if (c) c.addEventListener('click', function () { S.bulk = null; renderBulk(); });
+    var y = $('#bulkYes'); if (y) y.addEventListener('click', function () { var go = pass.slice(); S.bulk = null; go.forEach(function (u, i) { setTimeout(function () { send(u, u.step, 'Lease renewal, ' + endLabel(u)); }, i * 250); }); renderBulk(); });
+  }
+
+  // ----- history -----
+  function renderHist() {
+    if (!hist.length) { $('#hist').innerHTML = '<p class="sm" style="margin-top:8px">No changes yet. Approved changes appear here with who, when, old and new price and status.</p>'; return; }
+    $('#hist').innerHTML = '<div class="tablewrap"><table style="min-width:620px"><thead><tr><th>Time</th><th>Unit</th><th class="num">Old</th><th class="num">New</th><th>Effective</th><th>Status</th><th></th></tr></thead><tbody>' + hist.map(function (h, i) {
+      return '<tr style="cursor:default"><td class="sm">' + h.at + '</td><td><b>' + esc(h.name) + '</b></td><td class="num">' + money(h.old) + '</td><td class="num">' + money(h.nw) + '</td><td class="sm">' + esc(h.eff) + '</td><td><span class="stat ' + (h.st === 'Confirmed' ? 'ok' : h.st === 'Undone' ? '' : '') + '">' + h.st + '</span></td><td>' + (h.st === 'Confirmed' ? '<button class="btn alt" data-u="' + i + '" style="padding:3px 10px">Undo</button>' : '') + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
+    document.querySelectorAll('#hist [data-u]').forEach(function (b) { b.addEventListener('click', function () { undo(hist[+b.getAttribute('data-u')]); }); });
+  }
+
+  // ----- calendar -----
+  function renderCal() {
+    var L = sortedUnits(), s = '';
+    for (var i = 1; i <= 12; i++) {
+      var here = L.filter(function (u) { return u.ends === i; });
+      s += '<div><div class="m">' + MNAME[i] + '</div><div class="cell">' + (here.length ? here.map(function (u) {
+        return '<button class="chip" data-id="' + u.id + '"><i class="sw b' + u.band + '"></i>' + BAND[u.band].arrow + ' ' + esc(u.name) + '</button>';
+      }).join('') : '<span class="note">—</span>') + '</div></div>';
+    }
+    $('#cal').innerHTML = s;
+    $('#cal').querySelectorAll('.chip').forEach(function (c) { c.addEventListener('click', function () { pick(+c.getAttribute('data-id'), true); }); });
+  }
+
+  // ----- detail -----
+  function rangeBar(u) {
+    var fair = u.fair, lo = 0.65, hi = 1.35, f = function (r) { return Math.min(97, Math.max(3, (r - lo) / (hi - lo) * 100)); }, c1 = f(0.88), c2 = f(1.12);
+    return '<div class="rb"><div class="track"></div><div class="comps" style="left:' + c1 + '%;width:' + (c2 - c1) + '%"></div><div class="fair" style="left:50%"></div>' +
+      (u.pl != null ? '<div class="plm" style="left:' + f(u.pl / fair) + '%"></div>' : '') +
+      '<div class="ask b' + u.band + '" style="left:' + f(u.now / fair) + '%"></div></div>' +
+      '<div class="scale"><span>' + money(fair * 0.88) + '</span><span>market ' + money(fair) + '</span><span>' + money(fair * 1.12) + '</span></div>';
+  }
+  function trend(u, W) {
+    var r = mulberry(u.id * 31 + 7), r2 = mulberry(u.id * 17 + 3), pts = [], pl = [], H = 160, m = { l: 44, r: 12, t: 10, b: 24 };
+    for (var i = 0; i < 12; i++) { pts.push(u.fair * (1 - 0.07 * (11 - i) / 11) * (1 + (r() - .5) * 0.014)); if (u.pl != null) pl.push(u.pl * (1 - 0.065 * (11 - i) / 11) * (1 + (r2() - .5) * 0.016)); }
+    pts[11] = u.fair; if (u.pl != null) pl[11] = u.pl;
+    var all = pts.concat(pl, [u.now]), lo = Math.floor(Math.min.apply(null, all) * 0.97 / 50) * 50, hi = Math.ceil(Math.max.apply(null, all) * 1.03 / 50) * 50;
+    var pw = W - m.l - m.r, ph = H - m.t - m.b, X = function (i) { return m.l + i / 11 * pw; }, Y = function (v) { return m.t + ph - (v - lo) / (hi - lo) * ph; }, s = '';
+    [lo, (lo + hi) / 2, hi].forEach(function (t) { s += '<line x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + Y(t) + '" y2="' + Y(t) + '" stroke="var(--grid)"/><text x="' + (m.l - 6) + '" y="' + (Y(t) + 4) + '" text-anchor="end">' + money(t) + '</text>'; });
+    s += '<path d="' + pts.map(function (v, i) { return (i ? 'L' : 'M') + X(i) + ' ' + Y(v); }).join(' ') + '" fill="none" stroke="var(--ink)" stroke-width="2.5" stroke-linejoin="round"/>';
+    if (u.pl != null) s += '<path d="' + pl.map(function (v, i) { return (i ? 'L' : 'M') + X(i) + ' ' + Y(v); }).join(' ') + '" fill="none" stroke="var(--pl)" stroke-width="2.2" stroke-linejoin="round"/>';
+    s += '<line x1="' + X(0) + '" x2="' + X(11) + '" y1="' + Y(u.now) + '" y2="' + Y(u.now) + '" stroke="var(--ink2)" stroke-width="2" stroke-dasharray="5 4"/>';
+    s += '<circle class="dot b' + u.band + '" cx="' + X(11) + '" cy="' + Y(u.now) + '" r="6"/>';
+    s += '<text x="' + X(0) + '" y="' + (H - 6) + '">12 months ago</text><text x="' + X(11) + '" y="' + (H - 6) + '" text-anchor="end">Now</text>';
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="Market price, PriceLabs recommendation and your rent over 12 months">' + s + '</svg>' +
+      '<div class="legend"><span><i style="display:inline-block;width:22px;height:0;border-top:2.5px solid var(--ink)"></i>Our market price</span>' + (u.pl != null ? '<span><i style="display:inline-block;width:22px;height:0;border-top:2.5px solid var(--pl)"></i>PriceLabs</span>' : '') + '<span><i style="display:inline-block;width:22px;height:0;border-top:2px dashed var(--ink2)"></i>Your rent</span></div>';
+  }
+  function comps(u) {
+    var r = mulberry(u.id * 977 + 13), out = [];
+    for (var i = 0; i < 5; i++) { var size = Math.round(u.size * (0.88 + r() * 0.24)), pm = u.fair / (u.size || 1) * (0.93 + r() * 0.14); out.push([size, Math.round(size * pm / 10) * 10, pm]); }
+    return out;
+  }
+  function renderDetail() {
+    var u = units[S.sel] || units[0], el = $('#detail');
+    if (!u) { el.innerHTML = '<p class="sm">Pick a unit to see details.</p>'; return; }
+    var gap = u.fair - u.now, why;
+    if (!u.agree) why = 'Our market price and PriceLabs differ by ' + pct((u.pl - u.fair) / u.fair) + '. Check the comparable listings and your PriceLabs settings first. No change is suggested until a person has looked.';
+    else if (u.band <= 1) why = 'Your rent is ' + pct(u.dev) + ' under similar ' + u.beds + '-bedroom apartments. You could earn ' + money(gap) + ' more a month, ' + money(gap * 12) + ' a year. A single increase is capped at 10%, so ' + (u.step < u.sug ? 'the first step is ' + money(u.step) + ' and the next review moves it to ' + money(u.sug) + '.' : 'one step to ' + money(u.step) + ' reaches the target.');
+    else if (u.band === 2) why = 'Your rent is in line with the market. Leave it alone and focus on units with a bigger gap.';
+    else why = 'Your rent is ' + pct(u.dev) + ' above similar apartments. Expect a longer empty period if this unit turns over. A cut of ' + money(-gap) + ' a month would bring it back in line.';
+    var start = Math.min(Math.max(u.step, Math.round(u.fair * 0.8 / 10) * 10), Math.round(u.fair * 1.2 / 10) * 10);
+    el.innerHTML =
+      '<div class="d-title">' + esc(u.name) + ' · ' + esc(u.bld) + '</div><div class="sm">' + u.beds + ' bed · ' + u.size + ' m² · lease ends ' + endLabel(u) + '</div>' +
+      '<div class="d-price"><span class="big">' + money(u.now) + '</span><span class="sm">per month now</span></div>' +
+      '<div class="verdict">' + pill(u.band) + '<span>' + (u.band === 2 ? 'On target' : pct(u.dev) + (u.dev < 0 ? ' under market' : ' over market')) + '</span></div>' +
+      '<div class="three"><div>Rent now<b>' + money(u.now) + '</b></div><div>Our market<b>' + money(u.fair) + '</b></div><div>PriceLabs<b>' + (u.pl == null ? '—' : money(u.pl)) + '</b></div></div>' +
+      rangeBar(u) +
+      (u.agree ? '' : '<div class="flagbox"><b>⚠ Sources disagree.</b> Review before changing this rent.</div>') +
+      '<div class="why"><span class="tag">What this means</span>' + why + '</div>' +
+      '<div class="sec"><h2>Market and PriceLabs against your rent, last 12 months</h2><div class="chart" id="dTrend"></div></div>' +
+      '<div class="sec"><h2>Review and send to PriceLabs</h2><div class="scen"><div class="row"><span class="now" id="scNow"></span><span id="scPill"></span></div>' +
+      '<input type="range" id="scRange" min="' + Math.round(u.fair * 0.8 / 10) * 10 + '" max="' + Math.round(u.fair * 1.2 / 10) * 10 + '" step="10" value="' + start + '" aria-label="New rent for ' + esc(u.name) + '">' +
+      '<div class="scale"><span>' + money(Math.round(u.fair * 0.8 / 10) * 10) + '</span><span>drag to try a price</span><span>' + money(Math.round(u.fair * 1.2 / 10) * 10) + '</span></div><div class="msg" id="scMsg" style="margin-top:6px"></div></div>' +
+      '<div class="push" id="pushBox"></div></div>' +
+      '<div class="sec"><h2>Similar apartments compared</h2><table class="mini"><thead><tr><th>Size</th><th class="num">Rent</th><th class="num">Per m²</th></tr></thead><tbody>' +
+      comps(u).map(function (c) { return '<tr style="cursor:default"><td>' + c[0] + ' m²</td><td class="num">' + money(c[1]) + '</td><td class="num">' + money(c[2]) + '</td></tr>'; }).join('') + '</tbody></table></div>';
+    var tw = $('#dTrend'); tw.innerHTML = trend(u, Math.max(240, tw.clientWidth || 320));
+    var eff = 'Lease renewal, ' + endLabel(u);
+    function scen() {
+      var v = +$('#scRange').value, d = (v - u.fair) / u.fair, b = bandOf(d), ch = v - u.now;
+      $('#scNow').textContent = money(v); $('#scPill').innerHTML = pill(b);
+      var msg = ch === 0 ? 'Same as today.' : '<span class="' + (ch > 0 ? 'gain' : 'loss') + '">' + signedMoney(ch) + ' / month · ' + signedMoney(ch * 12) + ' / year</span>';
+      $('#scMsg').innerHTML = msg;
+      var c = validate(u, v), ok = allOk(c), cf = S.confirm && S.confirm.uid === u.id && S.confirm.v === v, last = u.status;
+      var tl = '';
+      if (last && last.st !== 'Undone') {
+        var steps = ['Proposed', 'Approved', 'Sent', 'Confirmed'], idx = steps.indexOf(last.st);
+        tl = '<div class="timeline">' + steps.map(function (x, i) { return '<span class="' + (i <= idx ? 'on' : '') + '">' + x + '</span>'; }).join('') + '</div><p class="sm" style="margin-top:6px">' + (last.st === 'Confirmed' ? 'PriceLabs now shows ' + money(last.nw) + ' (read back and matched).' : 'Working…') + '</p>';
+      }
+      $('#pushBox').innerHTML = '<div class="kv"><span>Unit</span><span>' + esc(u.name) + ' · ' + esc(u.bld) + '</span><span>Price in PriceLabs</span><span>' + money(u.now) + ' per month (read 06:00 today)</span><span>Proposed</span><span><b>' + money(v) + '</b> (' + signedMoney(ch) + ', ' + pct(ch / u.now, true) + ')</span><span>Effective from</span><span>' + esc(eff) + '</span></div>' + checkList(c) + tl +
+        (cf ? '<p style="margin-top:10px"><b>Send ' + money(v) + ' for ' + esc(u.name) + ' to PriceLabs?</b></p><div class="btnrow"><button class="btn" id="yes">Yes, send</button><button class="btn alt" id="no">Back</button></div>'
+          : '<div class="btnrow"><button class="btn" id="go"' + (ok ? '' : ' disabled') + '>Approve and send to PriceLabs</button></div>' + (ok ? '' : '<p class="sm" style="margin-top:6px">Fix the ✖ items to enable sending.</p>')) +
+        '<p class="note" style="margin-top:8px">Simulated in this mockup. Nothing is sent anywhere.</p>';
+      var g = $('#go'); if (g) g.addEventListener('click', function () { S.confirm = { uid: u.id, v: v }; scen(); });
+      var n = $('#no'); if (n) n.addEventListener('click', function () { S.confirm = null; scen(); });
+      var y = $('#yes'); if (y) y.addEventListener('click', function () { S.confirm = null; send(u, v, eff); });
+    }
+    $('#scRange').addEventListener('input', function () { S.confirm = null; scen(); }); scen();
+  }
+
+  function pick(id, scroll) { S.sel = id; S.confirm = null; renderAll(); if (scroll && innerWidth <= 1060) $('#detail').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+
+  // ----- CSV import -----
+  var SAMPLE_CSV = 'unit,building,beds,size_m2,rent,market_rent,pricelabs_rec,lease_end\nA-1,Sunrise House,2,75,1250,1420,1400,2027-02\nA-2,Sunrise House,1,44,980,960,970,2026-12\nB-1,Park View,3,110,2100,1850,1900,2027-05\nB-2,Park View,2,70,1300,1310,1330,2027-08';
+  $('#csv').value = SAMPLE_CSV;
+  $('#loadBtn').addEventListener('click', function () {
+    var lines = $('#csv').value.trim().split(/\r?\n/).filter(Boolean), msg = $('#csvMsg');
+    if (lines.length < 2) { msg.className = 'msg err'; msg.textContent = 'Add a header row and at least one unit.'; return; }
+    var head = lines[0].split(',').map(function (h) { return h.trim().toLowerCase(); }), idx = function (n) { return head.indexOf(n); };
+    var miss = ['unit', 'rent', 'market_rent'].filter(function (n) { return idx(n) < 0; });
+    if (miss.length) { msg.className = 'msg err'; msg.textContent = 'Missing column: ' + miss.join(', ') + '.'; return; }
+    var rows = [], bad = [];
+    lines.slice(1).forEach(function (ln, k) {
+      var c = ln.split(',').map(function (x) { return x.trim(); }), rent = +c[idx('rent')], mk = +c[idx('market_rent')];
+      if (!c[idx('unit')] || !(rent > 0) || !(mk > 0)) { bad.push(k + 2); return; }
+      var le = idx('lease_end') >= 0 ? /^(\d{4})-(\d{2})$/.exec(c[idx('lease_end')] || '') : null, ends = le ? (+le[1] - 2026) * 12 + (+le[2] - 10) : -1;
+      var pl = idx('pricelabs_rec') >= 0 && +c[idx('pricelabs_rec')] > 0 ? +c[idx('pricelabs_rec')] : null;
+      rows.push([c[idx('unit')], idx('building') >= 0 && c[idx('building')] ? c[idx('building')] : 'My building', idx('beds') >= 0 ? +c[idx('beds')] || 0 : 0, idx('size_m2') >= 0 ? +c[idx('size_m2')] || 0 : 0, rent, mk, ends, pl]);
+    });
+    if (!rows.length) { msg.className = 'msg err'; msg.textContent = 'No valid rows. Rent and market_rent must be numbers. Problem lines: ' + bad.join(', ') + '.'; return; }
+    build(rows); S.bld = 'all'; S.sel = 0; renderAll();
+    msg.className = 'msg ok'; msg.textContent = 'Loaded ' + rows.length + ' unit' + (rows.length === 1 ? '' : 's') + (bad.length ? '. Skipped lines: ' + bad.join(', ') : '') + '.';
+    $('#stamp').textContent = 'Showing the units you pasted. Market and PriceLabs numbers are the ones you supplied. Sending is still simulated.';
+  });
+  $('#sampleBtn').addEventListener('click', function () { build(SAMPLE); S.bld = 'all'; S.sel = 0; renderAll(); $('#csvMsg').textContent = ''; });
+
+  // ----- prompt -----
+  var PROMPT = "PROJECT\nRent Watch \"My Units\". A dashboard for a landlord or property manager. For each of their own apartments it shows the rent they charge today, compares it with (1) the market and (2) PriceLabs, says whether the rent is below, on or above the market, suggests a new rent, and lets the owner approve that change and send it to PriceLabs from the dashboard. Approved mockup: [link to My Units mockup].\n\nWHO DOES WHAT\nKarim: dashboard (front end). Abbas: data, scoring and PriceLabs connection (back end). Agree the data shapes in section 1 on day one so you can work in parallel.\n\nBLANKS TO FILL BEFORE SENDING\nMarket and currency: [city, currency]. Rental type: [long-term or short-term]. Local rent increase limit: [limit, or 10% if none]. Alerts by: [email or WhatsApp].\n\n1. DATA SHAPES\nUnit: { id, building, name, beds, size_m2, floor, furnished, building_age, lat, lng, current_rent, currency, lease_start, lease_end, status: occupied | vacant, pricelabs_listing_id }\nMarketScore: { fair_price, fair_low, fair_high, deviation_pct, band, confidence, comps_count, reasons: [text], trend_12m: [12 monthly fair prices] }\nPriceLabsSnapshot: { unit_id, taken_at, current_price, recommended_price, min_price, max_price, overrides: [{date, price}] }\nPriceChange: { id, unit_id, old_price, new_price, effective_from, reason, source_prices: {market, pricelabs}, status: proposed | approved | sent | confirmed | failed | cancelled | undone, proposed_by, approved_by, approved_at, pricelabs_response, readback_price, created_at }\ndeviation_pct = (current_rent - fair_price) / fair_price. Bands: far below <= -15%, below -15% to -5%, on target within 5%, above 5% to 15%, far above > 15%.\n\n2. ABBAS: DATA, SCORING, PRICELABS\nA. Confirm PriceLabs first. Read the PriceLabs API documentation (or ask their support) and write down in one page: which read endpoints give us listing, current price, recommended price, min and max; which write operations our plan allows (base price, min and max, date-specific overrides); whether [long-term or short-term] rentals are supported; rate limits. If writing is not allowed, build the fallback: an export file of approved prices for manual upload, with the same approval and history.\nB. Credentials. The PriceLabs key is read only from the environment variable PRICELABS_API_KEY (or the secret manager). Never in code, the browser, logs or chat. Use the least access the key allows.\nC. Ingest. Nightly pull of PriceLabs snapshots for every unit. Market data from sources we are allowed to use (PriceLabs market data if available, official APIs, licensed data, partner feeds, CSV upload). Do NOT scrape any site whose terms forbid it. Respect robots.txt and rate limits. Keep a daily snapshot so trends can be drawn.\nD. Clean. Remove duplicates (same address, size and price within 7 days), drop listings not seen for 60 days, convert currency, rent period and size units, trim outliers.\nE. Fair price per unit. Median of comparable listings (same area, size within 20%, same bedrooms, last 90 days, at least 8 comps), then a regression on log(rent) with size, bedrooms, floor, furnished, building age and distance to centre or transit. Fall back to comps when data is thin. Measure error on held-out listings (MAPE), show it in the dashboard, target under 10%. Confidence: High with 20 or more comps, Medium 12 to 19, Low below 12.\nF. Compare with PriceLabs. For each unit return rent now, our market price, PriceLabs recommended price and the percent difference between the last two. If they differ by more than 7%, set flag SOURCES_DISAGREE and do not produce an automatic suggestion.\nG. Suggested price. If on target: keep. If below market: 97% of the average of our market price and the PriceLabs recommendation, applied at lease renewal. If above market: 103% of that average. Cap any single increase at the local limit or 10%. When the gap is bigger, propose the capped step now, store the final target, and propose the next step at the next review. Say so in the reason text.\nH. Price change workflow (server side). POST /price-changes creates a proposal. POST /price-changes/:id/approve records the approver. A background worker then (1) re-runs all guardrails, (2) calls PriceLabs to set the new price, (3) reads the price back, (4) sets status to confirmed or failed with the reason. Use idempotency keys so a retry never sends twice. POST /price-changes/:id/undo restores the old price. GET /price-changes lists history. Nothing is ever sent without an approved record.\nI. Guardrails (all enforced on the server, not only in the browser): single-step cap; floor and ceiling at 80% to 120% of our market price; block when confidence is Low; block when SOURCES_DISAGREE until a person marks it reviewed; daily limit of 20 changes per owner; 5 minute delay before sending so a batch can be cancelled; every attempt written to an audit log.\nJ. Other endpoints: GET /portfolio (units with scores and PriceLabs numbers), GET /units/:id (comps, 12-month trend, PriceLabs history), POST /portfolio/import (CSV: unit, rent, optional building, beds, size_m2, lease_end; market numbers are computed, not required). Alerts: 90 days before a lease ends, notify the owner if the unit is not on target, with the suggested rent.\nK. Security: login required, each owner sees and changes only their own units, roles (viewer, approver), data encrypted at rest, tests with fixed sample data including a fake PriceLabs server.\n\n3. KARIM: DASHBOARD\nA. Build the screens in the approved mockup: summary tiles, dot-and-diamond chart, \"What to do next\" table with tick boxes and totals, renewal calendar, unit detail with 12-month market line and \"Try a new rent\" slider, similar apartments list, CSV import.\nB. Add PriceLabs to every view. Chart: add a hollow square for the PriceLabs recommendation next to the diamond for our market price. Table: add a PriceLabs column, show the percent difference, and shade rows with a SOURCES_DISAGREE warning. Unit detail: add the PriceLabs line to the 12-month chart.\nC. Add the \"Review and send to PriceLabs\" panel (see the sample report page 4): current price in PriceLabs, proposed price with percent change, effective date, reason, guardrail checks with tick or cross, status line (Proposed, Awaiting approval, Sent, Confirmed or Failed). Button \"Approve and send to PriceLabs\" and \"Cancel\". Show server errors in plain words.\nD. Bulk: ticked moves in the table open one review screen listing every change and the total effect per month and per year. Approve all or untick single ones.\nE. History page: every change with who, when, old and new price, status, and an Undo button while undo is possible. Show \"last updated\" time and data source on every page.\nF. Colours and wording: blue = you charge less than the market, grey = on target, red = you charge more. Every colour comes with a word and an arrow (colour-blind safe, no red and green pairs). Works at 400 px phone width with no sideways page scroll. Light and dark themes. Loading, empty and error states. Show a note that rent increases may be limited by law or by the lease.\n\nDONE WHEN\nReal units and real market data replace the sample data. Scores match a hand-checked sample of 20 units. MAPE is shown and under 10%, or we know why not. A test price change is approved on the dashboard, appears in PriceLabs, is read back as confirmed, and undo restores it. A change that breaks a guardrail is refused with a clear message. The page loads in under 2 seconds with 200 units. No API keys are in the repo.";
+  $('#prompt').textContent = PROMPT;
+  $('#copyBtn').addEventListener('click', function () {
+    var btn = $('#copyBtn');
+    function done(t) { btn.textContent = t; setTimeout(function () { btn.textContent = 'Copy prompt'; }, 1800); }
+    function fallback() { var r = document.createRange(); r.selectNodeContents($('#prompt')); var sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); done('Selected, press copy'); }
+    try { navigator.clipboard.writeText(PROMPT).then(function () { done('Copied'); }, fallback); } catch (e) { fallback(); }
+  });
+
+  function renderAll() { renderControls(); renderKPIs(); renderChart(); renderTable(); renderHist(); renderCal(); renderDetail(); }
+  var raf; addEventListener('resize', function () { cancelAnimationFrame(raf); raf = requestAnimationFrame(function () { renderChart(); var u = units[S.sel], t = $('#dTrend'); if (u && t) t.innerHTML = trend(u, Math.max(240, t.clientWidth || 320)); }); });
+  renderAll();
+})();
+</script>
