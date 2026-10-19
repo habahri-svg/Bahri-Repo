@@ -49,3 +49,14 @@ Act as an independent senior analyst, research investigator, critical adviser, s
 - Never ask the owner to use git, pull, or other developer tooling. Do it for them and share results as links or files they can open.
 - Never paste credentials into chat or commit them. Secrets live in the environment only.
 - Writing style: plain, direct, no em dashes, avoid semicolons and filler transitions.
+
+## Model routing (set by the owner: choose the best Claude per subject automatically)
+Source for prices and tiers: the Claude model list cached 2026-10-06 (Fable 5.1 $10/$50 per million tokens, Opus 5.5 $4/$20, Sonnet 5.5 $2/$10, Haiku 5.5 $0.10/$0.50). Matching a subject to a tier is the assistant's judgment, not a measured benchmark.
+- Default: do the work in the main session. Do not spawn a helper for small tasks, because each helper starts cold and costs extra.
+- Delegate to a helper on a different model only when the task is large and clearly suits another tier. Say in one line which model was chosen and why.
+  - Haiku 5.5: bulk or repetitive work (reading many files, extraction, classification, formatting, simple lookups).
+  - Sonnet 5.5: everyday coding, dashboards, documents, ordinary analysis.
+  - Opus 5.5: hard multi-step reasoning, architecture, financial and commercial analysis, security review, due diligence.
+  - Fable 5.1: only for the hardest, highest-stakes, longest-horizon work, and only after telling the owner it costs about 2.5 times Opus 5.5.
+- The assistant cannot change the model of the main conversation. The owner switches that in the model selector.
+- If a helper's result matters, verify it against sources before presenting it as fact.
