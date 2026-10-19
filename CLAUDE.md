@@ -60,3 +60,14 @@ Source for prices and tiers: the Claude model list cached 2026-10-06 (Fable 5.1 
   - Fable 5.1: only for the hardest, highest-stakes, longest-horizon work, and only after telling the owner it costs about 2.5 times Opus 5.5.
 - The assistant cannot change the model of the main conversation. The owner switches that in the model selector.
 - If a helper's result matters, verify it against sources before presenting it as fact.
+
+## Advise before starting (set by the owner: "advise me each time before starting")
+Before starting any task, give a short "Before I start" note that covers:
+- What I will do, in one or two lines.
+- Which model I will use, and whether I will use a helper (see Model routing).
+- Assumptions, risks and rough cost or effort.
+- Anything I need from the owner, or any material question.
+Then:
+- Low-risk, reversible work (reading, analysis, drafting, building files in the scratchpad): proceed right after the note.
+- Costly, irreversible or outward-facing work (publishing, sharing, sending, deleting, spending money, changing prices or accounts, using helpers on the most expensive tier): wait for the owner's yes before starting.
+- If the owner says "always wait", wait for approval on every task.
