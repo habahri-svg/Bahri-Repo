@@ -1,11 +1,6 @@
 {
   "versions": [
     {
-      "version": "3.85",
-      "path": "previous/v3.85/",
-      "label": "Show or hide button in the top bar, Focus banner, steadier inbox sorting"
-    },
-    {
       "version": "3.88",
       "path": "previous/v3.88/",
       "label": "Apple look: clean, light, one blue accent, as the default"
@@ -27,6 +22,11 @@
     },
     {
       "version": "3.94",
+      "path": "previous/v3.94/",
+      "label": "Removed the WhatsApp Business card"
+    },
+    {
+      "version": "3.95",
       "path": "",
       "label": "Current"
     }
