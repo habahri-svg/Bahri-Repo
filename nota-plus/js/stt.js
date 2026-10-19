@@ -25,6 +25,8 @@ export class DeviceEngine {
     this.emptyRuns = 0;
     this.failures = 0;
     this.waiters = [];
+    this.lastFinal = '';
+    this.lastFinalAt = 0;
   }
 
   start() {
@@ -61,7 +63,7 @@ export class DeviceEngine {
         const text = res[0].transcript;
         if (res.isFinal) {
           pending = '';
-          this.onFinal(text.trim());
+          this._final(text);
         } else interim += text;
       }
       pending = interim.trim();
@@ -78,7 +80,7 @@ export class DeviceEngine {
       if (pending) {
         const p = pending;
         pending = '';
-        this.onFinal(p); // the session ended before the last words were marked final
+        this._final(p); // the session ended before the last words were marked final
       }
       if (gen === this.gen) this.onInterim('');
       this.waiters.splice(0).forEach((f) => f());
@@ -105,6 +107,34 @@ export class DeviceEngine {
         }, 400);
       }
     }
+  }
+
+  // Phones sometimes hand over the same words again, or the growing start of one sentence again ("hello", "hello this").
+  // Keep each word once: drop a repeat, and when new text repeats the last text and adds more, keep only the added part.
+  _final(raw) {
+    const text = String(raw || '').trim();
+    if (!text) return;
+    const toks = (x) => x.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w));
+    const norm = (w) => w.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+    const now = Date.now();
+    const gap = now - this.lastFinalAt;
+    const prev = this.lastFinal ? toks(this.lastFinal).map(norm) : [];
+    const cur = toks(text);
+    const curN = cur.map(norm);
+    if (prev.length && gap < 8000) {
+      const grows = curN.length > prev.length && prev.every((w, i) => w === curN[i]);
+      if (grows) {
+        this.lastFinal = text;
+        this.lastFinalAt = now;
+        const tail = cur.slice(prev.length).join(' ');
+        if (tail) this.onFinal(tail);
+        return;
+      }
+      if (gap < 1500 && prev.join(' ').includes(curN.join(' '))) return; // the very same words again
+    }
+    this.lastFinal = text;
+    this.lastFinalAt = now;
+    this.onFinal(text);
   }
 
   // Called when the page comes back to the foreground, a locked screen silently ends recognition.
@@ -157,6 +187,9 @@ const GHOSTS = [
   'شكرا', 'شكرا للمشاهدة', 'اشتركوا في القناة', 'ترجمة نانسي قنقر', 'تمت الترجمة', 'موسيقى'
 ];
 const isGhost = (text) => GHOSTS.includes(text.toLowerCase().replace(/[.!?،,؟\s]+/g, ' ').trim());
+// Whisper reports how likely a piece is silence (nsp) and how sure it is of its words (lp, an average log probability).
+// Drop clear silence, and doubtful pieces that look like silence, but never confident words just because the room was noisy.
+export const worthKeeping = (s) => !!s.text && !(s.nsp > 0.9 || (s.nsp > 0.6 && s.lp < -0.6));
 const MIN_BYTES = 1500; // a fraction of a second of speech is already bigger than this
 
 export class CloudEngine {
@@ -172,6 +205,7 @@ export class CloudEngine {
     this.cur = null;
     this.timer = null;
     this.dead = false;
+    this.stats = { sent: 0, kept: 0, dropped: 0, errors: 0 }; // shown to the user when a recording comes back empty
   }
 
   setLang(l) {
@@ -300,6 +334,7 @@ export class CloudEngine {
 
   async _handle(blob, t0, last = false) {
     if (blob.size < MIN_BYTES) return this._beat('empty'); // the recorder produced almost no audio
+    this.stats.sent++;
     this._beat('sending');
     const hint = this.hint ? this.hint() : '';
     let r;
@@ -315,6 +350,7 @@ export class CloudEngine {
           await sleep(rate ? Math.min(Number(e.retryAfter) || 5, 20) * 1000 : 3000);
           continue;
         }
+        this.stats.errors++;
         if (offline || rate) {
           this.failed.push({ blob, t0 }); // try once more when the recording ends
           if (!last) this.onError(e);
@@ -325,12 +361,15 @@ export class CloudEngine {
     if (!r) return;
     const out = [];
     for (const s of r.segments) {
-      if (!s.text || s.nsp > 0.6) continue;
-      if (s.nsp > 0.25 && isGhost(s.text)) continue;
-      if (hint && s.nsp > 0.15 && s.text.length > 8 && hint.includes(s.text)) continue; // the model echoing its hint on silence
+      if (!s.text) continue;
+      if (!worthKeeping(s) || (s.nsp > 0.25 && isGhost(s.text)) || (hint && s.nsp > 0.15 && s.text.length > 8 && hint.includes(s.text))) {
+        this.stats.dropped++; // clear silence, a known hallucination, or the model echoing its hint on silence
+        continue;
+      }
       out.push({ t: t0 + s.start, text: s.text, lang: langOf(s.text) });
     }
     if (!r.segments.length && r.text && !isGhost(r.text)) out.push({ t: t0, text: r.text, lang: langOf(r.text) });
+    this.stats.kept += out.length;
     if (out.length) this.onSegments(out);
     else this._beat('silent'); // the audio reached the service but no speech was heard in it
   }

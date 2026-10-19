@@ -4,7 +4,7 @@ import { $, esc, uid, fmtClock, langOf, arabicRatio, download, copyText, isIOS, 
 import { loadSettings, saveSettings, notesDb, audioDb, requestPersistence, storageEstimate, saveDraft, loadDraft, clearDraft } from './store.js';
 import { runChecks, reportText } from './selfcheck.js';
 import { summarize, quickSummary, translateTexts, polishTexts, followUpEmail, answer, buildGlobalContext, transcribeBlob, testKey, friendlyError, detectActions, detectSpeakers, transcriptText } from './ai.js';
-import { deviceSupported } from './stt.js';
+import { deviceSupported, worthKeeping } from './stt.js';
 import { Recorder } from './recorder.js';
 import * as V from './views.js';
 import { noteToText, noteToSrt, printHtml, noteToMarkdown, noteToDoc, actionsToIcs } from './export.js';
@@ -242,6 +242,8 @@ async function startRecInner() {
   }
   S.rec = rec;
   S.detected = [];
+  levelHist.length = 0;
+  lastAdvice = '';
   lastVerdict = '';
   startTicker();
   startDraftTimer();
@@ -447,6 +449,7 @@ async function openAndName(note) {
   location.hash = '#/note/' + note.id;
   await new Promise((r) => setTimeout(r, 0));
   await routing;
+  if (!note.segments.length) return; // nothing to name or summarise yet
   const ans = await askSpeakerNames(note);
   if (ans) {
     note.speakers = { ...note.speakers, ...ans.names };
@@ -468,6 +471,18 @@ async function openAndName(note) {
   generateSummary(note, note.lastSummaryLang);
 }
 
+// Nothing at all came out and there is no audio to keep, so say why instead of a quick message that is easy to miss.
+async function showNoWords(r) {
+  const why = r.whyEmpty();
+  const last = r.errors[r.errors.length - 1];
+  const detail = why === 'whyError' && last ? ` ${friendlyError(last, t)}` : '';
+  location.hash = '#/';
+  await new Promise((res) => setTimeout(res, 0));
+  await routing;
+  modal(`<div class="dialog"><h3>${t('noWords')}</h3><p>${esc(t(why) + detail)}</p><p class="muted">${t('noWordsTips')}</p>
+    <div class="row gap end"><button type="button" class="btn ghost" data-action="close-modal">${t('ok')}</button><a class="btn" href="#/record">${t('tryAgain')}</a></div></div>`);
+}
+
 async function finishRecording() {
   const r = S.rec;
   if (!r || S.stopping) return; // a double tap on Stop does nothing
@@ -479,16 +494,23 @@ async function finishRecording() {
   try {
     const res = await r.stop();
     const text = res.segments.map((s) => s.text).join(' ').trim();
-    if (!text) {
+    if (!text && !res.audio) {
       S.rec = null;
       S.detected = [];
       clearDraft();
-      toast(t('emptyRecording'));
-      location.hash = '#/';
       render();
+      wait(null);
+      S.stopping = false;
+      await showNoWords(r);
       return;
     }
     note = newNote({ title: defaultTitle(), segments: res.segments, duration: res.duration, template: r.template, bookmarks: res.bookmarks, hasAudio: !!res.audio, speakers: { ...r.speakerNames } });
+    if (!text) {
+      // the words did not come back but the audio did: keep it, the user can transcribe it again
+      note.whyEmpty = r.whyEmpty();
+      const last = r.errors[r.errors.length - 1];
+      if (note.whyEmpty === 'whyError' && last) note.whyDetail = friendlyError(last, t);
+    }
     await persistNew(note, res.audio); // saved before anything else is asked
     S.rec = null;
     S.detected = [];
@@ -548,7 +570,7 @@ async function importFile(file) {
   wait(t('importing'));
   try {
     const r = await transcribeBlob(S.settings, file, { lang: 'auto', name: file.name });
-    const segs = r.segments.filter((s) => s.text && s.nsp < 0.6).map((s) => ({ t: s.start, text: s.text, lang: langOf(s.text), speaker: 0 }));
+    const segs = r.segments.filter(worthKeeping).map((s) => ({ t: s.start, text: s.text, lang: langOf(s.text), speaker: 0 }));
     if (!segs.length && r.text) segs.push({ t: 0, text: r.text, lang: langOf(r.text), speaker: 0 });
     if (!segs.length) {
       toast(t('emptyRecording'));
@@ -691,6 +713,7 @@ function refreshNote(n) {
 
 async function generateSummary(n, lang) {
   lang = lang || S.sumLang;
+  if (!(n.segments || []).length) return;
   const key = n.id + ':' + lang;
   if (S.busy[key]) {
     S.rerun[key] = true; // a new template or names arrived mid-run, go again when this one ends
@@ -1090,6 +1113,42 @@ const A = {
     await persist(n);
     renderNote();
     toast(t('polishUndone'));
+  },
+  // Runs the saved audio through speech to text again, for a recording that came back empty or with a poor transcript.
+  async retranscribe() {
+    closeModal();
+    const n = N();
+    if (!n) return;
+    if (!S.settings.apiKey) return needKey();
+    if (!n.hasAudio) return toast(t('noAudio'));
+    if ((n.segments || []).length && !confirm(t('confirmRetranscribe'))) return;
+    const key = n.id + ':retr';
+    if (S.busy[key]) return;
+    S.busy[key] = true;
+    wait(t('retranscribing'));
+    try {
+      const a = await audioDb.get(n.id);
+      if (!a || !a.blob) return toast(t('noAudio'));
+      if (a.blob.size > 24 * 1048576) return toast(t('importTooBig'));
+      const r = await transcribeBlob(S.settings, a.blob, { lang: 'auto' });
+      const segs = r.segments.filter(worthKeeping).map((s) => ({ t: s.start, text: s.text, lang: langOf(s.text), speaker: 0 }));
+      if (!segs.length && r.text) segs.push({ t: 0, text: r.text, lang: langOf(r.text), speaker: 0 });
+      if (!segs.length) return toast(t('retryEmpty'));
+      n.segments = segs;
+      n.lang = dominantLang(segs);
+      n.summary = {};
+      delete n.whyEmpty;
+      delete n.whyDetail;
+      S.noteTab = 'summary';
+      await persist(n);
+      generateSummary(n, S.sumLang);
+    } catch (e) {
+      toast(friendlyError(e, t));
+    } finally {
+      delete S.busy[key];
+      wait(null);
+      refreshNote(n);
+    }
   },
   'translate-all'() {
     closeModal();

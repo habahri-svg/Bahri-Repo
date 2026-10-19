@@ -35,6 +35,8 @@ export class Recorder {
     this.dead = ''; // reason the transcript stopped growing, shown on screen
     this.health = { heard: 0, sent: 0, answered: 0, silent: 0, empty: 0, lastText: 0 }; // live counters for the status line
     this.interrupted = false; // the microphone was taken away (call, Bluetooth switch, lock)
+    this.errors = []; // what went wrong while recording, used to explain an empty result
+    this.maxPeak = 0; // loudest sound the microphone delivered, 0 to 1
     this.result = null;
     this._vis = () => {
       if (document.visibilityState === 'visible' && !this.stopped) {
@@ -66,9 +68,19 @@ export class Recorder {
       if (d > peak) peak = d;
     }
     this.peak = peak;
+    if (peak > this.maxPeak) this.maxPeak = peak;
     const rms = Math.sqrt(sum / buf.length);
     if (rms > 0.02) this.health.heard++;
     return rms;
+  }
+
+  // Which explanation fits a recording that produced no words.
+  whyEmpty() {
+    if (this.kind === 'device' && this.dead) return 'whyBlocked';
+    if (this.analyser && this.maxPeak < 0.03) return 'whySilent';
+    if (this.errors.length) return 'whyError';
+    if (this.kind === 'cloud' && this.engine && this.engine.stats && this.engine.stats.sent) return 'whyNoWords';
+    return 'whyGeneric';
   }
 
   // Names and the end of what was just said, given to the speech model so spelling and style stay consistent between pieces.
@@ -217,6 +229,7 @@ export class Recorder {
         onSegments: (segs) => segs.forEach((x) => this._add(x.text, x.t, x.lang, false)),
         onError: (e) => {
           if (e && e.code === 'recorder') this.dead = 'recorder';
+          this.errors.push(e);
           this._chg();
           this.opts.onError(e);
         }
@@ -255,6 +268,7 @@ export class Recorder {
       }
     }
     this.dead = code;
+    this.errors.push({ code });
     this._chg();
     this.opts.onError({ code });
   }
@@ -268,6 +282,7 @@ export class Recorder {
     if (merge && !this.liveTranslate && last && last.speaker === sp && last.lang === lang && last.text.length < 220 && t - (last.lastT ?? last.t) < 5) {
       last.text += ' ' + text;
       last.lastT = t;
+      this.opts.onSegment && this.opts.onSegment(last); // keeps the live "detected tasks" box in step
       this._chg();
       return last;
     }
