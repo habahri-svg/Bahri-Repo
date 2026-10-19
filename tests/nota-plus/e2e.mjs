@@ -68,6 +68,14 @@ const SPEECH_MOCK = `
         this.timer = setTimeout(() => { this.running = false; this.onerror && this.onerror({ error: 'no-speech' }); this.onend && this.onend(); }, 1200);
         return;
       }
+      if (typeof phrase === 'object') {
+        this.timer = setTimeout(() => {
+          if (!this.running) return;
+          this.onresult && this.onresult({ resultIndex: 0, results: [Object.assign([{ transcript: phrase.interim }], { isFinal: false })] });
+          this.timer = setTimeout(() => { this.running = false; this.onend && this.onend(); }, 250);
+        }, 150);
+        return;
+      }
       this.timer = setTimeout(() => {
         if (!this.running) return;
         this.onresult && this.onresult({ resultIndex: 0, results: [Object.assign([{ transcript: phrase.slice(0, Math.ceil(phrase.length / 2)) }], { isFinal: false })] });
@@ -105,6 +113,9 @@ async function installApiMock(context) {
     const json = (o) => route.fulfill({ status: 200, headers: CORS, contentType: 'application/json', body: JSON.stringify(o) });
     if (p === '/models') return json({ data: [{ id: 'llama-3.3-70b-versatile' }, { id: 'whisper-large-v3-turbo' }] });
     if (p === '/audio/transcriptions') {
+      if (apiMode === 'empty') return json({ language: 'english', text: '', segments: [] });
+      if (apiMode === 'lowconf') return json({ language: 'english', text: 'Hello team we need the budget', segments: [{ start: 0, end: 3, text: ' Hello team we need the budget', no_speech_prob: 0.7, avg_logprob: -0.2 }] });
+      if (apiMode === 'hallu') return json({ language: 'english', text: 'Something odd', segments: [{ start: 0, end: 3, text: ' Something odd', no_speech_prob: 0.95, avg_logprob: -1.5 }] });
       return json({
         language: 'english',
         text: 'Hello team. We need to send the budget by Friday. شكرا لكم جميعا',
@@ -461,7 +472,7 @@ try {
   await page.click('[data-action=test-key]');
   check('good key shows OK and the model', await waitFor(async () => /llama/.test(await text(page, '#key-status')), 3000), await text(page, '#key-status'));
   check('storage info shows note count', /\d+/.test(await text(page, '#storage-info')), await text(page, '#storage-info'));
-  check('version is shown', (await text(page, '#app-version')).includes('v10'), await text(page, '#app-version'));
+  check('version is shown', (await text(page, '#app-version')).includes('v11'), await text(page, '#app-version'));
   await page.click('[data-action=run-checks]');
   check('self-check finishes all steps', await waitFor(async () => (await page.locator('.checks .chk').count()) >= 9 && (await page.locator('.checks .chk.run').count()) === 0, 15000));
   const failed = await page.locator('.checks .chk.fail').allInnerTexts();
@@ -666,9 +677,12 @@ try {
   await sleep(1500);
   const beforeSilent = await count();
   await page.click('[data-action=stop-rec]');
-  check('stopping a silent recording shows a message, saves nothing', await waitFor(async () => /nothing|no speech|empty|captured/i.test(await toastText(page)), 6000), await toastText(page));
+  check('an empty recording with no audio explains why in a dialog (not a quick toast)', await waitFor(() => exists(page, '#modal .dialog h3'), 6000));
+  check('the dialog gives tips and a Try again button', (await text(page, '#modal .dialog')).includes('Tips') && (await exists(page, '#modal .dialog a[href="#/record"]')));
+  await page.screenshot({ path: `${OUT}/16-no-words.png` });
+  await page.click('#modal [data-action=close-modal]');
   await waitFor(() => exists(page, '#list'), 4000);
-  check('silent recording did not create a note', (await count()) === beforeSilent);
+  check('an empty recording with no audio saves no note', (await count()) === beforeSilent);
   const before = await page.locator('#list .card.note').count();
   await page.click('a.fab');
   await page.waitForSelector('[data-action=start-rec]');
@@ -698,6 +712,128 @@ try {
   await page.click('[data-action=delete-all]');
   await goHome(page);
   check('"Delete all" empties the library', await exists(page, '#list .empty'));
+
+
+  // -------------------------------------------------------------- 10b never lose a recording
+  group('10b. A recording you spoke into is never lost');
+  const setEngine = (pg, engine) => pg.evaluate((e) => { const s = JSON.parse(localStorage.getItem('nota-plus.settings')); s.engine = e; localStorage.setItem('nota-plus.settings', JSON.stringify(s)); }, engine);
+  await setEngine(page, 'cloud');
+  await page.reload();
+  await page.waitForSelector('#list');
+  // the speech service answers, but with no words
+  apiMode = 'empty';
+  const notesBeforeEmpty = await count();
+  await page.click('a.fab');
+  await page.waitForSelector('[data-action=start-rec]');
+  await page.click('[data-action=start-rec]');
+  await waitFor(() => exists(page, '#rec-timer'), 5000);
+  await sleep(3500);
+  await page.click('[data-action=stop-rec]');
+  check('no words but audio recorded: the note is kept', await waitFor(async () => (await count()) === notesBeforeEmpty + 1, 8000), `${notesBeforeEmpty} -> ${await count()}`);
+  check('it opens on an explanation, not on a blank page', await waitFor(async () => /No words were recognised/.test(await text(page, '#note-body')), 6000), await text(page, '#note-body').catch(() => ''));
+  check('the explanation says sound was recorded but no words came back', /no words came back/i.test(await text(page, '#note-body')), await text(page, '#note-body'));
+  check('no "who spoke" dialog for a note with no transcript', !(await exists(page, 'form[data-form=speakers]')));
+  check('the audio is saved with the note', await exists(page, '#player'));
+  await page.screenshot({ path: `${OUT}/17-empty-note.png` });
+  await goHome(page);
+  check('the library shows it as "No transcript yet"', (await text(page, '#list .card.note .snip')).includes('No transcript yet'), await text(page, '#list .card.note .snip'));
+  await page.click('#list .card.note');
+  await page.waitForSelector('.tabs');
+  apiMode = 'ok';
+  await page.click('[data-action=retranscribe]');
+  check('"Transcribe again" turns the saved audio into a transcript', await waitFor(async () => (await page.evaluate(async () => { const n = await new Promise((res) => { const r = indexedDB.open('nota-plus'); r.onsuccess = () => { const q = r.result.transaction('notes').objectStore('notes').getAll(); q.onsuccess = () => res(q.result); }; }); return n.some((x) => x.hasAudio && (x.segments || []).length >= 2); })), 10000));
+  check('and writes the summary for it', await waitFor(async () => (await exists(page, '.sum')) && (await text(page, '.sum')).includes('budget'), 8000));
+  await page.click('[data-action=tab][data-id=transcript]');
+  check('the transcript shows the recovered lines', (await page.locator('#tr-lines .line').count()) >= 2);
+  await page.click('[data-action=menu]');
+  check('the menu offers "Transcribe the saved audio again" for any note with audio', await exists(page, '.menuitem[data-action=retranscribe]'));
+  await page.press('body', 'Escape');
+  await goHome(page);
+
+  // real speech with a high "no speech" score is kept when Whisper is sure of its words
+  apiMode = 'lowconf';
+  await page.click('a.fab');
+  await page.waitForSelector('[data-action=start-rec]');
+  await page.click('[data-action=start-rec]');
+  await waitFor(() => exists(page, '#rec-timer'), 5000);
+  await sleep(3000);
+  await page.click('[data-action=stop-rec]');
+  check('speech Whisper is sure about is kept even when the room is noisy', await waitFor(() => exists(page, 'form[data-form=speakers]'), 10000));
+  await page.click('form[data-form=speakers] .btn:not(.ghost)');
+  await page.click('[data-action=tab][data-id=transcript]');
+  check('and appears in the transcript', (await text(page, '#tr-lines')).includes('Hello team we need the budget'));
+  await goHome(page);
+
+  // doubtful, silence-like pieces are still dropped, and the audio is kept
+  apiMode = 'hallu';
+  const beforeHallu = await count();
+  await page.click('a.fab');
+  await page.waitForSelector('[data-action=start-rec]');
+  await page.click('[data-action=start-rec]');
+  await waitFor(() => exists(page, '#rec-timer'), 5000);
+  await sleep(3000);
+  await page.click('[data-action=stop-rec]');
+  check('a made-up phrase on silence is dropped but the recording is kept', await waitFor(async () => (await count()) === beforeHallu + 1 && /No words were recognised/.test(await text(page, '#note-body').catch(() => '')), 10000));
+  apiMode = 'ok';
+  await goHome(page);
+
+  // the phone gives the growing start of a sentence again and again
+  await setEngine(page, 'device');
+  await page.reload();
+  await page.waitForSelector('#list');
+  await page.click('a.fab');
+  await page.waitForSelector('[data-action=start-rec]');
+  await page.evaluate(() => (window.__sr.queue = [{ interim: 'hello' }, { interim: 'hello this' }, { interim: 'hello this is' }, { interim: 'hello this is your test' }]));
+  await page.click('[data-action=start-rec]');
+  await waitFor(async () => (await text(page, '#rec-lines')).includes('your test'), 8000);
+  await sleep(800);
+  const liveText = (await page.locator('#rec-lines .txt').allInnerTexts()).join(' | ');
+  check('growing interim text is saved once, not repeated', liveText === 'hello this is your test', liveText);
+  await page.evaluate(() => window.__sr.queue.push('Same words here', 'Same words here'));
+  await waitFor(async () => (await text(page, '#rec-lines')).includes('Same words here'), 6000);
+  await sleep(2500);
+  const rep = (await page.locator('#rec-lines .txt').allInnerTexts()).join(' | ');
+  check('the same phrase handed over twice at once is saved once', (rep.match(/Same words here/g) || []).length === 1, rep);
+  await page.click('[data-action=stop-rec]');
+  await waitFor(() => exists(page, 'form[data-form=speakers]'), 8000);
+  await page.click('form[data-form=speakers] [data-action=close-modal]');
+  await waitFor(() => exists(page, '.tabs'), 6000);
+  await goHome(page);
+
+  // the microphone delivers only silence (another app or a call has it)
+  const ctx6 = await browser.newContext(ctxOpts);
+  await installApiMock(ctx6);
+  const p6 = await newPage(ctx6);
+  await p6.addInitScript(() => {
+    navigator.mediaDevices.getUserMedia = async () => {
+      const ac = new AudioContext();
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      g.gain.value = 0;
+      const d = ac.createMediaStreamDestination();
+      o.connect(g);
+      g.connect(d);
+      o.start();
+      return d.stream;
+    };
+  });
+  await p6.goto(BASE);
+  await p6.evaluate(() => { localStorage.setItem('nota-plus.settings', JSON.stringify({ engine: 'cloud', apiKey: 'gsk_validkey123' })); localStorage.setItem('nota-plus.welcomeDone', '1'); });
+  await p6.reload();
+  await p6.waitForSelector('#app .screen');
+  await p6.evaluate(() => (location.hash = '#/'));
+  await p6.waitForSelector('a.fab');
+  apiMode = 'empty';
+  await p6.click('a.fab');
+  await p6.waitForSelector('[data-action=start-rec]');
+  await p6.click('[data-action=start-rec]');
+  check('a silent microphone is flagged while recording', await waitFor(async () => /silent/i.test(await p6.locator('#rec-status').innerText()), 14000), await p6.locator('#rec-status').innerText());
+  check('and the screen says what to do', await waitFor(async () => /almost nothing/i.test(await p6.locator('#rec-hint').innerText()), 4000), await p6.locator('#rec-hint').innerText());
+  await p6.screenshot({ path: `${OUT}/18-mic-silent.png` });
+  await p6.click('[data-action=stop-rec]');
+  check('after stopping, the note says the microphone heard almost nothing', await waitFor(async () => /heard almost nothing/i.test(await p6.locator('#note-body').innerText()), 10000), await p6.locator('#note-body').innerText().catch(() => ''));
+  apiMode = 'ok';
+  await ctx6.close();
 
   // -------------------------------------------------------------- 11 import
   group('11. Import audio');

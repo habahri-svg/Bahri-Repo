@@ -138,7 +138,7 @@ function snippet(n, q) {
   }
   const text = (n.segments || []).map((s) => s.text).join(' ');
   const sm = n.summary?.[n.lastSummaryLang || ''];
-  return (sm && sm.overview ? sm.overview : text).slice(0, 110);
+  return (sm && sm.overview ? sm.overview : text || t('noTranscriptYet')).slice(0, 110);
 }
 
 export function noteListHtml() {
@@ -323,6 +323,12 @@ function summaryHtml(n, lang) {
   const key = n.id + ':' + lang;
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
   if (S.busy[key]) return `<div class="busy"><span class="spin"></span>${t('writing')}</div>`;
+  if (!(n.segments || []).length) {
+    const why = n.whyEmpty ? t(n.whyEmpty) + (n.whyDetail ? ' ' + n.whyDetail : '') : t('whyGeneric');
+    return `<div class="empty"><b>${t('noWords')}</b><p>${esc(why)}</p>${
+      n.hasAudio ? `<p>${t('noWordsAudio')}</p><button class="btn" data-action="retranscribe">${icon('sparkle', 18)}<span>${t('retranscribe')}</span></button>` : `<p class="muted">${t('noWordsTips')}</p>`
+    }</div>`;
+  }
   const sm = n.summary?.[lang];
   if (!sm) {
     return `<div class="empty"><b>${t('noSummary')}</b><p>${S.settings.apiKey ? '' : t('offlineNote')}</p>
@@ -489,7 +495,7 @@ export function noteView(n) {
 
 export function menuHtml(n) {
   const a = (id, label, cls = '') => `<button class="menuitem ${cls}" data-action="${id}">${label}</button>`;
-  return `<div class="sheet" role="dialog" aria-modal="true">${a('rename', t('rename'))}${a('generate', t('regenerate'))}${a('translate-all', t('translateAll'))}${a('polish', t('polishTranscript'))}${n && (n.segments || []).some((s) => s.raw != null) ? a('undo-polish', t('undoPolish')) : ''}${a('star', n && n.starred ? t('unstar') : t('star'))}${a('export-doc', t('exportDoc'))}${a('export-md', t('exportMd'))}${a('export-txt', t('exportTxt'))}${a('export-srt', t('exportSrt'))}${a('delete', t('delete'), 'danger')}${a('close-modal', t('cancel'))}</div>`;
+  return `<div class="sheet" role="dialog" aria-modal="true">${a('rename', t('rename'))}${a('generate', t('regenerate'))}${n && n.hasAudio ? a('retranscribe', t('retranscribe')) : ''}${a('translate-all', t('translateAll'))}${a('polish', t('polishTranscript'))}${n && (n.segments || []).some((s) => s.raw != null) ? a('undo-polish', t('undoPolish')) : ''}${a('star', n && n.starred ? t('unstar') : t('star'))}${a('export-doc', t('exportDoc'))}${a('export-md', t('exportMd'))}${a('export-txt', t('exportTxt'))}${a('export-srt', t('exportSrt'))}${a('delete', t('delete'), 'danger')}${a('close-modal', t('cancel'))}</div>`;
 }
 
 // ---------- ask across all notes ----------

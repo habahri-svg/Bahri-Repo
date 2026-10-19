@@ -34,6 +34,8 @@ export class Recorder {
     this.stopped = false;
     this.dead = ''; // reason the transcript stopped growing, shown on screen
     this.interrupted = false; // the microphone was taken away (call, Bluetooth switch, lock)
+    this.errors = []; // what went wrong while recording, used to explain an empty result
+    this.maxPeak = 0; // loudest sound the microphone delivered, 0 to 1
     this.result = null;
     this._vis = () => {
       if (document.visibilityState === 'visible' && !this.stopped) {
@@ -65,7 +67,22 @@ export class Recorder {
       if (d > peak) peak = d;
     }
     this.peak = peak;
+    if (peak > this.maxPeak) this.maxPeak = peak;
     return Math.sqrt(sum / buf.length);
+  }
+
+  // True when a few seconds in, the microphone has delivered nothing but silence.
+  micSilent() {
+    return !this.paused && !this.stopped && !!this.analyser && this.elapsed() > 6 && this.maxPeak < 0.03;
+  }
+
+  // Which explanation fits a recording that produced no words.
+  whyEmpty() {
+    if (this.kind === 'device' && this.dead) return 'whyBlocked';
+    if (this.analyser && this.maxPeak < 0.03) return 'whySilent';
+    if (this.errors.length) return 'whyError';
+    if (this.kind === 'cloud' && this.engine && this.engine.stats && this.engine.stats.sent) return 'whyNoWords';
+    return 'whyGeneric';
   }
 
   // Names and the end of what was just said, given to the speech model so spelling and style stay consistent between pieces.
@@ -207,6 +224,7 @@ export class Recorder {
         onSegments: (segs) => segs.forEach((x) => this._add(x.text, x.t, x.lang, false)),
         onError: (e) => {
           if (e && e.code === 'recorder') this.dead = 'recorder';
+          this.errors.push(e);
           this._chg();
           this.opts.onError(e);
         }
@@ -245,6 +263,7 @@ export class Recorder {
       }
     }
     this.dead = code;
+    this.errors.push({ code });
     this._chg();
     this.opts.onError({ code });
   }
