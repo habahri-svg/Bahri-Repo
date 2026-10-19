@@ -94,7 +94,10 @@ td input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent)
 .summary { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--gold-wash); border: 1px solid var(--gold-line); border-radius: 8px; padding: 10px 12px; margin-top: 10px; }
 
 .cal { display: grid; grid-template-columns: repeat(12, minmax(78px, 1fr)); gap: 4px; margin-top: 8px; min-width: 960px; }
-.calwrap { overflow-x: auto; }
+.sbars { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 6px; align-items: end; height: 160px; margin-top: 12px; }
+.sbar { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; height: 100%; font-size: 11px; color: var(--ink2); }
+.sbar i { display: block; width: 100%; border-radius: 4px 4px 0 0; background: var(--navy); }
+.sbar.peak i { background: var(--gold-fill); }
 .cal .m { font-size: 12px; color: var(--muted); padding: 2px 4px; font-weight: 600; }
 .cal .cell { min-height: 64px; background: var(--wash); border-radius: 6px; padding: 4px; display: flex; flex-direction: column; gap: 3px; }
 .chip { display: flex; color: var(--navy); font-weight: 600; align-items: center; gap: 5px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; font-size: 12px; text-align: left; }
@@ -155,31 +158,31 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
     <div>
       <div class="brand">WyzRent · Rent Watch</div>
       <h1>My Units</h1>
-      <p class="sub">Are you charging too little or too much, how does it compare with the market and PriceLabs, and what should you change?</p>
+      <p class="sub">Are you charging too little or too much per night, how does it compare with the market and PriceLabs, and what should you change?</p>
     </div>
     <div class="filters">
       <label class="field">Building <select id="bSel"></select></label>
       <span class="field">Sort by
         <span class="seg" id="sortSeg" role="group" aria-label="Sort units">
           <button data-v="dev" aria-pressed="true">Biggest gap</button>
-          <button data-v="lease" aria-pressed="false">Lease ends soon</button>
+          <button data-v="bld" aria-pressed="false">Building</button>
           <button data-v="name" aria-pressed="false">Unit name</button>
         </span>
       </span>
     </div>
   </div>
 
-  <div class="banner"><b>Made-up sample data, and sending is simulated.</b> <span id="stamp">Nothing in this mockup contacts PriceLabs. Try "Review and send" on any unit to see how an approved price change would flow.</span></div>
+  <div class="banner"><b>Real apartments, sample rates, simulated sending.</b> <span id="stamp">The six apartments come from your WYZ Rent brochure. The nightly rates, market prices and PriceLabs numbers are invented. Nothing here contacts Hostaway or PriceLabs. Pick an apartment and try "Approve and send to PriceLabs".</span></div>
 
   <div class="kpis" id="kpis"></div>
 
   <div class="main">
     <div class="col">
       <div class="panel">
-        <div class="head"><h2>Your rent against the market and PriceLabs</h2><span class="note" id="chartNote"></span></div>
+        <div class="head"><h2>Your nightly rate against the market and PriceLabs</h2><span class="note" id="chartNote"></span></div>
         <p class="note">Dot = what you charge now. Diamond = our market price. Hollow square = PriceLabs recommendation. Click a row for details.</p>
         <div class="chart" id="chart"></div>
-        <div class="legend"><span><i class="l-dot"></i>Rent now (colour = band)</span><span><i class="l-dia"></i>Our market price</span><span><i class="l-sq"></i>PriceLabs recommendation</span><span>Line = gap to market</span></div>
+        <div class="legend"><span><i class="l-dot"></i>Rate now (colour = band)</span><span><i class="l-dia"></i>Our market price</span><span><i class="l-sq"></i>PriceLabs recommendation</span><span>Line = gap to market</span></div>
         <div class="legend" id="bandKey"></div>
       </div>
 
@@ -187,13 +190,13 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
         <div class="head"><h2>What to do next</h2><span class="note">Tick the moves you plan to make</span></div>
         <div class="tablewrap">
           <table>
-            <thead><tr><th>Apply</th><th>Unit</th><th class="num">Rent now</th><th class="num">Our market</th><th class="num">PriceLabs</th><th>Where you are</th><th>Lease ends</th><th>Suggested move</th><th class="num">Change / month</th></tr></thead>
+            <thead><tr><th>Apply</th><th>Unit</th><th class="num">Rate now</th><th class="num">Our market</th><th class="num">PriceLabs</th><th>Where you are</th><th>Suggested move</th><th class="num">Change / night</th></tr></thead>
             <tbody id="rows"></tbody>
           </table>
         </div>
         <div class="summary" id="summary"></div>
         <div id="bulk"></div>
-        <p class="note" style="margin-top:8px">Increases are capped at 10% per step and happen at lease renewal. Rent increases may also be limited by local law or by the lease. Check your rules before changing a rent.</p>
+        <p class="note" style="margin-top:8px">Changes are capped at 15% per step and apply to open dates from tomorrow. Bookings that already exist keep the price the guest booked.</p>
       </div>
 
       <div class="panel">
@@ -202,14 +205,14 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
       </div>
 
       <div class="panel">
-        <div class="head"><h2>When you can act: lease renewals</h2><span class="note">Next 12 months</span></div>
-        <p class="note">Each chip is a lease ending that month. That is your chance to change the rent.</p>
-        <div class="calwrap"><div class="cal" id="cal"></div></div>
+        <div class="head"><h2>Demand through the year</h2><span class="note">Sample pattern</span></div>
+        <p class="note">Gold bars are the peak months. In peak months the market can carry higher rates. In quiet months a lower rate fills the calendar. PriceLabs adjusts by date, and this shows where your base rates sit.</p>
+        <div class="sbars" id="cal"></div>
       </div>
 
       <div class="panel">
         <h2>Load my own units</h2>
-        <p class="note">Paste rows from a spreadsheet as comma-separated text. Required columns: unit, rent, market_rent. Optional: building, beds, size_m2, lease_end (like 2027-03), pricelabs_rec. In the real product market_rent and pricelabs_rec come from the scoring engine and your PriceLabs account.</p>
+        <p class="note">Paste rows as comma-separated text. Required columns: unit, nightly_rate, market_rate (all in AED per night). Optional: building, beds, size_sqft, pricelabs_rec. In the real product the rates come from Hostaway, and market_rate and pricelabs_rec come from the scoring engine and your PriceLabs account.</p>
         <textarea id="csv" aria-label="Units as CSV" spellcheck="false"></textarea>
         <div class="btnrow">
           <button class="btn" id="loadBtn">Load these units</button>
@@ -233,8 +236,9 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
 (function () {
   function $(s) { return document.querySelector(s); }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-  function money(n) { return (n < 0 ? '−$' : '$') + Math.round(Math.abs(n)).toLocaleString('en-US'); }
-  function signedMoney(n) { return (n < 0 ? '−$' : n > 0 ? '+$' : '$') + Math.round(Math.abs(n)).toLocaleString('en-US'); }
+  function money(n) { return (n < 0 ? '−AED ' : 'AED ') + Math.round(Math.abs(n)).toLocaleString('en-US'); }
+  function num(n) { return Math.round(n).toLocaleString('en-US'); }
+  function signedMoney(n) { return (n < 0 ? '−AED ' : n > 0 ? '+AED ' : 'AED ') + Math.round(Math.abs(n)).toLocaleString('en-US'); }
   function pct(d, sg) { var v = Math.round(Math.abs(d) * 100); return sg ? (d < 0 ? '−' : d > 0 ? '+' : '') + v + '%' : v + '%'; }
   function mulberry(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; var t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
   var BAND = [
@@ -244,15 +248,20 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
   ];
   function bandOf(d) { return d <= -0.15 ? 0 : d <= -0.05 ? 1 : d < 0.05 ? 2 : d < 0.15 ? 3 : 4; }
   function pill(b) { return '<span class="pill"><i class="sw b' + b + '"></i>' + BAND[b].arrow + ' ' + BAND[b].label + '</span>'; }
-  var MNAME = ['Oct 2026', 'Nov 2026', 'Dec 2026', 'Jan 2027', 'Feb 2027', 'Mar 2027', 'Apr 2027', 'May 2027', 'Jun 2027', 'Jul 2027', 'Aug 2027', 'Sep 2027', 'Oct 2027'];
-  var CAP = 0.10, DAILY = 20, AGREE = 0.07;
+  var CAP = 0.15, DAILY = 20, AGREE = 0.07, OCC = 0.75, FLOOR = 0.7, CEIL = 1.3;
+  var SEASON = [['Nov', 85], ['Dec', 100], ['Jan', 95], ['Feb', 90], ['Mar', 80], ['Apr', 65], ['May', 50], ['Jun', 35], ['Jul', 30], ['Aug', 32], ['Sep', 45], ['Oct', 70]];
 
-  // name, building, beds, size, rent now, our market price, lease end (months from Oct 2026), PriceLabs recommendation
+  // short name, full name, building, beds, size sqft (0 = not listed), nightly rate now (AED), our market price, PriceLabs recommendation
+  // The six apartments are from the WYZ Rent brochure. The rates are ILLUSTRATIVE sample numbers.
   var SAMPLE = [
-    ['H-1A', 'Harbor Court', 2, 78, 1180, 1420, 5, 1390], ['H-2B', 'Harbor Court', 2, 72, 1350, 1480, 2, 1510], ['H-3C', 'Harbor Court', 3, 104, 1890, 1610, 6, 1540], ['H-4D', 'Harbor Court', 2, 80, 1510, 1560, 10, 1575],
-    ['O-1A', 'Old Town Lofts', 1, 44, 940, 1100, 3, 1120], ['O-2A', 'Old Town Lofts', 2, 70, 1290, 1300, 8, 1250], ['O-3B', 'Old Town Lofts', 2, 74, 1640, 1520, 4, 1490], ['O-4C', 'Old Town Lofts', 1, 42, 1130, 1090, 12, 1000],
-    ['R-1A', 'Riverside Flats', 1, 46, 1020, 1000, 1, 1010], ['R-2B', 'Riverside Flats', 3, 118, 2050, 1720, 11, 1860], ['R-3A', 'Riverside Flats', 2, 76, 1240, 1480, 2, 1470], ['R-4C', 'Riverside Flats', 1, 40, 980, 1110, 9, 1125]
+    ['PT 1BR·36', 'Palm Tower · 1 bed · 36th floor', 'Palm Tower', 1, 1200, 1140, 1350, 1320],
+    ['PT 1BR·31', 'Palm Tower · 1 bed · 31st floor', 'Palm Tower', 1, 0, 1050, 1250, 1230],
+    ['PT Studio', 'Palm Tower · Studio · 36th floor', 'Palm Tower', 0, 850, 780, 800, 790],
+    ['PT 2BR·36', 'Palm Tower · 2 bed · 36th floor', 'Palm Tower', 2, 0, 1850, 1700, 1720],
+    ['Mada 2BR', 'Mada Residences · 2 bed · 12th floor', 'Mada Residences', 2, 1600, 1450, 1900, 1820],
+    ['CW 1BR', 'City Walk Building 6A · 1 bed', 'City Walk', 1, 1200, 980, 1000, 880]
   ];
+  var COMPS = [22, 18, 26, 10, 24, 15];
   var units = [], hist = [], S = { bld: 'all', sort: 'dev', sel: 0, sent: 0, confirm: null, bulk: null };
 
   // recompute everything that depends on the current rent
@@ -266,8 +275,8 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
   }
   function build(rows) {
     units = rows.map(function (r, i) {
-      var u = { id: i, name: r[0], bld: r[1], beds: r[2], size: r[3], now: r[4], fair: r[5], ends: r[6], pl: r[7] == null ? null : r[7], comps: i === 0 ? 22 : i === 2 ? 10 : 14 + (i * 5) % 27, status: null };
-      derive(u); u.apply = u.band !== 2 && u.agree && u.step !== u.now; return u;
+      var u = { id: i, name: r[0], full: r[1], bld: r[2], beds: r[3], size: r[4], now: r[5], fair: r[6], pl: r[7] == null ? null : r[7], comps: rows === SAMPLE ? COMPS[i] : 14 + (i * 5) % 27, status: null };
+      derive(u); u.apply = u.band !== 2 && u.agree && u.conf !== 'Low' && u.step !== u.now; return u;
     });
     hist = []; S.sent = 0; S.confirm = null; S.bulk = null;
   }
@@ -275,10 +284,9 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
 
   function sortedUnits() {
     var L = units.filter(function (u) { return S.bld === 'all' || u.bld === S.bld; });
-    L.sort(function (a, b) { return S.sort === 'dev' ? a.dev - b.dev : S.sort === 'lease' ? a.ends - b.ends : a.name.localeCompare(b.name); });
+    L.sort(function (a, b) { return S.sort === 'dev' ? a.dev - b.dev : S.sort === 'bld' ? a.bld.localeCompare(b.bld) || a.name.localeCompare(b.name) : a.name.localeCompare(b.name); });
     return L;
   }
-  function endLabel(u) { return u.ends >= 0 && u.ends < MNAME.length ? MNAME[u.ends] : 'Later'; }
   function wOf(el) { return Math.max(260, el.clientWidth); }
 
   // guardrails, the same rules the server will enforce
@@ -287,7 +295,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
     return [
       { ok: ch !== 0, t: 'New price is different from today' },
       { ok: ch <= 0 || ch / u.now <= CAP + 1e-9, t: 'Increase within the ' + pct(CAP) + ' single-step cap' },
-      { ok: v >= u.fair * 0.8 && v <= u.fair * 1.2, t: 'Inside floor and ceiling (80% to 120% of market)' },
+      { ok: v >= u.fair * FLOOR && v <= u.fair * CEIL, t: 'Inside floor and ceiling (70% to 130% of market)' },
       { ok: u.conf !== 'Low', t: 'Confidence is ' + u.conf + ' (' + u.comps + ' comparables)' },
       { ok: u.agree, t: 'Our market price and PriceLabs agree within 7%' },
       { ok: S.sent < DAILY, t: 'Under today\'s limit of ' + DAILY + ' changes' }
@@ -306,7 +314,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
   }
   function undo(rec) {
     var u = units[rec.uid]; if (!u) return;
-    rec.st = 'Undone'; u.now = rec.old; derive(u); u.apply = u.band !== 2 && u.agree && u.step !== u.now; u.status = null; renderAll();
+    rec.st = 'Undone'; u.now = rec.old; derive(u); u.apply = u.band !== 2 && u.agree && u.conf !== 'Low' && u.step !== u.now; u.status = null; renderAll();
   }
 
   // ----- controls -----
@@ -325,19 +333,19 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
     var below = L.filter(function (u) { return u.band <= 1; }), above = L.filter(function (u) { return u.band >= 3; }), ok = L.filter(function (u) { return u.band === 2; });
     var dis = L.filter(function (u) { return !u.agree; });
     var room = below.reduce(function (s, u) { return s + (u.fair - u.now); }, 0);
-    var nowTotal = L.reduce(function (s, u) { return s + u.now; }, 0), fairTotal = L.reduce(function (s, u) { return s + u.fair; }, 0);
+    var avgNow = L.length ? L.reduce(function (s, u) { return s + u.now; }, 0) / L.length : 0, avgFair = L.length ? L.reduce(function (s, u) { return s + u.fair; }, 0) / L.length : 0;
     $('#kpis').innerHTML =
-      '<div class="kpi"><div class="l"><i class="sw b1"></i>▼ Underpriced units</div><div class="v">' + below.length + '</div><div class="s">of ' + L.length + ' apartments</div></div>' +
-      '<div class="kpi gold"><div class="l">Room to raise rent</div><div class="v">' + signedMoney(room) + '</div><div class="s">per month, ' + signedMoney(room * 12) + ' per year</div></div>' +
-      '<div class="kpi"><div class="l"><i class="sw b3"></i>▲ Vacancy risk</div><div class="v">' + above.length + '</div><div class="s">units priced above market</div></div>' +
+      '<div class="kpi"><div class="l"><i class="sw b1"></i>▼ Underpriced</div><div class="v">' + below.length + '</div><div class="s">of ' + L.length + ' apartments</div></div>' +
+      '<div class="kpi gold"><div class="l">Room to raise rates</div><div class="v">' + signedMoney(room) + '</div><div class="s">a night, about ' + signedMoney(room * 365 * OCC) + ' a year if booked ' + Math.round(OCC * 100) + '% of nights</div></div>' +
+      '<div class="kpi"><div class="l"><i class="sw b3"></i>▲ Vacancy risk</div><div class="v">' + above.length + '</div><div class="s">priced above market</div></div>' +
       '<div class="kpi"><div class="l"><i class="sw b2"></i>● On target</div><div class="v">' + ok.length + '</div><div class="s">within 5% of market</div></div>' +
       '<div class="kpi"><div class="l">⚠ Sources disagree</div><div class="v">' + dis.length + '</div><div class="s">PriceLabs and our price differ over 7%. Check first.</div></div>' +
-      '<div class="kpi"><div class="l">Monthly rent roll</div><div class="v">' + money(nowTotal) + '</div><div class="s">market would pay ' + money(fairTotal) + '</div></div>';
+      '<div class="kpi"><div class="l">Average nightly rate</div><div class="v">' + money(avgNow) + '</div><div class="s">market average ' + money(avgFair) + '</div></div>';
   }
 
   // ----- three-price chart -----
   function renderChart() {
-    var L = sortedUnits(), el = $('#chart'), W = wOf(el), wide = W > 620, rowH = 34, m = { l: 66, r: wide ? 200 : 12, t: 26, b: 6 }, H = m.t + L.length * rowH + m.b;
+    var L = sortedUnits(), el = $('#chart'), W = wOf(el), wide = W > 620, rowH = 34, m = { l: 88, r: wide ? 210 : 12, t: 26, b: 6 }, H = m.t + L.length * rowH + m.b;
     $('#chartNote').textContent = L.length + ' unit' + (L.length === 1 ? '' : 's');
     if (!L.length) { el.innerHTML = '<p class="sm" style="padding:16px 0">No units in this building.</p>'; return; }
     var vals = []; L.forEach(function (u) { vals.push(u.now, u.fair); if (u.pl != null) vals.push(u.pl); });
@@ -346,7 +354,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
     var pw = W - m.l - m.r, X = function (v) { return m.l + (v - lo) / (hi - lo) * pw; }, s = '';
     for (var t = Math.ceil(lo / 250) * 250; t <= hi; t += 250) {
       s += '<line x1="' + X(t) + '" x2="' + X(t) + '" y1="' + (m.t - 8) + '" y2="' + (H - m.b) + '" stroke="var(--grid)"/>';
-      if (W > 420 || (t / 250) % 2 === 0) s += '<text x="' + X(t) + '" y="12" text-anchor="middle">' + money(t) + '</text>';
+      if (W > 420 || (t / 250) % 2 === 0) s += '<text x="' + X(t) + '" y="12" text-anchor="middle">' + num(t) + '</text>';
     }
     L.forEach(function (u, i) {
       var y = m.t + i * rowH + rowH / 2, xn = X(u.now), xf = X(u.fair), gap = u.fair - u.now;
@@ -357,7 +365,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
       s += '<path d="M' + xf + ' ' + (y - 7) + ' L' + (xf + 7) + ' ' + y + ' L' + xf + ' ' + (y + 7) + ' L' + (xf - 7) + ' ' + y + ' Z" fill="var(--navy)"/>';
       s += '<circle class="dot b' + u.band + (u.id === S.sel ? ' sel' : '') + '" cx="' + xn + '" cy="' + y + '" r="8"/>';
       if (wide) {
-        var txt = u.band === 2 ? 'On target' : gap > 0 ? 'Leaving ' + money(gap) + ' a month' : 'Over by ' + money(-gap) + ' a month';
+        var txt = u.band === 2 ? 'On target' : gap > 0 ? 'Leaving ' + money(gap) + ' a night' : 'Over by ' + money(-gap) + ' a night';
         s += '<text class="ink" x="' + (W - m.r + 14) + '" y="' + (y + 4) + '">' + BAND[u.band].arrow + ' ' + txt + (u.agree ? '' : '  ⚠') + '</text>';
       }
       s += '<rect class="rowhit" data-id="' + u.id + '" x="0" y="' + (y - rowH / 2) + '" width="' + W + '" height="' + rowH + '"><title>' + esc(u.name) + ': ' + money(u.now) + ' now, ' + money(u.fair) + ' market' + (u.pl != null ? ', PriceLabs ' + money(u.pl) : '') + '</title></rect>';
@@ -370,21 +378,22 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
   // ----- table -----
   function moveText(u) {
     if (!u.agree) return '⚠ Review: sources disagree';
+    if (u.conf === 'Low' && u.step !== u.now) return '⚠ Blocked: only ' + u.comps + ' comparables<div class="sm">would ' + (u.step > u.now ? 'raise to ' : 'lower to ') + money(u.sug) + '</div>';
     if (u.band <= 1) return '▲ Raise to ' + money(u.step) + (u.step < u.sug ? '<div class="sm">then ' + money(u.sug) + ' at next review</div>' : '');
     if (u.band === 2) return '● Keep as is';
-    return '▼ Lower to ' + money(u.sug) + ' to avoid an empty unit';
+    return '▼ Lower to ' + money(u.sug) + ' to fill more nights';
   }
   function statusChip(u) { return u.status && u.status.st !== 'Undone' ? ' <span class="stat ' + (u.status.st === 'Confirmed' ? 'ok' : '') + '">' + u.status.st + '</span>' : ''; }
   function renderTable() {
     var L = sortedUnits();
     $('#rows').innerHTML = L.length ? L.map(function (u) {
-      var ch = u.step - u.now, can = ch !== 0 && u.agree;
+      var ch = u.step - u.now, can = ch !== 0 && u.agree && u.conf !== 'Low';
       return '<tr tabindex="0" data-id="' + u.id + '" class="' + (u.id === S.sel ? 'sel ' : '') + (u.agree ? '' : 'warnrow') + '"><td><input type="checkbox" data-c="' + u.id + '" aria-label="Apply move for ' + esc(u.name) + '"' + (u.apply && can ? ' checked' : '') + (can ? '' : ' disabled') + '></td>' +
         '<td><b>' + esc(u.name) + '</b><div class="sm">' + esc(u.bld) + '</div></td><td class="num">' + money(u.now) + '</td><td class="num">' + money(u.fair) + '</td>' +
         '<td class="num">' + (u.pl == null ? '<span class="sm">not linked</span>' : money(u.pl) + (u.agree ? '' : '<div class="sm">' + pct((u.pl - u.fair) / u.fair, true) + ' vs ours</div>')) + '</td>' +
         '<td>' + pill(u.band) + (u.band === 2 ? '' : ' <span class="sm">' + pct(u.dev) + (u.dev < 0 ? ' under' : ' over') + '</span>') + '</td>' +
-        '<td class="sm">' + endLabel(u) + '</td><td>' + moveText(u) + statusChip(u) + '</td><td class="num">' + (ch === 0 || !u.agree ? '<span class="sm">none</span>' : '<span class="' + (ch > 0 ? 'gain' : 'loss') + '">' + signedMoney(ch) + '</span>') + '</td></tr>';
-    }).join('') : '<tr><td colspan="9" class="sm" style="padding:18px 8px">No units in this building.</td></tr>';
+        '<td>' + moveText(u) + statusChip(u) + '</td><td class="num">' + (ch === 0 || !can ? '<span class="sm">none</span>' : '<span class="' + (ch > 0 ? 'gain' : 'loss') + '">' + signedMoney(ch) + '</span>') + '</td></tr>';
+    }).join('') : '<tr><td colspan="8" class="sm" style="padding:18px 8px">No units in this building.</td></tr>';
     document.querySelectorAll('#rows tr[data-id]').forEach(function (tr) {
       function go(e) { if (e.target && e.target.type === 'checkbox') return; pick(+tr.getAttribute('data-id'), true); }
       tr.addEventListener('click', go);
@@ -395,10 +404,10 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
     });
     renderSummary(); renderBulk();
   }
-  function ticked() { return sortedUnits().filter(function (u) { return u.apply && u.agree && u.step !== u.now; }); }
+  function ticked() { return sortedUnits().filter(function (u) { return u.apply && u.agree && u.conf !== 'Low' && u.step !== u.now; }); }
   function renderSummary() {
     var L = ticked(), d = L.reduce(function (s, u) { return s + (u.step - u.now); }, 0);
-    $('#summary').innerHTML = '<span>' + L.length + ' move' + (L.length === 1 ? '' : 's') + ' ticked · effect on rent roll: <b class="' + (d >= 0 ? 'gain' : 'loss') + '">' + signedMoney(d) + ' / month</b> · <b class="' + (d >= 0 ? 'gain' : 'loss') + '">' + signedMoney(d * 12) + ' / year</b></span>' +
+    $('#summary').innerHTML = '<span>' + L.length + ' move' + (L.length === 1 ? '' : 's') + ' ticked · effect: <b class="' + (d >= 0 ? 'gain' : 'loss') + '">' + signedMoney(d) + ' / night</b> · <b class="' + (d >= 0 ? 'gain' : 'loss') + '">' + signedMoney(d * 365 * OCC) + ' / year at ' + Math.round(OCC * 100) + '% booked</b></span>' +
       '<button class="btn" id="bulkBtn"' + (L.length ? '' : ' disabled') + '>Review and send ticked moves</button>';
     $('#bulkBtn').addEventListener('click', function () { S.bulk = { confirm: false }; renderBulk(); });
   }
@@ -412,13 +421,13 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
     }).join('');
     var tot = pass.reduce(function (s, u) { return s + (u.step - u.now); }, 0);
     el.innerHTML = '<div class="push"><h2>Review ' + L.length + ' change' + (L.length === 1 ? '' : 's') + ' before sending to PriceLabs</h2><div class="tablewrap"><table class="mini" style="min-width:560px"><thead><tr><th>Unit</th><th class="num">Now</th><th class="num">New</th><th class="num">Change</th><th>Checks</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
-      '<p class="sm" style="margin-top:8px">' + pass.length + ' of ' + L.length + ' can be sent. Effect: <b class="' + (tot >= 0 ? 'gain' : 'loss') + '">' + signedMoney(tot) + ' / month, ' + signedMoney(tot * 12) + ' / year</b>. Failing changes are skipped.</p>' +
+      '<p class="sm" style="margin-top:8px">' + pass.length + ' of ' + L.length + ' can be sent. Effect: <b class="' + (tot >= 0 ? 'gain' : 'loss') + '">' + signedMoney(tot) + ' / night, ' + signedMoney(tot * 365 * OCC) + ' / year at ' + Math.round(OCC * 100) + '% booked</b>. Failing changes are skipped.</p>' +
       (S.bulk.confirm ? '<p style="margin-top:8px"><b>Send ' + pass.length + ' change' + (pass.length === 1 ? '' : 's') + ' to PriceLabs now?</b> A 5 minute delay lets you cancel in the real product.</p><div class="btnrow"><button class="btn" id="bulkYes">Yes, send</button><button class="btn alt" id="bulkNo">Back</button></div>'
         : '<div class="btnrow"><button class="btn" id="bulkGo"' + (pass.length ? '' : ' disabled') + '>Approve and send to PriceLabs</button><button class="btn alt" id="bulkCancel">Cancel</button></div>') + '</div>';
     var g = $('#bulkGo'); if (g) g.addEventListener('click', function () { S.bulk.confirm = true; renderBulk(); });
     var n = $('#bulkNo'); if (n) n.addEventListener('click', function () { S.bulk.confirm = false; renderBulk(); });
     var c = $('#bulkCancel'); if (c) c.addEventListener('click', function () { S.bulk = null; renderBulk(); });
-    var y = $('#bulkYes'); if (y) y.addEventListener('click', function () { var go = pass.slice(); S.bulk = null; go.forEach(function (u, i) { setTimeout(function () { send(u, u.step, 'Lease renewal, ' + endLabel(u)); }, i * 250); }); renderBulk(); });
+    var y = $('#bulkYes'); if (y) y.addEventListener('click', function () { var go = pass.slice(); S.bulk = null; go.forEach(function (u, i) { setTimeout(function () { send(u, u.step, 'Open dates from tomorrow'); }, i * 250); }); renderBulk(); });
   }
 
   // ----- history -----
@@ -430,17 +439,11 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
     document.querySelectorAll('#hist [data-u]').forEach(function (b) { b.addEventListener('click', function () { undo(hist[+b.getAttribute('data-u')]); }); });
   }
 
-  // ----- calendar -----
+  // ----- demand through the year -----
   function renderCal() {
-    var L = sortedUnits(), s = '';
-    for (var i = 1; i <= 12; i++) {
-      var here = L.filter(function (u) { return u.ends === i; });
-      s += '<div><div class="m">' + MNAME[i] + '</div><div class="cell">' + (here.length ? here.map(function (u) {
-        return '<button class="chip" data-id="' + u.id + '"><i class="sw b' + u.band + '"></i>' + BAND[u.band].arrow + ' ' + esc(u.name) + '</button>';
-      }).join('') : '<span class="note">—</span>') + '</div></div>';
-    }
-    $('#cal').innerHTML = s;
-    $('#cal').querySelectorAll('.chip').forEach(function (c) { c.addEventListener('click', function () { pick(+c.getAttribute('data-id'), true); }); });
+    $('#cal').innerHTML = SEASON.map(function (m) {
+      return '<div class="sbar' + (m[1] >= 90 ? ' peak' : '') + '"><span>' + m[1] + '</span><i style="height:' + Math.round(m[1] * 1.05) + '%"></i><span>' + m[0] + '</span></div>';
+    }).join('');
   }
 
   // ----- detail -----
@@ -457,50 +460,52 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
     pts[11] = u.fair; if (u.pl != null) pl[11] = u.pl;
     var all = pts.concat(pl, [u.now]), lo = Math.floor(Math.min.apply(null, all) * 0.97 / 50) * 50, hi = Math.ceil(Math.max.apply(null, all) * 1.03 / 50) * 50;
     var pw = W - m.l - m.r, ph = H - m.t - m.b, X = function (i) { return m.l + i / 11 * pw; }, Y = function (v) { return m.t + ph - (v - lo) / (hi - lo) * ph; }, s = '';
-    [lo, (lo + hi) / 2, hi].forEach(function (t) { s += '<line x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + Y(t) + '" y2="' + Y(t) + '" stroke="var(--grid)"/><text x="' + (m.l - 6) + '" y="' + (Y(t) + 4) + '" text-anchor="end">' + money(t) + '</text>'; });
+    [lo, (lo + hi) / 2, hi].forEach(function (t) { s += '<line x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + Y(t) + '" y2="' + Y(t) + '" stroke="var(--grid)"/><text x="' + (m.l - 6) + '" y="' + (Y(t) + 4) + '" text-anchor="end">' + num(t) + '</text>'; });
     s += '<path d="' + pts.map(function (v, i) { return (i ? 'L' : 'M') + X(i) + ' ' + Y(v); }).join(' ') + '" fill="none" stroke="var(--navy)" stroke-width="2.5" stroke-linejoin="round"/>';
     if (u.pl != null) s += '<path d="' + pl.map(function (v, i) { return (i ? 'L' : 'M') + X(i) + ' ' + Y(v); }).join(' ') + '" fill="none" stroke="var(--pl)" stroke-width="2.2" stroke-linejoin="round"/>';
     s += '<line x1="' + X(0) + '" x2="' + X(11) + '" y1="' + Y(u.now) + '" y2="' + Y(u.now) + '" stroke="var(--ink2)" stroke-width="2" stroke-dasharray="5 4"/>';
     s += '<circle class="dot b' + u.band + '" cx="' + X(11) + '" cy="' + Y(u.now) + '" r="6"/>';
     s += '<text x="' + X(0) + '" y="' + (H - 6) + '">12 months ago</text><text x="' + X(11) + '" y="' + (H - 6) + '" text-anchor="end">Now</text>';
-    return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="Market price, PriceLabs recommendation and your rent over 12 months">' + s + '</svg>' +
-      '<div class="legend"><span><i style="display:inline-block;width:22px;height:0;border-top:2.5px solid var(--navy)"></i>Our market price</span>' + (u.pl != null ? '<span><i style="display:inline-block;width:22px;height:0;border-top:2.5px solid var(--pl)"></i>PriceLabs</span>' : '') + '<span><i style="display:inline-block;width:22px;height:0;border-top:2px dashed var(--ink2)"></i>Your rent</span></div>';
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="Market price, PriceLabs recommendation and your nightly rate over 12 months">' + s + '</svg>' +
+      '<div class="legend"><span><i style="display:inline-block;width:22px;height:0;border-top:2.5px solid var(--navy)"></i>Our market price</span>' + (u.pl != null ? '<span><i style="display:inline-block;width:22px;height:0;border-top:2.5px solid var(--pl)"></i>PriceLabs</span>' : '') + '<span><i style="display:inline-block;width:22px;height:0;border-top:2px dashed var(--ink2)"></i>Your rate</span></div>';
   }
   function comps(u) {
     var r = mulberry(u.id * 977 + 13), out = [];
-    for (var i = 0; i < 5; i++) { var size = Math.round(u.size * (0.88 + r() * 0.24)), pm = u.fair / (u.size || 1) * (0.93 + r() * 0.14); out.push([size, Math.round(size * pm / 10) * 10, pm]); }
+    for (var i = 0; i < 5; i++) { var base = u.size || 1000, size = Math.round(base * (0.88 + r() * 0.24)), pm = u.fair / base * (0.93 + r() * 0.14); out.push([size, Math.round(size * pm / 10) * 10, pm]); }
     return out;
   }
   function renderDetail() {
     var u = units[S.sel] || units[0], el = $('#detail');
     if (!u) { el.innerHTML = '<p class="sm">Pick a unit to see details.</p>'; return; }
     var gap = u.fair - u.now, why;
+    var yearly = gap * 365 * OCC;
     if (!u.agree) why = 'Our market price and PriceLabs differ by ' + pct((u.pl - u.fair) / u.fair) + '. Check the comparable listings and your PriceLabs settings first. No change is suggested until a person has looked.';
-    else if (u.band <= 1) why = 'Your rent is ' + pct(u.dev) + ' under similar ' + u.beds + '-bedroom apartments. You could earn ' + money(gap) + ' more a month, ' + money(gap * 12) + ' a year. A single increase is capped at 10%, so ' + (u.step < u.sug ? 'the first step is ' + money(u.step) + ' and the next review moves it to ' + money(u.sug) + '.' : 'one step to ' + money(u.step) + ' reaches the target.');
-    else if (u.band === 2) why = 'Your rent is in line with the market. Leave it alone and focus on units with a bigger gap.';
-    else why = 'Your rent is ' + pct(u.dev) + ' above similar apartments. Expect a longer empty period if this unit turns over. A cut of ' + money(-gap) + ' a month would bring it back in line.';
-    var start = Math.min(Math.max(u.step, Math.round(u.fair * 0.8 / 10) * 10), Math.round(u.fair * 1.2 / 10) * 10);
+    else if (u.conf === 'Low' && u.band !== 2) why = 'Only ' + u.comps + ' similar listings were found, so the score is a rough guide and sending is blocked until a person reviews it.';
+    else if (u.band <= 1) why = 'Your nightly rate is ' + pct(u.dev) + ' under similar ' + (u.beds === 0 ? 'studios' : u.beds + '-bedroom holiday homes') + '. You could earn ' + money(gap) + ' more a night, about ' + money(yearly) + ' a year if booked ' + Math.round(OCC * 100) + '% of nights. A single change is capped at ' + pct(CAP) + ', so ' + (u.step < u.sug ? 'the first step is ' + money(u.step) + ' and the next review moves it to ' + money(u.sug) + '.' : 'one step to ' + money(u.step) + ' reaches the target.');
+    else if (u.band === 2) why = 'Your nightly rate is in line with the market. Leave it alone and focus on apartments with a bigger gap.';
+    else why = 'Your nightly rate is ' + pct(u.dev) + ' above similar holiday homes. Expect fewer bookings at this price. A cut of ' + money(-gap) + ' a night would bring it back in line.';
+    var start = Math.min(Math.max(u.step, Math.round(u.fair * FLOOR / 10) * 10), Math.round(u.fair * CEIL / 10) * 10);
     el.innerHTML =
-      '<div class="d-title">' + esc(u.name) + ' · ' + esc(u.bld) + '</div><div class="sm">' + u.beds + ' bed · ' + u.size + ' m² · lease ends ' + endLabel(u) + '</div>' +
-      '<div class="d-price"><span class="big">' + money(u.now) + '</span><span class="sm">per month now</span></div>' +
+      '<div class="d-title">' + esc(u.full) + '</div><div class="sm">' + (u.beds === 0 ? 'Studio' : u.beds + ' bed') + (u.size ? ' · ' + num(u.size) + ' sqft' : ' · size not listed') + '</div>' +
+      '<div class="d-price"><span class="big">' + money(u.now) + '</span><span class="sm">per night now</span></div>' +
       '<div class="verdict">' + pill(u.band) + '<span>' + (u.band === 2 ? 'On target' : pct(u.dev) + (u.dev < 0 ? ' under market' : ' over market')) + '</span></div>' +
       '<div class="three"><div>Rent now<b>' + money(u.now) + '</b></div><div>Our market<b>' + money(u.fair) + '</b></div><div>PriceLabs<b>' + (u.pl == null ? '—' : money(u.pl)) + '</b></div></div>' +
       rangeBar(u) +
       (u.agree ? '' : '<div class="flagbox"><b>⚠ Sources disagree.</b> Review before changing this rent.</div>') +
       '<div class="why"><span class="tag">What this means</span>' + why + '</div>' +
-      '<div class="sec"><h2>Market and PriceLabs against your rent, last 12 months</h2><div class="chart" id="dTrend"></div></div>' +
+      '<div class="sec"><h2>Market and PriceLabs against your nightly rate, last 12 months</h2><div class="chart" id="dTrend"></div></div>' +
       '<div class="sec"><h2>Review and send to PriceLabs</h2><div class="scen"><div class="row"><span class="now" id="scNow"></span><span id="scPill"></span></div>' +
-      '<input type="range" id="scRange" min="' + Math.round(u.fair * 0.8 / 10) * 10 + '" max="' + Math.round(u.fair * 1.2 / 10) * 10 + '" step="10" value="' + start + '" aria-label="New rent for ' + esc(u.name) + '">' +
-      '<div class="scale"><span>' + money(Math.round(u.fair * 0.8 / 10) * 10) + '</span><span>drag to try a price</span><span>' + money(Math.round(u.fair * 1.2 / 10) * 10) + '</span></div><div class="msg" id="scMsg" style="margin-top:6px"></div></div>' +
+      '<input type="range" id="scRange" min="' + Math.round(u.fair * FLOOR / 10) * 10 + '" max="' + Math.round(u.fair * CEIL / 10) * 10 + '" step="10" value="' + start + '" aria-label="New nightly rate for ' + esc(u.name) + '">' +
+      '<div class="scale"><span>' + num(Math.round(u.fair * FLOOR / 10) * 10) + '</span><span>drag to try a price (AED per night)</span><span>' + num(Math.round(u.fair * CEIL / 10) * 10) + '</span></div><div class="msg" id="scMsg" style="margin-top:6px"></div></div>' +
       '<div class="push" id="pushBox"></div></div>' +
-      '<div class="sec"><h2>Similar apartments compared</h2><table class="mini"><thead><tr><th>Size</th><th class="num">Rent</th><th class="num">Per m²</th></tr></thead><tbody>' +
-      comps(u).map(function (c) { return '<tr style="cursor:default"><td>' + c[0] + ' m²</td><td class="num">' + money(c[1]) + '</td><td class="num">' + money(c[2]) + '</td></tr>'; }).join('') + '</tbody></table></div>';
+      '<div class="sec"><h2>Similar apartments compared</h2><table class="mini"><thead><tr><th>Size</th><th class="num">Rate</th><th class="num">Per sqft</th></tr></thead><tbody>' +
+      comps(u).map(function (c) { return '<tr style="cursor:default"><td>' + num(c[0]) + ' sqft</td><td class="num">' + money(c[1]) + '</td><td class="num">' + money(c[2]) + '</td></tr>'; }).join('') + '</tbody></table></div>';
     var tw = $('#dTrend'); tw.innerHTML = trend(u, Math.max(240, tw.clientWidth || 320));
-    var eff = 'Lease renewal, ' + endLabel(u);
+    var eff = 'Open dates from tomorrow';
     function scen() {
       var v = +$('#scRange').value, d = (v - u.fair) / u.fair, b = bandOf(d), ch = v - u.now;
       $('#scNow').textContent = money(v); $('#scPill').innerHTML = pill(b);
-      var msg = ch === 0 ? 'Same as today.' : '<span class="' + (ch > 0 ? 'gain' : 'loss') + '">' + signedMoney(ch) + ' / month · ' + signedMoney(ch * 12) + ' / year</span>';
+      var msg = ch === 0 ? 'Same as today.' : '<span class="' + (ch > 0 ? 'gain' : 'loss') + '">' + signedMoney(ch) + ' / night · ' + signedMoney(ch * 365 * OCC) + ' / year at ' + Math.round(OCC * 100) + '% booked</span>';
       $('#scMsg').innerHTML = msg;
       var c = validate(u, v), ok = allOk(c), cf = S.confirm && S.confirm.uid === u.id && S.confirm.v === v, last = u.status;
       var tl = '';
@@ -508,7 +513,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
         var steps = ['Proposed', 'Approved', 'Sent', 'Confirmed'], idx = steps.indexOf(last.st);
         tl = '<div class="timeline">' + steps.map(function (x, i) { return '<span class="' + (i <= idx ? 'on' : '') + '">' + x + '</span>'; }).join('') + '</div><p class="sm" style="margin-top:6px">' + (last.st === 'Confirmed' ? 'PriceLabs now shows ' + money(last.nw) + ' (read back and matched).' : 'Working…') + '</p>';
       }
-      $('#pushBox').innerHTML = '<div class="kv"><span>Unit</span><span>' + esc(u.name) + ' · ' + esc(u.bld) + '</span><span>Price in PriceLabs</span><span>' + money(u.now) + ' per month (read 06:00 today)</span><span>Proposed</span><span><b>' + money(v) + '</b> (' + signedMoney(ch) + ', ' + pct(ch / u.now, true) + ')</span><span>Effective from</span><span>' + esc(eff) + '</span></div>' + checkList(c) + tl +
+      $('#pushBox').innerHTML = '<div class="kv"><span>Apartment</span><span>' + esc(u.full) + '</span><span>Price in PriceLabs</span><span>' + money(u.now) + ' per night (read 06:00 today)</span><span>Proposed</span><span><b>' + money(v) + '</b> (' + signedMoney(ch) + ', ' + pct(ch / u.now, true) + ')</span><span>Applies to</span><span>' + esc(eff) + '. Existing bookings keep their price.</span></div>' + checkList(c) + tl +
         (cf ? '<p style="margin-top:10px"><b>Send ' + money(v) + ' for ' + esc(u.name) + ' to PriceLabs?</b></p><div class="btnrow"><button class="btn" id="yes">Yes, send</button><button class="btn alt" id="no">Back</button></div>'
           : '<div class="btnrow"><button class="btn" id="go"' + (ok ? '' : ' disabled') + '>Approve and send to PriceLabs</button></div>' + (ok ? '' : '<p class="sm" style="margin-top:6px">Fix the ✖ items to enable sending.</p>')) +
         '<p class="note" style="margin-top:8px">Simulated in this mockup. Nothing is sent anywhere.</p>';
@@ -522,31 +527,31 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
   function pick(id, scroll) { S.sel = id; S.confirm = null; renderAll(); if (scroll && innerWidth <= 1060) $('#detail').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 
   // ----- CSV import -----
-  var SAMPLE_CSV = 'unit,building,beds,size_m2,rent,market_rent,pricelabs_rec,lease_end\nA-1,Sunrise House,2,75,1250,1420,1400,2027-02\nA-2,Sunrise House,1,44,980,960,970,2026-12\nB-1,Park View,3,110,2100,1850,1900,2027-05\nB-2,Park View,2,70,1300,1310,1330,2027-08';
+  var SAMPLE_CSV = 'unit,building,beds,size_sqft,nightly_rate,market_rate,pricelabs_rec\nA-1,Marina Tower,1,750,820,960,940\nA-2,Marina Tower,2,1100,1450,1400,1420\nB-1,Downtown Loft,1,700,900,880,890\nB-2,Downtown Loft,2,1250,1900,1650,1700';
   $('#csv').value = SAMPLE_CSV;
   $('#loadBtn').addEventListener('click', function () {
     var lines = $('#csv').value.trim().split(/\r?\n/).filter(Boolean), msg = $('#csvMsg');
-    if (lines.length < 2) { msg.className = 'msg err'; msg.textContent = 'Add a header row and at least one unit.'; return; }
+    if (lines.length < 2) { msg.className = 'msg err'; msg.textContent = 'Add a header row and at least one apartment.'; return; }
     var head = lines[0].split(',').map(function (h) { return h.trim().toLowerCase(); }), idx = function (n) { return head.indexOf(n); };
-    var miss = ['unit', 'rent', 'market_rent'].filter(function (n) { return idx(n) < 0; });
+    var miss = ['unit', 'nightly_rate', 'market_rate'].filter(function (n) { return idx(n) < 0; });
     if (miss.length) { msg.className = 'msg err'; msg.textContent = 'Missing column: ' + miss.join(', ') + '.'; return; }
     var rows = [], bad = [];
     lines.slice(1).forEach(function (ln, k) {
-      var c = ln.split(',').map(function (x) { return x.trim(); }), rent = +c[idx('rent')], mk = +c[idx('market_rent')];
-      if (!c[idx('unit')] || !(rent > 0) || !(mk > 0)) { bad.push(k + 2); return; }
-      var le = idx('lease_end') >= 0 ? /^(\d{4})-(\d{2})$/.exec(c[idx('lease_end')] || '') : null, ends = le ? (+le[1] - 2026) * 12 + (+le[2] - 10) : -1;
+      var c = ln.split(',').map(function (x) { return x.trim(); }), rate = +c[idx('nightly_rate')], mk = +c[idx('market_rate')];
+      if (!c[idx('unit')] || !(rate > 0) || !(mk > 0)) { bad.push(k + 2); return; }
       var pl = idx('pricelabs_rec') >= 0 && +c[idx('pricelabs_rec')] > 0 ? +c[idx('pricelabs_rec')] : null;
-      rows.push([c[idx('unit')], idx('building') >= 0 && c[idx('building')] ? c[idx('building')] : 'My building', idx('beds') >= 0 ? +c[idx('beds')] || 0 : 0, idx('size_m2') >= 0 ? +c[idx('size_m2')] || 0 : 0, rent, mk, ends, pl]);
+      var bld = idx('building') >= 0 && c[idx('building')] ? c[idx('building')] : 'My building', beds = idx('beds') >= 0 ? +c[idx('beds')] || 0 : 0;
+      rows.push([c[idx('unit')], c[idx('unit')] + ' · ' + bld, bld, beds, idx('size_sqft') >= 0 ? +c[idx('size_sqft')] || 0 : 0, rate, mk, pl]);
     });
-    if (!rows.length) { msg.className = 'msg err'; msg.textContent = 'No valid rows. Rent and market_rent must be numbers. Problem lines: ' + bad.join(', ') + '.'; return; }
+    if (!rows.length) { msg.className = 'msg err'; msg.textContent = 'No valid rows. nightly_rate and market_rate must be numbers. Problem lines: ' + bad.join(', ') + '.'; return; }
     build(rows); S.bld = 'all'; S.sel = 0; renderAll();
-    msg.className = 'msg ok'; msg.textContent = 'Loaded ' + rows.length + ' unit' + (rows.length === 1 ? '' : 's') + (bad.length ? '. Skipped lines: ' + bad.join(', ') : '') + '.';
-    $('#stamp').textContent = 'Showing the units you pasted. Market and PriceLabs numbers are the ones you supplied. Sending is still simulated.';
+    msg.className = 'msg ok'; msg.textContent = 'Loaded ' + rows.length + ' apartment' + (rows.length === 1 ? '' : 's') + (bad.length ? '. Skipped lines: ' + bad.join(', ') : '') + '.';
+    $('#stamp').textContent = 'Showing the apartments you pasted. Market and PriceLabs numbers are the ones you supplied. Sending is still simulated.';
   });
   $('#sampleBtn').addEventListener('click', function () { build(SAMPLE); S.bld = 'all'; S.sel = 0; renderAll(); $('#csvMsg').textContent = ''; });
 
   // ----- prompt -----
-  var PROMPT = "PROJECT\nRent Watch \"My Units\". A dashboard for a landlord or property manager. For each of their own apartments it shows the rent they charge today, compares it with (1) the market and (2) PriceLabs, says whether the rent is below, on or above the market, suggests a new rent, and lets the owner approve that change and send it to PriceLabs from the dashboard. Approved mockup: [link to My Units mockup].\n\nWHO DOES WHAT\nKarim: dashboard (front end). Abbas: data, scoring and PriceLabs connection (back end). Agree the data shapes in section 1 on day one so you can work in parallel.\n\nBLANKS TO FILL BEFORE SENDING\nMarket and currency: [city, currency]. Rental type: [long-term or short-term]. Local rent increase limit: [limit, or 10% if none]. Alerts by: [email or WhatsApp].\n\n1. DATA SHAPES\nUnit: { id, building, name, beds, size_m2, floor, furnished, building_age, lat, lng, current_rent, currency, lease_start, lease_end, status: occupied | vacant, pricelabs_listing_id }\nMarketScore: { fair_price, fair_low, fair_high, deviation_pct, band, confidence, comps_count, reasons: [text], trend_12m: [12 monthly fair prices] }\nPriceLabsSnapshot: { unit_id, taken_at, current_price, recommended_price, min_price, max_price, overrides: [{date, price}] }\nPriceChange: { id, unit_id, old_price, new_price, effective_from, reason, source_prices: {market, pricelabs}, status: proposed | approved | sent | confirmed | failed | cancelled | undone, proposed_by, approved_by, approved_at, pricelabs_response, readback_price, created_at }\ndeviation_pct = (current_rent - fair_price) / fair_price. Bands: far below <= -15%, below -15% to -5%, on target within 5%, above 5% to 15%, far above > 15%.\n\n2. ABBAS: DATA, SCORING, PRICELABS\nA. Confirm PriceLabs first. Read the PriceLabs API documentation (or ask their support) and write down in one page: which read endpoints give us listing, current price, recommended price, min and max; which write operations our plan allows (base price, min and max, date-specific overrides); whether [long-term or short-term] rentals are supported; rate limits. If writing is not allowed, build the fallback: an export file of approved prices for manual upload, with the same approval and history.\nB. Credentials. The PriceLabs key is read only from the environment variable PRICELABS_API_KEY (or the secret manager). Never in code, the browser, logs or chat. Use the least access the key allows.\nC. Ingest. Nightly pull of PriceLabs snapshots for every unit. Market data from sources we are allowed to use (PriceLabs market data if available, official APIs, licensed data, partner feeds, CSV upload). Do NOT scrape any site whose terms forbid it. Respect robots.txt and rate limits. Keep a daily snapshot so trends can be drawn.\nD. Clean. Remove duplicates (same address, size and price within 7 days), drop listings not seen for 60 days, convert currency, rent period and size units, trim outliers.\nE. Fair price per unit. Median of comparable listings (same area, size within 20%, same bedrooms, last 90 days, at least 8 comps), then a regression on log(rent) with size, bedrooms, floor, furnished, building age and distance to centre or transit. Fall back to comps when data is thin. Measure error on held-out listings (MAPE), show it in the dashboard, target under 10%. Confidence: High with 20 or more comps, Medium 12 to 19, Low below 12.\nF. Compare with PriceLabs. For each unit return rent now, our market price, PriceLabs recommended price and the percent difference between the last two. If they differ by more than 7%, set flag SOURCES_DISAGREE and do not produce an automatic suggestion.\nG. Suggested price. If on target: keep. If below market: 97% of the average of our market price and the PriceLabs recommendation, applied at lease renewal. If above market: 103% of that average. Cap any single increase at the local limit or 10%. When the gap is bigger, propose the capped step now, store the final target, and propose the next step at the next review. Say so in the reason text.\nH. Price change workflow (server side). POST /price-changes creates a proposal. POST /price-changes/:id/approve records the approver. A background worker then (1) re-runs all guardrails, (2) calls PriceLabs to set the new price, (3) reads the price back, (4) sets status to confirmed or failed with the reason. Use idempotency keys so a retry never sends twice. POST /price-changes/:id/undo restores the old price. GET /price-changes lists history. Nothing is ever sent without an approved record.\nI. Guardrails (all enforced on the server, not only in the browser): single-step cap; floor and ceiling at 80% to 120% of our market price; block when confidence is Low; block when SOURCES_DISAGREE until a person marks it reviewed; daily limit of 20 changes per owner; 5 minute delay before sending so a batch can be cancelled; every attempt written to an audit log.\nJ. Other endpoints: GET /portfolio (units with scores and PriceLabs numbers), GET /units/:id (comps, 12-month trend, PriceLabs history), POST /portfolio/import (CSV: unit, rent, optional building, beds, size_m2, lease_end; market numbers are computed, not required). Alerts: 90 days before a lease ends, notify the owner if the unit is not on target, with the suggested rent.\nK. Security: login required, each owner sees and changes only their own units, roles (viewer, approver), data encrypted at rest, tests with fixed sample data including a fake PriceLabs server.\n\n3. KARIM: DASHBOARD\nA. Build the screens in the approved mockup: summary tiles, dot-and-diamond chart, \"What to do next\" table with tick boxes and totals, renewal calendar, unit detail with 12-month market line and \"Try a new rent\" slider, similar apartments list, CSV import.\nB. Add PriceLabs to every view. Chart: add a hollow square for the PriceLabs recommendation next to the diamond for our market price. Table: add a PriceLabs column, show the percent difference, and shade rows with a SOURCES_DISAGREE warning. Unit detail: add the PriceLabs line to the 12-month chart.\nC. Add the \"Review and send to PriceLabs\" panel (see the sample report page 4): current price in PriceLabs, proposed price with percent change, effective date, reason, guardrail checks with tick or cross, status line (Proposed, Awaiting approval, Sent, Confirmed or Failed). Button \"Approve and send to PriceLabs\" and \"Cancel\". Show server errors in plain words.\nD. Bulk: ticked moves in the table open one review screen listing every change and the total effect per month and per year. Approve all or untick single ones.\nE. History page: every change with who, when, old and new price, status, and an Undo button while undo is possible. Show \"last updated\" time and data source on every page.\nF. Colours and wording: blue = you charge less than the market, grey = on target, red = you charge more. Every colour comes with a word and an arrow (colour-blind safe, no red and green pairs). Works at 400 px phone width with no sideways page scroll. Light and dark themes. Loading, empty and error states. Show a note that rent increases may be limited by law or by the lease.\n\nDONE WHEN\nReal units and real market data replace the sample data. Scores match a hand-checked sample of 20 units. MAPE is shown and under 10%, or we know why not. A test price change is approved on the dashboard, appears in PriceLabs, is read back as confirmed, and undo restores it. A change that breaks a guardrail is refused with a clear message. The page loads in under 2 seconds with 200 units. No API keys are in the repo.";
+  var PROMPT = "PROJECT\nRent Watch for WyzRent holiday homes in Dubai. A dashboard for the owner. For each apartment it shows the nightly rate we charge today, compares it with (1) the short-term rental market and (2) PriceLabs, says whether we are below, on or above the market, suggests a new nightly rate, and lets the owner approve the change and send it to PriceLabs from the dashboard. All prices are in AED per night. Approved mockup and sample report: [links].\n\nWHO DOES WHAT\nKarim: dashboard (front end). Abbas: data, scoring, and the Hostaway and PriceLabs connections (back end). Agree the data shapes in section 1 on day one so you can work in parallel.\n\nBLANKS TO FILL BEFORE SENDING\nWho creates the Hostaway and PriceLabs API credentials: [name]. Occupancy assumption for yearly estimates: [75%]. Alerts by: [email or WhatsApp].\n\n1. DATA SHAPES\nApartment: { id, building, name, beds, size_sqft (may be unknown), floor, view, hostaway_listing_id, pricelabs_listing_id, nightly_rate_now (AED), min_price, max_price, status }\nBooking (from Hostaway): { reservation_id, apartment_id, check_in, check_out, nightly_rate, channel, status }\nMarketScore: { fair_nightly, fair_low, fair_high, deviation_pct, band, confidence, comps_count, reasons: [text], trend_12m: [12 monthly fair prices], occupancy_30d, adr_30d }\nPriceLabsSnapshot: { apartment_id, taken_at, base_price, min_price, max_price, recommended_price, overrides: [{date, price}] }\nPriceChange: { id, apartment_id, old_price, new_price, scope: base_price | date_override, date_range, reason, source_prices: {market, pricelabs}, status: proposed | approved | sent | confirmed | failed | cancelled | undone, proposed_by, approved_by, approved_at, pricelabs_response, readback_price, created_at }\ndeviation_pct = (nightly_rate_now - fair_nightly) / fair_nightly. Bands: far below <= -15%, below -15% to -5%, on target within 5%, above 5% to 15%, far above > 15%.\n\n2. ABBAS: DATA, SCORING, HOSTAWAY, PRICELABS\nA. Hostaway (read-only first). Hostaway is the source of truth for apartments, calendar and bookings. Hostaway API credentials (typically a client ID and secret created by an admin in the Hostaway dashboard, exchanged for an access token) go only in the environment variables HOSTAWAY_CLIENT_ID and HOSTAWAY_CLIENT_SECRET, never in code, the browser, logs or chat. Confirm the exact steps, endpoints and limits in Hostaway's API documentation. Pull listings, calendar rates and availability, and reservations. From reservations compute occupancy and average daily rate for the last 30 and 90 days.\nB. PriceLabs. Confirm first, in PriceLabs documentation or with their support, in one page: which read endpoints give us listings, base, minimum and maximum price, recommended price and overrides; which write operations our plan allows (base price, min and max, date-specific overrides); rate limits. The key goes only in PRICELABS_API_KEY. If writing is not allowed, build the fallback: an export file of approved prices for manual upload, with the same approval and history. Price changes always go through PriceLabs, never straight into the Hostaway calendar, so the two systems do not overwrite each other.\nC. Market data. PriceLabs market data if the API provides it, otherwise a licensed short-term-rental data provider or partner feed. Do not scrape any site whose terms forbid it. Most listing platforms forbid scraping, so check each site's terms and prefer licensed data. Respect rate limits.\nD. Fair nightly rate per apartment. Compare like with like: same area or building, same bedrooms, similar size, view and amenities, and the same dates (same weekdays and season). Median of comparable listings with at least 8 comps, then a regression on log(nightly rate) with bedrooms, size, floor, view, building, season, weekday or weekend, and lead time. Fall back to comps when data is thin. Measure error on held-out data (MAPE), show it in the dashboard, target under 12%. Confidence: High 20 or more comps, Medium 12 to 19, Low below 12.\nE. Compare with PriceLabs. For each apartment return rate now, our market price, the PriceLabs recommendation and the percent difference between the last two. If they differ by more than 7%, set SOURCES_DISAGREE and make no automatic suggestion. Use occupancy as a second signal: a rate below market with occupancy above 90% means raise with confidence. A rate above market with occupancy below 50% means lower.\nF. Suggested price. On target: keep. Below market: 97% of the average of our market price and the PriceLabs recommendation. Above market: 103% of that average. Cap any single change at 15%. When the gap is bigger, propose the capped step now and the next step at the next review. Keep the result inside 70% to 130% of our market price and inside the PriceLabs minimum and maximum.\nG. Price change workflow (server side). POST /price-changes creates a proposal. POST /price-changes/:id/approve records the approver. A background worker (1) re-runs all guardrails, (2) calls PriceLabs to set the price for open dates from tomorrow, (3) reads the price back, (4) sets the status to confirmed or failed with the reason. Existing bookings keep their price. Use idempotency keys so a retry never sends twice. POST /price-changes/:id/undo restores the old price. GET /price-changes lists history.\nH. Guardrails, all enforced on the server: single-step cap; floor and ceiling; block when confidence is Low; block when SOURCES_DISAGREE until a person marks it reviewed; no change to dates less than 2 days away without extra confirmation; daily limit of 20 changes per owner; 5 minute delay before sending so a batch can be cancelled; every attempt in an audit log.\nI. Endpoints: GET /portfolio (apartments with scores, occupancy and PriceLabs numbers), GET /apartments/:id (comps, 12-month trend, bookings), GET /season (monthly demand index), plus the price-change endpoints above. Alerts to [email or WhatsApp]: rate far below market with occupancy above 90%; rate above market with occupancy below 50% for the next 30 days.\nJ. Security: login required, roles (viewer, approver), data encrypted at rest, secrets only in the server environment, tests with fixed sample data including fake Hostaway and PriceLabs servers.\n\n3. KARIM: DASHBOARD\nA. Build the screens in the approved mockup: summary tiles, three-price chart (dot = rate now, diamond = our market price, hollow square = PriceLabs), \"What to do next\" table with tick boxes and totals, change history with undo, demand through the year, apartment detail with the 12-month line and \"Try a new rate\" slider, and CSV import.\nB. Show every price as AED per night (example: AED 1,150). Sizes in sqft, and show \"not listed\" when unknown. Studio shows as Studio.\nC. The \"Review and send to PriceLabs\" panel (see page 4 of the sample report): current price in PriceLabs, proposed price with percent change, what dates it applies to, reason, guardrail checks with tick or cross, status line (Proposed, Awaiting approval, Sent, Confirmed or Failed), buttons \"Approve and send to PriceLabs\" and \"Cancel\" with a second confirmation. Show server errors in plain words.\nD. Bulk: ticked changes open one review screen with each change, whether it passes the guardrails, and the total effect per night and per year. Failing changes are skipped, not sent.\nE. History page: who, when, old and new price, status, and an Undo button while undo is possible. Show \"last updated\" time and the data source (Hostaway, PriceLabs, market data) on every page.\nF. Colours and wording: dark blue and gold on white. Blue = we charge less than the market, grey = on target, red = we charge more, in every chart. Every colour comes with a word and an arrow (colour-blind safe, no red and green pairs). Works at 400 px phone width with no sideways page scroll. Loading, empty and error states.\n\nDONE WHEN\nReal apartments, bookings and market data replace the sample data. Scores match a hand-checked sample of all apartments. MAPE is shown and under 12%, or we know why not. A test price change is approved on the dashboard, appears in PriceLabs, is read back as confirmed, and undo restores it. A change that breaks a guardrail is refused with a clear message. The page loads in under 2 seconds. No credentials are in the repo.";
   $('#prompt').textContent = PROMPT;
   $('#copyBtn').addEventListener('click', function () {
     var btn = $('#copyBtn');
