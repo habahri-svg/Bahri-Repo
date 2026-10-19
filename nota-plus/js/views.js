@@ -273,6 +273,7 @@ export function recordLiveView() {
         <button class="chip dk${r.liveTranslate ? ' on' : ''}" data-action="toggle-translate" aria-pressed="${!!r.liveTranslate}">${icon('translate', 16)}<span>${r.liveTranslate ? t('translateOn') : t('translateOff')}</span></button></div>
       </div>
       <div class="bars" id="rec-bars" aria-hidden="true">${'<i></i>'.repeat(40)}</div>
+      <div class="health" id="rec-health" role="status" hidden></div>
     </div>
     <div class="log${S.largeText ? ' large' : ''}" id="rec-lines" aria-live="off" aria-label="${t('tabTranscript')}">${liveLinesHtml(r)}</div>
     <div class="spk bar" id="rec-spk" role="group" aria-label="${t('speaker')}">${Array.from({ length: r.speakerCount }, (_, i) => `<button class="chip dk spc sp${i}${r.speaker === i ? ' on' : ''}" data-action="pick-speaker" data-i="${i}" aria-pressed="${r.speaker === i}"><i></i>${esc(speakerName(names, i))}</button>`).join('')}${r.speakerCount < 6 ? `<button class="chip dk" data-action="add-speaker" aria-label="${t('addSpeaker')}">+</button>` : ''}</div>

@@ -162,8 +162,8 @@ const MIN_BYTES = 1500; // a fraction of a second of speech is already bigger th
 export class CloudEngine {
   // chunkMs is the longest a piece may get. With a level meter, pieces are cut in a pause between sentences,
   // not in the middle of a word, once they are at least minMs long.
-  constructor({ stream, lang, chunkMs = 15000, minMs = 5000, level, hint, elapsed, transcribe, onSegments, onError }) {
-    Object.assign(this, { stream, lang, chunkMs, minMs, level, hint, elapsed, transcribe, onSegments, onError });
+  constructor({ stream, lang, chunkMs = 15000, minMs = 5000, level, hint, elapsed, transcribe, onSegments, onError, onBeat }) {
+    Object.assign(this, { stream, lang, chunkMs, minMs, level, hint, elapsed, transcribe, onSegments, onError, onBeat });
     this.hist = [];
     this.watch = null;
     this.running = false;
@@ -294,13 +294,19 @@ export class CloudEngine {
     }
   }
 
+  _beat(what) {
+    this.onBeat && this.onBeat(what);
+  }
+
   async _handle(blob, t0, last = false) {
-    if (blob.size < MIN_BYTES) return;
+    if (blob.size < MIN_BYTES) return this._beat('empty'); // the recorder produced almost no audio
+    this._beat('sending');
     const hint = this.hint ? this.hint() : '';
     let r;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         r = await this.transcribe(blob, this.lang, hint);
+        this._beat('answered');
         break;
       } catch (e) {
         const rate = e.status === 429;
@@ -326,5 +332,6 @@ export class CloudEngine {
     }
     if (!r.segments.length && r.text && !isGhost(r.text)) out.push({ t: t0, text: r.text, lang: langOf(r.text) });
     if (out.length) this.onSegments(out);
+    else this._beat('silent'); // the audio reached the service but no speech was heard in it
   }
 }
