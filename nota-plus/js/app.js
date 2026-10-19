@@ -12,8 +12,10 @@ import { noteToText, noteToSrt, printHtml, noteToMarkdown, noteToDoc, actionsToI
 const app = $('#app');
 const paint = (html) => (app.innerHTML = html);
 // Keep in step with VERSION in sw.js. Shown in Settings so a stale copy of the app is easy to spot.
-const APP_VERSION = 'v9';
+const APP_VERSION = 'v10';
 window.NOTA_VERSION = APP_VERSION;
+// Read-only debug peek used by the test suite and when diagnosing a device by hand from the browser console.
+window.__nota = () => ({ version: APP_VERSION, rec: S.rec && !S.rec.stopped ? { kind: S.rec.kind, analyser: !!S.rec.analyser, health: { ...S.rec.health }, verdict: S.rec.healthState(), segs: S.rec.segments.length } : null, errors: S.errors.slice(-5) });
 const HIDE_INSTALL = 'nota-plus.hideInstall';
 const WELCOME_DONE = 'nota-plus.welcomeDone';
 let routing = Promise.resolve();
@@ -240,6 +242,7 @@ async function startRecInner() {
   }
   S.rec = rec;
   S.detected = [];
+  lastVerdict = '';
   startTicker();
   startDraftTimer();
   render();
@@ -317,6 +320,24 @@ function paintTimer() {
   if (st) st.textContent = r.paused ? t('paused') : r.interrupted ? t('micLost') : r.dead ? t('notCapturing') : t('live');
   const d = $('#rec-dot');
   if (d) d.classList.toggle('off', r.paused || !!r.dead);
+  paintHealth(r);
+}
+
+// When nothing is being registered, say which link of the chain is broken and offer the way out. Never silent failure.
+let lastVerdict = '';
+function paintHealth(r) {
+  const verdict = r.healthState();
+  if (verdict === lastVerdict) return;
+  lastVerdict = verdict;
+  const box = $('#rec-health');
+  if (!box) return;
+  if (!verdict || verdict === 'dead' || verdict === 'mic') {
+    box.hidden = true; // dead and mic already have their own status text
+    return;
+  }
+  const fixable = verdict === 'deviceQuiet' && S.settings.apiKey && r.kind === 'device';
+  box.hidden = false;
+  box.innerHTML = `<span>${t('health_' + verdict)}</span>${fixable ? `<button class="btn small" data-action="switch-cloud">${t('switchCloud')}</button>` : ''}`;
 }
 
 function paintBars() {
@@ -814,6 +835,12 @@ const A = {
     render();
   },
   'start-rec': startRec,
+  async 'switch-cloud'() {
+    const r = S.rec;
+    if (!r || r.kind !== 'device') return;
+    await r._deviceError('network'); // same path as the automatic fallback, switches the engine and keeps the transcript
+    render();
+  },
   'set-lang-live'(el) {
     S.rec.setLang(el.dataset.id);
     render();

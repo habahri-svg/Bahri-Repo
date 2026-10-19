@@ -33,6 +33,7 @@ export class Recorder {
     this.wake = null;
     this.stopped = false;
     this.dead = ''; // reason the transcript stopped growing, shown on screen
+    this.health = { heard: 0, sent: 0, answered: 0, silent: 0, empty: 0, lastText: 0 }; // live counters for the status line
     this.interrupted = false; // the microphone was taken away (call, Bluetooth switch, lock)
     this.result = null;
     this._vis = () => {
@@ -65,7 +66,9 @@ export class Recorder {
       if (d > peak) peak = d;
     }
     this.peak = peak;
-    return Math.sqrt(sum / buf.length);
+    const rms = Math.sqrt(sum / buf.length);
+    if (rms > 0.02) this.health.heard++;
+    return rms;
   }
 
   // Names and the end of what was just said, given to the speech model so spelling and style stay consistent between pieces.
@@ -204,6 +207,13 @@ export class Recorder {
         level: () => this.readLevel(),
         hint: () => this.promptHint(),
         transcribe: (blob, lang, hint) => transcribeBlob(this.opts.settings, blob, { lang, retries: 0, hint }),
+        onBeat: (what) => {
+          if (what === 'sending') this.health.sent++;
+          else if (what === 'answered') this.health.answered++;
+          else if (what === 'silent') this.health.silent++;
+          else if (what === 'empty') this.health.empty++;
+          this._chg();
+        },
         onSegments: (segs) => segs.forEach((x) => this._add(x.text, x.t, x.lang, false)),
         onError: (e) => {
           if (e && e.code === 'recorder') this.dead = 'recorder';
@@ -261,6 +271,7 @@ export class Recorder {
       this._chg();
       return last;
     }
+    this.health.lastText = Date.now();
     const seg = { t, lastT: t, speaker: sp, text, lang };
     let i = this.segments.length;
     while (i > 0 && this.segments[i - 1].t > t) i--;
@@ -343,6 +354,26 @@ export class Recorder {
         w.addEventListener('release', () => (this.wake = null));
       }
     } catch {}
+  }
+
+  // A one-word verdict of the capture pipeline for the live status line.
+  healthState() {
+    if (this.stopped || this.paused) return '';
+    if (this.dead) return 'dead';
+    if (this.interrupted) return 'mic';
+    const age = Date.now() - this.t0 - this.pausedTotal;
+    if (age < 9000) return ''; // give it a few seconds before judging
+    const h = this.health;
+    const noTextFor = Date.now() - (h.lastText || 0);
+    if (this.kind === 'cloud') {
+      if (this.analyser && h.heard < 4) return 'noSound'; // mic is open but nothing arrives from it
+      if (h.sent === 0 && age > 20000) return 'notSending';
+      if (h.sent > 0 && h.answered === 0 && age > 25000) return 'noAnswer'; // requests leave but nothing comes back
+      if (h.answered >= 2 && this.segments.length === 0 && h.silent >= 2) return 'silentAudio'; // service hears no speech in the audio
+    } else {
+      if ((!h.lastText && age > 15000) || (h.lastText && noTextFor > 20000 && this.engine && !this.engine.alive)) return 'deviceQuiet';
+    }
+    return '';
   }
 
   // Everything said up to the moment of Stop ends up in the result, including the last phrase.

@@ -340,3 +340,7 @@ details.tips summary { cursor: pointer; }
 .ins .num { text-align: end; font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
 .log.large .txt { font-size: 26px; line-height: 1.5; }
 .dialog textarea, .dialog #em-sub { font-size: 16px; }
+
+/* ---------- live capture health strip ---------- */
+.health { display: flex; align-items: center; gap: 10px; justify-content: space-between; flex-wrap: wrap; padding: 10px 12px; border-radius: 12px; background: rgba(242, 181, 68, 0.14); border: 1px solid rgba(242, 181, 68, 0.5); color: var(--amber); font-size: 13px; line-height: 1.45; }
+.health .btn { flex: none; }
