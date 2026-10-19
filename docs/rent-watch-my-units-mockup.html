@@ -4,27 +4,16 @@
 /* Layout: summary tiles, then the three-price chart and a move table on the left, a sticky unit detail with the PriceLabs send panel on the right.
    Blue = you charge less than the market, grey = on target, red = you charge more. Words and arrows always go with colour. */
 :root {
-  --bg: #f6f6f3; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #7a7872;
-  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --accent: #256abf; --wash: #f0efec;
-  --c0: #1c5cab; --c1: #6da7ec; --c2: #c9c8c1; --c3: #f0a0a0; --c4: #e34948; --pl: #6250d6;
-  --good: #006300; --warn-bg: #fff4d6; --warn-ink: #5c4300; --err: #b3261e;
+  color-scheme: light;
+  --bg: #ffffff; --surface: #ffffff; --ink: #0b1a33; --ink2: #44516b; --muted: #6b778c;
+  --navy: #0b2a5b; --navy2: #17407f; --gold: #b8860b; --gold-fill: #e0b73a; --gold-wash: #fbf3d9; --gold-line: #e6cf86;
+  --grid: #e4e9f2; --axis: #bcc6d8; --border: #dbe2ef; --accent: #17407f; --wash: #f3f6fb;
+  --c0: #1b6ad1; --c1: #8fbbf0; --c2: #d3d6dc; --c3: #f2a1a1; --c4: #d93a3a; --pl: #b8860b;
+  --good: #0a6b2a; --warn-bg: #fff1d0; --warn-ink: #5c4300; --err: #b3261e;
   --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --muted: #9a988f;
-    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --accent: #6da7ec; --wash: #242422;
-    --c0: #3987e5; --c1: #1c5cab; --c2: #4a4a46; --c3: #9c3f3e; --c4: #e66767; --pl: #9085e9;
-    --good: #0ca30c; --warn-bg: #3a2f10; --warn-ink: #f3d98a; --err: #f2b8b5; color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --muted: #9a988f;
-  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --accent: #6da7ec; --wash: #242422;
-  --c0: #3987e5; --c1: #1c5cab; --c2: #4a4a46; --c3: #9c3f3e; --c4: #e66767; --pl: #9085e9;
-  --good: #0ca30c; --warn-bg: #3a2f10; --warn-ink: #f3d98a; --err: #f2b8b5; color-scheme: dark;
-}
 * { box-sizing: border-box; }
+html, body { background: #ffffff; }
 body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 14px; line-height: 1.45; }
 .wrap { max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; padding-block: 16px 48px;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
@@ -32,15 +21,24 @@ button { font: inherit; color: inherit; cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .5; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, tr:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 h1 { font-size: 26px; line-height: 1.15; margin: 0; letter-spacing: -0.01em; }
-h2 { font-size: 15px; margin: 0; }
+h2 { font-size: 15px; margin: 0; color: var(--navy); }
 p { margin: 0; }
 .sub { color: var(--ink2); margin-top: 4px; }
 .sm { color: var(--ink2); font-size: 12.5px; }
 .note { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
-.banner { background: var(--warn-bg); color: var(--warn-ink); border-radius: 8px; padding: 8px 12px; font-size: 13px; }
-.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; min-width: 0; }
+.banner { background: var(--gold-wash); color: var(--ink); border: 1px solid var(--gold-line); border-radius: 8px; padding: 8px 12px; font-size: 13px; }
+.panel { background: var(--surface); border: 1px solid var(--border); box-shadow: 0 1px 2px rgba(11,42,91,.06); border-radius: 10px; padding: 16px; min-width: 0; }
 .head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 .top { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.hero { background: var(--navy); color: #ffffff; border-radius: 12px; padding: 18px 20px; border-bottom: 4px solid var(--gold-fill); }
+.hero h1 { color: #ffffff; }
+.hero .sub { color: #c9d6ee; }
+.hero .brand { color: var(--gold-fill); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: 12px; margin-bottom: 4px; }
+.hero .field { color: #dbe5f7; }
+.hero .seg { border-color: #4a6aa3; background: #ffffff; }
+.hero .seg button { color: var(--navy); background: #ffffff; }
+.hero .seg button[aria-pressed="true"] { background: var(--gold-fill); color: var(--navy); }
+.hero select { border-color: #4a6aa3; color: var(--navy); background: #ffffff; }
 .sw { width: 12px; height: 12px; border-radius: 3px; flex: none; display: inline-block; }
 .b0 { background: var(--c0); } .b1 { background: var(--c1); } .b2 { background: var(--c2); } .b3 { background: var(--c3); } .b4 { background: var(--c4); }
 .pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 999px; padding: 2px 9px 2px 7px; font-size: 12.5px; white-space: nowrap; font-weight: 600; background: var(--surface); }
@@ -54,12 +52,13 @@ select { font: inherit; color: var(--ink); background: var(--surface); border: 1
 .seg { display: inline-flex; border: 1px solid var(--axis); border-radius: 6px; overflow: hidden; }
 .seg button { border: 0; background: var(--surface); padding: 6px 10px; border-right: 1px solid var(--axis); }
 .seg button:last-child { border-right: 0; }
-.seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.seg button[aria-pressed="true"] { background: var(--navy); color: #ffffff; }
 
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
 .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
 .kpi .l { color: var(--ink2); font-size: 13px; display: flex; gap: 6px; align-items: center; }
-.kpi .v { font-size: 28px; font-weight: 650; line-height: 1.15; margin-top: 2px; }
+.kpi .v { font-size: 28px; font-weight: 650; line-height: 1.15; margin-top: 2px; color: var(--navy); }
+.kpi.gold { background: var(--gold-wash); border-color: var(--gold-line); }
 .kpi .s { color: var(--ink2); font-size: 12.5px; }
 
 .main { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 16px; align-items: start; }
@@ -68,7 +67,7 @@ select { font: inherit; color: var(--ink); background: var(--surface); border: 1
 .chart { position: relative; width: 100%; }
 .chart svg { display: block; width: 100%; }
 svg text { font-family: var(--font); fill: var(--muted); font-size: 11.5px; }
-svg .ink { fill: var(--ink2); } svg .strong { fill: var(--ink); font-weight: 600; }
+svg .ink { fill: var(--ink2); } svg .strong { fill: var(--navy); font-weight: 700; }
 svg .b0 { fill: var(--c0); } svg .b1 { fill: var(--c1); } svg .b2 { fill: var(--c2); } svg .b3 { fill: var(--c3); } svg .b4 { fill: var(--c4); }
 svg circle.dot { stroke: var(--surface); stroke-width: 1.5; }
 svg circle.sel { stroke: var(--ink); stroke-width: 2.5; }
@@ -78,49 +77,49 @@ svg .rowsel { fill: var(--wash); }
 .legend { display: flex; gap: 6px 16px; flex-wrap: wrap; color: var(--ink2); font-size: 12.5px; margin-top: 8px; align-items: center; }
 .legend i { display: inline-block; vertical-align: middle; margin-right: 5px; }
 .l-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ink2); }
-.l-dia { width: 9px; height: 9px; background: var(--ink); transform: rotate(45deg); }
-.l-sq { width: 9px; height: 9px; border: 1.6px solid var(--ink); background: var(--surface); }
+.l-dia { width: 9px; height: 9px; background: var(--navy); transform: rotate(45deg); }
+.l-sq { width: 9px; height: 9px; border: 2px solid var(--gold); background: var(--surface); }
 
 .tablewrap { overflow-x: auto; margin-top: 8px; }
 table { width: 100%; border-collapse: collapse; min-width: 860px; }
-th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--axis); white-space: nowrap; }
+th { text-align: left; font-weight: 600; color: var(--navy); font-size: 12px; padding: 6px 8px; border-bottom: 2px solid var(--gold-fill); white-space: nowrap; }
 td { padding: 9px 8px; border-bottom: 1px solid var(--grid); vertical-align: middle; }
 tbody tr { cursor: pointer; }
 tbody tr:hover { background: var(--wash); }
-tbody tr.sel { background: var(--wash); box-shadow: inset 3px 0 0 var(--accent); }
+tbody tr.sel { background: var(--wash); box-shadow: inset 4px 0 0 var(--gold-fill); }
 tbody tr.warnrow { background: var(--warn-bg); }
 tbody tr.warnrow td { color: var(--warn-ink); }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 td input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
-.summary { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--wash); border-radius: 8px; padding: 10px 12px; margin-top: 10px; }
+.summary { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--gold-wash); border: 1px solid var(--gold-line); border-radius: 8px; padding: 10px 12px; margin-top: 10px; }
 
 .cal { display: grid; grid-template-columns: repeat(12, minmax(78px, 1fr)); gap: 4px; margin-top: 8px; min-width: 960px; }
 .calwrap { overflow-x: auto; }
 .cal .m { font-size: 12px; color: var(--muted); padding: 2px 4px; font-weight: 600; }
 .cal .cell { min-height: 64px; background: var(--wash); border-radius: 6px; padding: 4px; display: flex; flex-direction: column; gap: 3px; }
-.chip { display: flex; align-items: center; gap: 5px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; font-size: 12px; text-align: left; }
+.chip { display: flex; color: var(--navy); font-weight: 600; align-items: center; gap: 5px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; font-size: 12px; text-align: left; }
 .chip .sw { width: 9px; height: 9px; }
 
 .rb { position: relative; width: 100%; height: 26px; }
 .rb .track { position: absolute; left: 0; right: 0; top: 12px; height: 2px; background: var(--grid); }
 .rb .comps { position: absolute; top: 7px; height: 12px; border-radius: 6px; background: var(--axis); opacity: .75; }
-.rb .fair { position: absolute; top: 2px; width: 2px; height: 22px; background: var(--ink); transform: translateX(-1px); }
+.rb .fair { position: absolute; top: 2px; width: 2px; height: 22px; background: var(--navy); transform: translateX(-1px); }
 .rb .ask { position: absolute; top: 5px; width: 16px; height: 16px; border-radius: 50%; transform: translateX(-8px); border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--ink2); }
-.rb .plm { position: absolute; top: 8px; width: 10px; height: 10px; transform: translateX(-5px); border: 1.8px solid var(--ink); background: var(--surface); }
+.rb .plm { position: absolute; top: 8px; width: 10px; height: 10px; transform: translateX(-5px); border: 2px solid var(--gold); background: var(--surface); }
 .scale { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink2); margin-top: 3px; font-variant-numeric: tabular-nums; }
 
-.d-title { font-size: 17px; font-weight: 650; }
+.d-title { font-size: 17px; font-weight: 650; color: var(--navy); }
 .d-price { display: flex; align-items: baseline; gap: 8px; margin: 10px 0 2px; }
-.d-price .big { font-size: 32px; font-weight: 700; line-height: 1.1; }
+.d-price .big { font-size: 32px; font-weight: 700; line-height: 1.1; color: var(--navy); }
 .verdict { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-weight: 650; margin: 4px 0 12px; }
 .three { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 10px; }
-.three div { background: var(--wash); border-radius: 8px; padding: 6px 8px; font-size: 12px; color: var(--ink2); }
+.three div { background: var(--wash); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; font-size: 12px; color: var(--ink2); }
 .three b { display: block; font-size: 15px; color: var(--ink); font-variant-numeric: tabular-nums; }
-.why { background: var(--wash); border-radius: 8px; padding: 10px 12px; margin: 12px 0; }
+.why { background: var(--wash); border-left: 4px solid var(--gold-fill); border-radius: 8px; padding: 10px 12px; margin: 12px 0; }
 .why .tag { font-size: 12px; color: var(--muted); display: block; margin-bottom: 2px; }
 .flagbox { background: var(--warn-bg); color: var(--warn-ink); border-radius: 8px; padding: 8px 10px; margin: 10px 0; font-size: 13px; }
 .sec { margin-top: 14px; }
-.scen { background: var(--wash); border-radius: 8px; padding: 12px; margin-top: 8px; }
+.scen { background: var(--wash); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-top: 8px; }
 .scen input[type=range] { width: 100%; accent-color: var(--accent); }
 .scen .row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .scen .now { font-size: 24px; font-weight: 700; }
@@ -129,17 +128,18 @@ td input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent)
 .checks { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; }
 .checks li { display: flex; gap: 6px; }
 .checks .y { color: var(--good); font-weight: 700; } .checks .n { color: var(--err); font-weight: 700; }
-.push { border: 1.5px solid var(--ink); border-radius: 10px; padding: 12px; margin-top: 10px; }
+.push { border: 1.5px solid var(--gold-fill); background: #fffdf6; border-radius: 10px; padding: 12px; margin-top: 10px; }
 .push .kv { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 4px 8px; font-size: 12.5px; margin-top: 8px; }
 .push .kv span:nth-child(odd) { color: var(--muted); }
 .mini { min-width: 0; margin-top: 6px; }
 .mini th, .mini td { padding: 5px 4px; font-size: 12.5px; }
-.btn { background: var(--ink); color: var(--surface); border: 0; border-radius: 6px; padding: 8px 14px; font-weight: 600; }
-.btn.alt { background: none; color: var(--ink); border: 1px solid var(--axis); }
+.btn { background: var(--gold-fill); color: var(--navy); border: 0; border-radius: 6px; padding: 8px 14px; font-weight: 700; }
+.btn:hover:not(:disabled) { background: #ecc653; }
+.btn.alt { background: #ffffff; color: var(--navy); border: 1px solid var(--navy); font-weight: 600; }
 .btnrow { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .timeline { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; font-size: 12px; }
 .timeline span { border: 1px solid var(--axis); border-radius: 999px; padding: 1px 9px; color: var(--muted); }
-.timeline span.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.timeline span.on { background: var(--navy); color: #ffffff; border-color: var(--navy); }
 .timeline span.fail { background: var(--err); color: var(--surface); border-color: var(--err); }
 textarea { width: 100%; min-height: 110px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; color: var(--ink); background: var(--surface); border: 1px solid var(--axis); border-radius: 8px; padding: 10px; margin-top: 8px; }
 .msg { margin-top: 8px; font-size: 13px; }
@@ -151,8 +151,9 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
 </style>
 
 <div class="wrap">
-  <div class="top">
+  <div class="top hero">
     <div>
+      <div class="brand">WyzRent · Rent Watch</div>
       <h1>My Units</h1>
       <p class="sub">Are you charging too little or too much, how does it compare with the market and PriceLabs, and what should you change?</p>
     </div>
@@ -327,7 +328,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
     var nowTotal = L.reduce(function (s, u) { return s + u.now; }, 0), fairTotal = L.reduce(function (s, u) { return s + u.fair; }, 0);
     $('#kpis').innerHTML =
       '<div class="kpi"><div class="l"><i class="sw b1"></i>▼ Underpriced units</div><div class="v">' + below.length + '</div><div class="s">of ' + L.length + ' apartments</div></div>' +
-      '<div class="kpi"><div class="l">Room to raise rent</div><div class="v">' + signedMoney(room) + '</div><div class="s">per month, ' + signedMoney(room * 12) + ' per year</div></div>' +
+      '<div class="kpi gold"><div class="l">Room to raise rent</div><div class="v">' + signedMoney(room) + '</div><div class="s">per month, ' + signedMoney(room * 12) + ' per year</div></div>' +
       '<div class="kpi"><div class="l"><i class="sw b3"></i>▲ Vacancy risk</div><div class="v">' + above.length + '</div><div class="s">units priced above market</div></div>' +
       '<div class="kpi"><div class="l"><i class="sw b2"></i>● On target</div><div class="v">' + ok.length + '</div><div class="s">within 5% of market</div></div>' +
       '<div class="kpi"><div class="l">⚠ Sources disagree</div><div class="v">' + dis.length + '</div><div class="s">PriceLabs and our price differ over 7%. Check first.</div></div>' +
@@ -352,8 +353,8 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
       if (u.id === S.sel) s += '<rect class="rowsel" x="0" y="' + (y - rowH / 2) + '" width="' + W + '" height="' + rowH + '" rx="6"/>';
       s += '<text class="strong" x="' + (m.l - 10) + '" y="' + (y + 4) + '" text-anchor="end">' + esc(u.name) + '</text>';
       s += '<line x1="' + xn + '" x2="' + xf + '" y1="' + y + '" y2="' + y + '" stroke="var(--ink2)" stroke-width="2.5" stroke-linecap="round"/>';
-      if (u.pl != null) s += '<rect x="' + (X(u.pl) - 5) + '" y="' + (y - 5) + '" width="10" height="10" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.7"/>';
-      s += '<path d="M' + xf + ' ' + (y - 7) + ' L' + (xf + 7) + ' ' + y + ' L' + xf + ' ' + (y + 7) + ' L' + (xf - 7) + ' ' + y + ' Z" fill="var(--ink)"/>';
+      if (u.pl != null) s += '<rect x="' + (X(u.pl) - 5.5) + '" y="' + (y - 5.5) + '" width="11" height="11" fill="var(--surface)" stroke="var(--gold)" stroke-width="2.2"/>';
+      s += '<path d="M' + xf + ' ' + (y - 7) + ' L' + (xf + 7) + ' ' + y + ' L' + xf + ' ' + (y + 7) + ' L' + (xf - 7) + ' ' + y + ' Z" fill="var(--navy)"/>';
       s += '<circle class="dot b' + u.band + (u.id === S.sel ? ' sel' : '') + '" cx="' + xn + '" cy="' + y + '" r="8"/>';
       if (wide) {
         var txt = u.band === 2 ? 'On target' : gap > 0 ? 'Leaving ' + money(gap) + ' a month' : 'Over by ' + money(-gap) + ' a month';
@@ -457,13 +458,13 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); bo
     var all = pts.concat(pl, [u.now]), lo = Math.floor(Math.min.apply(null, all) * 0.97 / 50) * 50, hi = Math.ceil(Math.max.apply(null, all) * 1.03 / 50) * 50;
     var pw = W - m.l - m.r, ph = H - m.t - m.b, X = function (i) { return m.l + i / 11 * pw; }, Y = function (v) { return m.t + ph - (v - lo) / (hi - lo) * ph; }, s = '';
     [lo, (lo + hi) / 2, hi].forEach(function (t) { s += '<line x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + Y(t) + '" y2="' + Y(t) + '" stroke="var(--grid)"/><text x="' + (m.l - 6) + '" y="' + (Y(t) + 4) + '" text-anchor="end">' + money(t) + '</text>'; });
-    s += '<path d="' + pts.map(function (v, i) { return (i ? 'L' : 'M') + X(i) + ' ' + Y(v); }).join(' ') + '" fill="none" stroke="var(--ink)" stroke-width="2.5" stroke-linejoin="round"/>';
+    s += '<path d="' + pts.map(function (v, i) { return (i ? 'L' : 'M') + X(i) + ' ' + Y(v); }).join(' ') + '" fill="none" stroke="var(--navy)" stroke-width="2.5" stroke-linejoin="round"/>';
     if (u.pl != null) s += '<path d="' + pl.map(function (v, i) { return (i ? 'L' : 'M') + X(i) + ' ' + Y(v); }).join(' ') + '" fill="none" stroke="var(--pl)" stroke-width="2.2" stroke-linejoin="round"/>';
     s += '<line x1="' + X(0) + '" x2="' + X(11) + '" y1="' + Y(u.now) + '" y2="' + Y(u.now) + '" stroke="var(--ink2)" stroke-width="2" stroke-dasharray="5 4"/>';
     s += '<circle class="dot b' + u.band + '" cx="' + X(11) + '" cy="' + Y(u.now) + '" r="6"/>';
     s += '<text x="' + X(0) + '" y="' + (H - 6) + '">12 months ago</text><text x="' + X(11) + '" y="' + (H - 6) + '" text-anchor="end">Now</text>';
     return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="Market price, PriceLabs recommendation and your rent over 12 months">' + s + '</svg>' +
-      '<div class="legend"><span><i style="display:inline-block;width:22px;height:0;border-top:2.5px solid var(--ink)"></i>Our market price</span>' + (u.pl != null ? '<span><i style="display:inline-block;width:22px;height:0;border-top:2.5px solid var(--pl)"></i>PriceLabs</span>' : '') + '<span><i style="display:inline-block;width:22px;height:0;border-top:2px dashed var(--ink2)"></i>Your rent</span></div>';
+      '<div class="legend"><span><i style="display:inline-block;width:22px;height:0;border-top:2.5px solid var(--navy)"></i>Our market price</span>' + (u.pl != null ? '<span><i style="display:inline-block;width:22px;height:0;border-top:2.5px solid var(--pl)"></i>PriceLabs</span>' : '') + '<span><i style="display:inline-block;width:22px;height:0;border-top:2px dashed var(--ink2)"></i>Your rent</span></div>';
   }
   function comps(u) {
     var r = mulberry(u.id * 977 + 13), out = [];
