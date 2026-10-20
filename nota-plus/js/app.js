@@ -12,7 +12,7 @@ import { noteToText, noteToSrt, printHtml, noteToMarkdown, noteToDoc, actionsToI
 const app = $('#app');
 const paint = (html) => (app.innerHTML = html);
 // Keep in step with VERSION in sw.js. Shown in Settings so a stale copy of the app is easy to spot.
-const APP_VERSION = 'v11';
+const APP_VERSION = 'v12';
 window.NOTA_VERSION = APP_VERSION;
 // Read-only debug peek used by the test suite and when diagnosing a device by hand from the browser console.
 window.__nota = () => ({ version: APP_VERSION, rec: S.rec && !S.rec.stopped ? { kind: S.rec.kind, analyser: !!S.rec.analyser, health: { ...S.rec.health }, verdict: S.rec.healthState(), segs: S.rec.segments.length } : null, errors: S.errors.slice(-5) });
@@ -141,7 +141,14 @@ async function route() {
   closeModal();
   if (name === 'record') {
     S.view = 'record';
-    if (!S.rec || S.rec.stopped) initSetup();
+    if (!S.rec || S.rec.stopped) {
+      initSetup();
+      if (new URLSearchParams(qs || '').get('autostart') && !S.starting) {
+        render(true);
+        startRec(); // the Record now shortcut goes straight into a recording with the saved defaults
+        return;
+      }
+    }
   } else if (name === 'note') {
     S.view = 'note';
     await openNote(arg, { find: new URLSearchParams(qs || '').get('find') || '' });
@@ -480,6 +487,19 @@ async function finishRecording() {
     const res = await r.stop();
     const text = res.segments.map((s) => s.text).join(' ').trim();
     if (!text) {
+      if (res.audio && res.duration >= 3) {
+        // transcription failed or stayed silent, but the sound itself is here: never throw it away
+        note = newNote({ title: `${defaultTitle()} (${t('audioOnlyTag')})`, segments: [], duration: res.duration, template: r.template, bookmarks: res.bookmarks, hasAudio: true, speakers: { ...r.speakerNames } });
+        note.autoTitle = false;
+        await persistNew(note, res.audio);
+        S.rec = null;
+        S.detected = [];
+        clearDraft();
+        location.hash = '#/note/' + note.id;
+        toast(t('audioKept'));
+        if (S.updatePending) setTimeout(() => location.reload(), 1500);
+        return;
+      }
       S.rec = null;
       S.detected = [];
       clearDraft();
@@ -690,6 +710,7 @@ function refreshNote(n) {
 }
 
 async function generateSummary(n, lang) {
+  if (!(n.segments || []).length) return;
   lang = lang || S.sumLang;
   const key = n.id + ':' + lang;
   if (S.busy[key]) {
@@ -939,6 +960,35 @@ const A = {
     seg.speaker = (seg.speaker + 1) % count;
     persist(n);
     renderNote();
+  },
+  async 'transcribe-note'() {
+    const n = N();
+    if (!S.settings.apiKey) return needKey();
+    const key = n.id + ':stt';
+    if (S.busy[key]) return;
+    const a = await audioDb.get(n.id).catch(() => null);
+    if (!a || !a.blob) return toast(t('noAudio'));
+    if (a.blob.size > 24 * 1048576) return toast(t('importTooBig'));
+    S.busy[key] = true;
+    renderNote();
+    try {
+      const r = await transcribeBlob(S.settings, a.blob, { lang: 'auto', name: 'note.webm' });
+      const segs = r.segments.filter((s) => s.text && s.nsp < 0.6).map((s) => ({ t: s.start, text: s.text, lang: langOf(s.text), speaker: 0 }));
+      if (!segs.length && r.text) segs.push({ t: 0, text: r.text, lang: langOf(r.text), speaker: 0 });
+      if (!segs.length) return toast(t('emptyRecording'));
+      n.segments = segs;
+      n.lang = dominantLang(segs);
+      n.autoTitle = true;
+      await persist(n);
+      renderNote();
+      generateSummary(n, n.lastSummaryLang);
+    } catch (e) {
+      toast(friendlyError(e, t));
+    } finally {
+      delete S.busy[key];
+      await persist(n);
+      refreshNote(n);
+    }
   },
   async 'detect-speakers'() {
     const n = N();
