@@ -477,6 +477,7 @@ export function noteView(n) {
           <button class="${lang === 'ar' ? 'on' : ''}" data-action="sum-lang" data-id="ar">عربي</button></div>
         <select id="note-template" class="select grow" aria-label="${t('template')}">${TEMPLATE_IDS.map((id) => `<option value="${id}"${(n.template || 'meeting') === id ? ' selected' : ''}>${t('tpl_' + id)}</option>`).join('')}</select>
       </div>
+      ${(n.segments || []).length === 0 && n.hasAudio ? `<div class="banner"><div><b>${t('noTranscriptYet')}</b><p>${t('noTranscriptYetBody')}</p></div><button class="btn small" data-action="transcribe-note" ${S.busy[n.id + ':stt'] ? 'disabled' : ''}>${S.busy[n.id + ':stt'] ? t('transcribing') : t('transcribeNow')}</button></div>` : ''}
       <div class="tabs" role="tablist">${tabs}</div>
       <div id="note-body" class="body">${body}</div>
     </div>
