@@ -72,7 +72,7 @@
 
     h.append(el("span", "status", "What you want them to do"));
     var qs = el("div", "chips"); QUICK.forEach(function (q) { var c = el("button", "chip", q); c.type = "button"; c.onclick = function () { note.value = (note.value.trim() ? note.value.trim() + " " : "") + q; note.focus(); }; qs.append(c); }); h.append(qs);
-    var note = el("textarea", "in"); note.rows = 3; note.placeholder = "Write it in your own words, for example: Please call the owner today and confirm the payout date."; note.setAttribute("aria-label", "Your instruction"); note.value = again ? "Reminder: " + (again.note || "") : ""; h.append(note);
+    var note = el("textarea", "in"); note.rows = 3; note.placeholder = "Write it in your own words, for example: Please call the owner today and confirm the payout date."; note.setAttribute("aria-label", "Your instruction"); note.value = again ? "Reminder: " + (again.note || "") : (/^(me|td):/.test(item.key || "") && item.title ? String(item.title).trim() : ""); h.append(note);
 
     h.append(el("span", "status", "Deadline (optional)"));
     var due = el("input", "in"); due.type = "date"; due.setAttribute("aria-label", "Deadline"); due.style.flex = "0 1 170px";
@@ -91,7 +91,7 @@
       lines.push((forWa ? "Hi " : "Hi ") + (w.name || "there") + ",");
       lines.push("");
       lines.push((ucb.checked ? "URGENT. " : "") + (note.value.trim() || "Please take care of this."));
-      if (icb.checked) { lines.push(""); lines.push("Item: " + item.title); if (item.meta) lines.push(item.meta); if (item.link) lines.push(item.link); }
+      if (icb.checked && note.value.trim() !== String(item.title || "").trim()) { lines.push(""); lines.push("Item: " + item.title); if (item.meta) lines.push(item.meta); if (item.link) lines.push(item.link); }
       if (due.value) { lines.push(""); lines.push("Please have it done by " + niceD(due.value) + "."); }
       lines.push(""); lines.push("Please tell me when it's done. Thank you.");
       var sg = !forWa && typeof sigText === "function" ? sigText() : ""; if (sg) { lines.push(""); lines.push(sg); }

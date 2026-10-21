@@ -2101,6 +2101,24 @@ async function completeTodoist(t,btn){
 async function pushTodoist(text,due){
   try{await mcp.callTool(TODO,"add-tasks",{tasks:[Object.assign({content:text},due?{dueString:due}:{})]});loadTodoist()}catch(e){$("taskNote").textContent="Saved here. Couldn't also add it to Todoist just now."}
 }
+/* Click the task name and type: the name turns into a box on the same line. Enter or clicking away saves, Esc cancels. */
+function inlineTask(k,t,span){
+  if(span.dataset.editing)return;span.dataset.editing="1";
+  const inp=el("input","in");inp.type="text";inp.value=t.t;inp.maxLength=200;inp.setAttribute("aria-label","Task");inp.style.cssText="flex:1 1 auto;min-width:0;font:inherit;font-weight:600;padding:3px 8px;height:auto";
+  span.replaceWith(inp);inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);
+  let done=false;
+  const back=()=>{if(done)return;done=true;renderTasks()};
+  const save=async()=>{
+    if(done)return;const nt=clip(inp.value,200).trim();
+    if(!nt||nt===t.t){back();return}
+    if(k!=="td"){t.t=nt;t.edited=Date.now();persist();back();return}
+    done=true;inp.disabled=true;
+    try{await mcp.callTool(TODO,"update-tasks",{tasks:[{id:t.id,content:nt}]});t.t=nt;renderTasks();loadTodoist()}
+    catch(e){renderTasks();$("taskNote").textContent="Couldn't save that change to Todoist just now."}
+  };
+  inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();save()}else if(e.key==="Escape"){e.preventDefault();back()}});
+  inp.addEventListener("blur",save);
+}
 function editTask(k,t,m){
   const isTd=k==="td";const hi=isTd?(t.p>=3):((t.p||1)>1);const oldDue=String(t.due||"").slice(0,10);
   m.replaceChildren();if(m.parentNode)m.parentNode.classList.add("editing");
@@ -2137,7 +2155,7 @@ function renderTasks(){
   if(!rows.length){const e=el("p","sub","No open tasks. Add one above, or tap Add to tasks on any email or research follow-up.");e.style.padding="0 14px 14px";host.append(e)}
   rows.forEach(({k,t})=>{
     const r=el("div","item tline");r.dataset.tkey=k+":"+(t.id||t.t);r.title=t.t+(t.src&&t.src!=="Added by you"?" ("+t.src+")":"");r.append(el("span","dot "+(k==="td"?"work":"follow")));const m=el("div","main");
-    m.append(el("span","t",t.t));
+    const tt=el("span","t",t.t);tt.title="Click to change this task";tt.style.cursor="text";tt.onclick=()=>inlineTask(k,t,tt);m.append(tt);
     const dd=dueOf({t});const over=dd!=="9999-99-99"&&dd<todayKey();const ins=(state.instructions||[]).filter(x=>!x.done&&x.key===k+":"+(t.id||t.t)).pop();const meta=[k==="td"?"Todoist":"",priOf({k,t})>1?"High":"",ins?"Instructed "+ins.name:"",dd!=="9999-99-99"?(over?"Overdue ":"")+niceDay(dd):""].filter(Boolean).join(" · ");const mm=el("span","m",meta);if(over)mm.style.color="var(--d-reply)";m.append(mm);
     const a=el("div","acts");const b=el("button","btn small ghost","Mark done");b.type="button";
     b.onclick=k==="td"?()=>completeTodoist(t,b):()=>{t.done=1;persist();renderTasks()};

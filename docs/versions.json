@@ -27,6 +27,16 @@
     },
     {
       "version": "3.97",
+      "path": "previous/v3.97/",
+      "label": "Tasks on one line each, with Ask, Edit, Mark done and Instruct"
+    },
+    {
+      "version": "3.98",
+      "path": "previous/v3.98/",
+      "label": "Click a task to change it, Instruct prefilled, WhatsApp window beside the page"
+    },
+    {
+      "version": "3.99",
       "path": "",
       "label": "Current"
     }
