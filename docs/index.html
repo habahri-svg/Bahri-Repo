@@ -152,6 +152,15 @@ textarea{min-height:180px;resize:vertical}
 .item .dot{margin-top:6px}
 .item .main{min-width:0;display:flex;flex-direction:column;gap:3px}
 .item .t{font-weight:600}
+#tasks .item.tline{padding:7px 14px;align-items:center}
+#tasks .item.tline .dot{margin-top:0}
+#tasks .item.tline .main{flex-direction:row;align-items:center;gap:10px;flex-wrap:nowrap}
+#tasks .item.tline .t{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#tasks .item.tline .m{flex:0 0 auto;white-space:nowrap;font-size:12px}
+#tasks .item.tline .m:empty{display:none}
+#tasks .item.tline .acts{flex:0 0 auto;display:flex;align-items:center;gap:6px;margin:0;flex-wrap:nowrap}
+#tasks .item.tline.editing .main{flex-direction:column;align-items:stretch}
+@media (max-width:560px){#tasks .item.tline .main{flex-wrap:wrap}#tasks .item.tline .t{flex-basis:100%}}
 .item .s{color:var(--fg);font-size:14px;overflow-wrap:anywhere}
 .item .m{color:var(--soft);font-size:13px}
 .urg{font-weight:700}.u4{color:var(--d-reply)}.u3{color:var(--d-follow)}
