@@ -1,11 +1,6 @@
 {
   "versions": [
     {
-      "version": "3.88",
-      "path": "previous/v3.88/",
-      "label": "Apple look: clean, light, one blue accent, as the default"
-    },
-    {
       "version": "3.89",
       "path": "previous/v3.89/",
       "label": "Advise me button: what, when, how on every decision"
@@ -27,6 +22,11 @@
     },
     {
       "version": "3.95",
+      "path": "previous/v3.95/",
+      "label": "Suggested answers on each email: Agree and send, or change the direction"
+    },
+    {
+      "version": "3.97",
       "path": "",
       "label": "Current"
     }

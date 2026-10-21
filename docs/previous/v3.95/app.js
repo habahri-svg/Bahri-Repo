@@ -1859,7 +1859,7 @@ function itemRow(i){
   const at=el("button","btn small ghost","Add to tasks");at.type="button";at.onclick=()=>{addTask(i.title||t.subject,"Email from "+nameOf(t.from));at.textContent="Added";at.disabled=true};
   a.append(askDrop("I need help with an email. From: "+(t.lastFromMe?"me, to "+((t.lastTo||[]).join(", ")):(t.from||""))+". Subject: "+(t.subject||"")+". What it's about: "+(i.summary||t.snippet||"")+" What's the best way to handle it? If a reply or chaser is needed, draft one I can edit.",(i.title||t.subject||"")+(i.summary?"\n"+i.summary:"")),dn,sz,pn,at,ins);mailTidy(t,i,a).forEach(x=>a.append(x));m.append(a,ib);row.append(m);return row;
 }
-async function draftFor(i,host,btn){
+async function draftFor(i,host,btn,preset){ /* preset (3.95): start from an answer that is already written, so nothing is generated twice */
   btn.disabled=true;btn.textContent="Reading the thread";
   let full=null,msgs=[];
   try{full=await mcp.callTool("Gmail","get_thread",{threadId:i.id,messageFormat:"PLAIN_TEXT"},{cache:false});msgs=(full.payload&&full.payload.messages)||[]}catch(e){}
@@ -1874,7 +1874,7 @@ async function draftFor(i,host,btn){
   const box=el("div","draftbox");box.append(toRow,ccRow,dirRow);try{attachAutocomplete(ccIn)}catch(e){}const ta=el("textarea");ta.id="d-"+i.id;ta.value="";const st=el("span","status","Writing a draft");
   box.append(st,ta);host.append(box);btn.textContent="Writing";
   try{
-    const chase=(i.st==="follow"||i.st==="wait");const tone=sample?await toneExamples().catch(()=>""):"";const r=!sample?{text:templateDraft(i,chase)}:await sample((chase?"Write a short, polite follow-up email chasing an answer that is still owed, ":"Write a reply email ")+"for "+(myName||"me")+" at "+BR.co+". Plain text only, ready to edit, "+(sigText()?"with no sign-off and no name, because their signature is added automatically":"signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject."+(tone?"\n\n"+tone:"")+"\n\nWhat it's about: "+(i.title||"")+". "+(i.summary||"")+"\n\nThread (latest last):\n"+(text||tById(i.id)?.snippet||""),{cache:false,provider:aiPickValue(),onText:u=>{ta.value=u.text}});
+    const chase=(i.st==="follow"||i.st==="wait");const tone=sample?await toneExamples().catch(()=>""):"";const r=preset?{text:preset}:!sample?{text:templateDraft(i,chase)}:await sample((chase?"Write a short, polite follow-up email chasing an answer that is still owed, ":"Write a reply email ")+"for "+(myName||"me")+" at "+BR.co+". Plain text only, ready to edit, "+(sigText()?"with no sign-off and no name, because their signature is added automatically":"signed with their first name"+(myName?" ("+myName.split(" ")[0]+")":""))+". Short, warm, professional. Use contractions. No em dashes, no semicolons. Put [DATE] or [DETAIL] where a fact is unknown. Return only the email body, no subject."+(tone?"\n\n"+tone:"")+"\n\nWhat it's about: "+(i.title||"")+". "+(i.summary||"")+"\n\nThread (latest last):\n"+(text||tById(i.id)?.snippet||""),{cache:false,provider:aiPickValue(),onText:u=>{ta.value=u.text}});
     ta.value=r.text;st.textContent="Edit it, then press Send. You confirm before it goes.";
   }catch(e){st.textContent="Couldn't write a draft just now ("+clip((e&&e.message)||"unknown reason",110)+"). Write your own here, then save it.";st.className="status err"}
   btn.remove();
