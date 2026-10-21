@@ -2101,6 +2101,32 @@ async function completeTodoist(t,btn){
 async function pushTodoist(text,due){
   try{await mcp.callTool(TODO,"add-tasks",{tasks:[Object.assign({content:text},due?{dueString:due}:{})]});loadTodoist()}catch(e){$("taskNote").textContent="Saved here. Couldn't also add it to Todoist just now."}
 }
+function editTask(k,t,m){
+  const isTd=k==="td";const hi=isTd?(t.p>=3):((t.p||1)>1);const oldDue=String(t.due||"").slice(0,10);
+  m.replaceChildren();if(m.parentNode)m.parentNode.classList.add("editing");
+  const ti=el("input","in");ti.type="text";ti.value=t.t;ti.maxLength=200;ti.setAttribute("aria-label","Task");
+  const row=el("div","");row.style.cssText="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px";
+  const di=el("input","in");di.type="date";di.value=/^\d{4}-\d{2}-\d{2}$/.test(oldDue)?oldDue:"";di.setAttribute("aria-label","Due date");di.style.flex="0 1 170px";
+  const pi=el("select","in");pi.setAttribute("aria-label","Priority");pi.style.flex="0 1 120px";[["1","Normal"],["2","High"]].forEach(([v,l])=>{const o=el("option","",l);o.value=v;pi.append(o)});pi.value=hi?"2":"1";
+  row.append(di,pi);
+  const note=el("span","m","");
+  const acts=el("div","acts");const sv=el("button","btn small","Save");sv.type="button";const cx=el("button","btn small ghost","Cancel");cx.type="button";
+  cx.onclick=()=>renderTasks();
+  const save=async()=>{
+    const nt=clip(ti.value,200).trim();if(!nt){note.textContent="The task can't be empty.";ti.focus();return}
+    const nd=di.value||"",np=+pi.value;
+    if(!isTd){t.t=nt;t.due=nd;t.p=np;t.edited=Date.now();persist();renderTasks();return}
+    sv.disabled=true;sv.textContent="Saving";note.textContent="";
+    try{
+      const up={id:t.id};if(nt!==t.t)up.content=nt;if(np!==(hi?2:1))up.priority=np>1?"p2":"p4";
+      if(Object.keys(up).length>1)await mcp.callTool(TODO,"update-tasks",{tasks:[up]});
+      if(nd!==oldDue){if(nd)await mcp.callTool(TODO,"reschedule-tasks",{tasks:[{id:t.id,date:nd}]});else await mcp.callTool(TODO,"update-tasks",{tasks:[{id:t.id,dueString:"remove"}]})}
+      t.t=nt;t.due=nd;t.p=np>1?3:1;renderTasks();loadTodoist();
+    }catch(e){sv.disabled=false;sv.textContent="Save";note.textContent="Couldn't save to Todoist just now. Try again, or change it in Todoist."}
+  };
+  sv.onclick=save;ti.addEventListener("keydown",e=>{if(e.key==="Enter")save();if(e.key==="Escape")renderTasks()});
+  acts.append(sv,cx);m.append(ti,row,note,acts);ti.focus();ti.select();
+}
 function renderTasks(){
   try{updateHero()}catch(e){}
   const host=$("tasks");if(!host)return;host.replaceChildren();
@@ -2110,12 +2136,13 @@ function renderTasks(){
   rows.sort((a,b)=>dueOf(a)<dueOf(b)?-1:dueOf(a)>dueOf(b)?1:priOf(b)-priOf(a));
   if(!rows.length){const e=el("p","sub","No open tasks. Add one above, or tap Add to tasks on any email or research follow-up.");e.style.padding="0 14px 14px";host.append(e)}
   rows.forEach(({k,t})=>{
-    const r=el("div","item");r.dataset.tkey=k+":"+(t.id||t.t);r.append(el("span","dot "+(k==="td"?"work":"follow")));const m=el("div","main");
+    const r=el("div","item tline");r.dataset.tkey=k+":"+(t.id||t.t);r.title=t.t+(t.src&&t.src!=="Added by you"?" ("+t.src+")":"");r.append(el("span","dot "+(k==="td"?"work":"follow")));const m=el("div","main");
     m.append(el("span","t",t.t));
-    const dd=dueOf({t});const over=dd!=="9999-99-99"&&dd<todayKey();const ins=(state.instructions||[]).filter(x=>!x.done&&x.key===k+":"+(t.id||t.t)).pop();const meta=[k==="td"?"Todoist":"My list",priOf({k,t})>1?"High priority":"",t.src||"",ins?"Instructed "+ins.name+" "+niceDay(new Date(ins.at).toISOString().slice(0,10)):"",dd!=="9999-99-99"?(over?"Overdue, was due ":"Due ")+niceDay(dd):""].filter(Boolean).join(" · ");const mm=el("span","m",meta);if(over)mm.style.color="var(--d-reply)";m.append(mm);
+    const dd=dueOf({t});const over=dd!=="9999-99-99"&&dd<todayKey();const ins=(state.instructions||[]).filter(x=>!x.done&&x.key===k+":"+(t.id||t.t)).pop();const meta=[k==="td"?"Todoist":"",priOf({k,t})>1?"High":"",ins?"Instructed "+ins.name:"",dd!=="9999-99-99"?(over?"Overdue ":"")+niceDay(dd):""].filter(Boolean).join(" · ");const mm=el("span","m",meta);if(over)mm.style.color="var(--d-reply)";m.append(mm);
     const a=el("div","acts");const b=el("button","btn small ghost","Mark done");b.type="button";
     b.onclick=k==="td"?()=>completeTodoist(t,b):()=>{t.done=1;persist();renderTasks()};
-    a.append(askDrop("Help me get this task done: "+t.t+(t.due?" (due "+t.due+")":"")+". Break it into concrete steps and tell me what to do first.","Task: "+t.t+(t.due?" (due "+t.due+")":"")),b);m.append(a);r.append(m);host.append(r);
+    const eb=el("button","btn small ghost","Edit");eb.type="button";eb.title="Change the task, its due date or priority";eb.onclick=()=>editTask(k,t,m);
+    a.append(askDrop("Help me get this task done: "+t.t+(t.due?" (due "+t.due+")":"")+". Break it into concrete steps and tell me what to do first.","Task: "+t.t+(t.due?" (due "+t.due+")":"")),eb,b);m.append(a);r.append(m);host.append(r);
   });
   const done=(state.tasks||[]).filter(t=>t.done).length;$("taskNote").textContent=done?done+" done on your list.":"";
   $("todoWrap").hidden=todo.state!=="ok";
