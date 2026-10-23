@@ -1,0 +1,44 @@
+{
+  "versions": [
+    {
+      "version": "3.89",
+      "path": "previous/v3.89/",
+      "label": "Advise me button: what, when, how on every decision"
+    },
+    {
+      "version": "3.90",
+      "path": "previous/v3.90/",
+      "label": "Live ops strip: occupied today, next 30 days, vs last year"
+    },
+    {
+      "version": "3.93",
+      "path": "previous/v3.93/",
+      "label": "Whole-team adviser in Advise me: six experts acting as one"
+    },
+    {
+      "version": "3.94",
+      "path": "previous/v3.94/",
+      "label": "Removed the WhatsApp Business card"
+    },
+    {
+      "version": "3.95",
+      "path": "previous/v3.95/",
+      "label": "Suggested answers on each email: Agree and send, or change the direction"
+    },
+    {
+      "version": "3.97",
+      "path": "previous/v3.97/",
+      "label": "Tasks on one line each, with Ask, Edit, Mark done and Instruct"
+    },
+    {
+      "version": "3.98",
+      "path": "previous/v3.98/",
+      "label": "Click a task to change it, Instruct prefilled, WhatsApp window beside the page"
+    },
+    {
+      "version": "3.99",
+      "path": "",
+      "label": "Current"
+    }
+  ]
+}
