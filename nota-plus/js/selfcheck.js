@@ -30,7 +30,7 @@ function silentWav(seconds = 1.5, rate = 16000) {
 const msg = (e) => (e && (e.message || e.name)) || String(e);
 
 // Can the browser reach the wider internet at all? A no-cors ping resolves whenever the network lets it through.
-async function webReachable() {
+export async function webReachable() {
   try {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 5000);

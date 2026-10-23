@@ -2,7 +2,7 @@ import { S } from './state.js';
 import { t, setLang, getLang } from './i18n.js';
 import { $, esc, uid, fmtClock, langOf, arabicRatio, download, copyText, isIOS, isStandalone, parseClock, levelAdvice } from './util.js';
 import { loadSettings, saveSettings, notesDb, audioDb, requestPersistence, storageEstimate, saveDraft, loadDraft, clearDraft } from './store.js';
-import { runChecks, reportText } from './selfcheck.js';
+import { runChecks, reportText, webReachable } from './selfcheck.js';
 import { summarize, quickSummary, translateTexts, polishTexts, followUpEmail, answer, buildGlobalContext, transcribeBlob, testKey, friendlyError, detectActions, detectSpeakers, transcriptText } from './ai.js';
 import { deviceSupported } from './stt.js';
 import { Recorder } from './recorder.js';
@@ -12,7 +12,7 @@ import { noteToText, noteToSrt, printHtml, noteToMarkdown, noteToDoc, actionsToI
 const app = $('#app');
 const paint = (html) => (app.innerHTML = html);
 // Keep in step with VERSION in sw.js. Shown in Settings so a stale copy of the app is easy to spot.
-const APP_VERSION = 'v12';
+const APP_VERSION = 'v13';
 window.NOTA_VERSION = APP_VERSION;
 // Read-only debug peek used by the test suite and when diagnosing a device by hand from the browser console.
 window.__nota = () => ({ version: APP_VERSION, rec: S.rec && !S.rec.stopped ? { kind: S.rec.kind, analyser: !!S.rec.analyser, health: { ...S.rec.health }, verdict: S.rec.healthState(), segs: S.rec.segments.length } : null, errors: S.errors.slice(-5) });
@@ -983,7 +983,10 @@ const A = {
       renderNote();
       generateSummary(n, n.lastSummaryLang);
     } catch (e) {
-      toast(friendlyError(e, t));
+      // name the real blocker: a network that drops api.groq.com gets the VPN message, not a generic error
+      if (e && (e.name === 'TypeError' || e.name === 'AbortError')) {
+        toast((await webReachable()) ? t('keyBlockedNet') : t('errNet'));
+      } else toast(friendlyError(e, t));
     } finally {
       delete S.busy[key];
       await persist(n);
