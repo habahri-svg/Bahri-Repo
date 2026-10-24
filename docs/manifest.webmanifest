@@ -1,0 +1,19 @@
+{
+  "name": "WYZ Rent Execution Page",
+  "short_name": "Execution Page",
+  "description": "Your email, calendar, files and tasks in one place.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f4f8fc",
+  "theme_color": "#104b70",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "New email", "short_name": "New email", "url": "./#new-email" }
+  ]
+}

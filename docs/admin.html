@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Owner Usage Panel</title>
+<script>try{var L=JSON.parse(localStorage.getItem("wyz-look")||"{}");if(L.p)document.documentElement.setAttribute("data-palette",L.p);if(L.m==="light"||L.m==="dark")document.documentElement.setAttribute("data-theme",L.m)}catch(e){}</script>
+<style>
+:root{--bg:#f4f8fc;--panel:#fff;--fg:#0e2238;--soft:#56697c;--line:#dbe5ee;--navy:#104b70;--gold:#b8923c;--sky:#e8f2fa;--onnavy:#fff;--bad:#c0392b;--good:#2e8b57}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b1a2b;--panel:#0e2238;--fg:#e8f2fa;--soft:#9db2c6;--line:#22405c;--navy:#9cc9e8;--sky:#16324e;--onnavy:#0b1a2b;--bad:#ff8a7a;--good:#6fd39a;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0b1a2b;--panel:#0e2238;--fg:#e8f2fa;--soft:#9db2c6;--line:#22405c;--navy:#9cc9e8;--sky:#16324e;--onnavy:#0b1a2b;--bad:#ff8a7a;--good:#6fd39a;color-scheme:dark}
+:root[data-palette="emerald"]{--navy:#0f6b52;--sky:#e6f4ee;--bg:#f3f9f6;--line:#d4e6dc}
+:root[data-palette="indigo"]{--navy:#3b3fa8;--sky:#ecedfb;--bg:#f6f6fd;--line:#dcdcf0}
+:root[data-palette="sunset"]{--navy:#b4492b;--sky:#fcefe8;--bg:#fdf7f3;--line:#efdcd2}
+:root[data-palette="plum"]{--navy:#7a2e8e;--sky:#f5ebf8;--bg:#fbf7fd;--line:#e8d9ee}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "IBM Plex Sans","Segoe UI",system-ui,sans-serif}
+.wrap{max-width:1000px;margin:0 auto;padding:20px 16px 60px;display:flex;flex-direction:column;gap:16px}
+h1{margin:0;font-size:22px}
+.sub,.status{color:var(--soft);font-size:14px;margin:0}
+.status.err{color:var(--bad)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.btn{font:inherit;font-weight:600;font-size:14px;padding:7px 14px;border-radius:9px;border:1px solid var(--navy);background:var(--panel);color:var(--navy);cursor:pointer}
+.btn.solid{background:var(--navy);color:var(--onnavy)}
+.btn.small{font-size:13px;padding:4px 10px}
+.btn:disabled{opacity:.55;cursor:default}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.tile{background:var(--sky);border-radius:10px;padding:10px 12px}
+.tile b{display:block;font-size:24px}
+.tile span{font-size:13px;color:var(--soft)}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:680px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);font-size:14px;vertical-align:middle}
+th{font-size:12.5px;color:var(--soft);text-transform:uppercase;letter-spacing:.03em}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--sky)}
+.pill.off{background:var(--bad);color:#fff}
+.pill.near{background:var(--gold);color:#fff}
+ol{padding-left:20px;margin:6px 0}
+code{background:var(--sky);padding:1px 5px;border-radius:5px;font-size:13px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div>
+    <h1>Owner usage panel</h1>
+    <p class="sub">Who is using the shared Claude and ChatGPT, how much, and a switch to turn someone off. Only owners can open this.</p>
+  </div>
+  <div class="card" id="signin">
+    <p class="sub" id="signinNote">Sign in with the Google account you listed as owner.</p>
+    <p><button class="btn solid" type="button" id="go">Sign in with Google</button></p>
+    <p class="status" id="msg" role="status"></p>
+  </div>
+  <div id="setup" class="card" hidden></div>
+  <div id="main" hidden>
+    <div class="tiles" id="tiles"></div>
+    <div class="card" style="margin-top:16px">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><b style="flex:1">People</b><button class="btn small" type="button" id="refresh">Refresh</button></div>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Person</th><th>Last seen</th><th class="n">Today</th><th class="n">Total calls</th><th class="n">Claude / ChatGPT</th><th class="n">Tokens in / out*</th><th>Status</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table></div>
+      <p class="sub" style="margin-top:8px">* Counted in tokens (a token is about three quarters of a word). Your Anthropic and OpenAI dashboards show the exact cost. "Switch off" stops that person's use of the shared AI. It cannot lock them out of their own Gmail or Calendar, which the page reads straight from their Google account.</p>
+    </div>
+  </div>
+</div>
+<script src="config.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var token = "", cfg = window.WYZ_CONFIG || {};
+  function say(t, err) { $("msg").textContent = t; $("msg").className = "status" + (err ? " err" : ""); }
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  var fmt = function (n) { return Number(n || 0).toLocaleString("en-GB"); };
+  function ago(ms) {
+    if (!ms) return "never";
+    var m = Math.round((Date.now() - ms) / 60000);
+    if (m < 2) return "just now"; if (m < 60) return m + " min ago"; if (m < 1440) return Math.round(m / 60) + " h ago";
+    return new Date(ms).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  }
+  function api(method, body) {
+    return fetch("/api/admin", { method: method, headers: { Authorization: "Bearer " + token, "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { status: r.status, body: j }; }); });
+  }
+  function setup(kind) {
+    var box = $("setup"); box.replaceChildren(); box.hidden = false;
+    box.append(el("b", "", kind === "owner" ? "One setting is missing" : "Switch on usage tracking"));
+    var ol = el("ol");
+    if (kind === "owner") {
+      ol.append(el("li", "", "In Vercel, open your project, Settings, Environment Variables."),
+        el("li", "", "Add OWNER_EMAILS with your Google email (several are fine, separated by commas)."),
+        el("li", "", "Redeploy, then refresh this page."));
+    } else {
+      ol.append(el("li", "", "In Vercel, open your project, then Storage, then Create Database, and pick Upstash Redis (the free plan is plenty)."),
+        el("li", "", "Connect it to this project. Vercel fills in KV_REST_API_URL and KV_REST_API_TOKEN for you."),
+        el("li", "", "Redeploy, then refresh this page. Usage is counted from then on, and daily limits become exact."));
+    }
+    box.append(ol);
+  }
+  function render(j) {
+    var users = j.users || [];
+    var calls = users.reduce(function (n, u) { return n + u.calls; }, 0), today = users.reduce(function (n, u) { return n + u.today; }, 0);
+    var tin = users.reduce(function (n, u) { return n + u.tokensIn; }, 0), tout = users.reduce(function (n, u) { return n + u.tokensOut; }, 0);
+    var tiles = $("tiles"); tiles.replaceChildren();
+    [[users.length, "people"], [fmt(today), "AI calls today"], [fmt(calls), "AI calls in total"], [fmt(tin + tout), "tokens used"], [users.filter(function (u) { return u.blocked; }).length, "switched off"]].forEach(function (t) {
+      var d = el("div", "tile"); d.append(el("b", "", String(t[0])), el("span", "", t[1])); tiles.append(d);
+    });
+    var rows = $("rows"); rows.replaceChildren();
+    if (!users.length) { var tr = el("tr"), td = el("td", "", "Nobody yet. People appear here after they sign in to the page."); td.colSpan = 8; tr.append(td); rows.append(tr); }
+    users.forEach(function (u) {
+      var tr = el("tr");
+      tr.append(el("td", "", u.email), el("td", "", ago(u.last)));
+      var t = el("td", "n", u.today + " / " + j.limit); if (u.today >= j.limit) t.append(" ", el("span", "pill near", "limit"));
+      tr.append(t, el("td", "n", fmt(u.calls)), el("td", "n", u.claude + " / " + u.chatgpt), el("td", "n", fmt(u.tokensIn) + " / " + fmt(u.tokensOut)));
+      var s = el("td"); s.append(u.blocked ? el("span", "pill off", "Switched off") : el("span", "pill", "On")); tr.append(s);
+      var a = el("td"), b = el("button", "btn small", u.blocked ? "Switch on" : "Switch off"); b.type = "button";
+      if (u.email === (j.me || "")) { b.disabled = true; b.title = "That's you"; }
+      b.onclick = function () {
+        if (!u.blocked && !confirm("Switch off the shared AI for " + u.email + "?")) return;
+        b.disabled = true;
+        api("POST", { action: u.blocked ? "unblock" : "block", email: u.email }).then(function (r) { if (r.status === 200) load(); else { say((r.body && r.body.error) || "That didn't work.", true); b.disabled = false; } });
+      };
+      a.append(b); tr.append(a); rows.append(tr);
+    });
+  }
+  function load() {
+    say("Loading...");
+    api("GET").then(function (r) {
+      var j = r.body || {};
+      if (r.status === 503 && j.setup === "owner") { say(j.error, true); setup("owner"); return; }
+      if (r.status !== 200) { say(j.error || "Couldn't load (" + r.status + ").", true); return; }
+      say(""); $("signin").hidden = true;
+      if (!j.storage) { $("main").hidden = true; setup("storage"); return; }
+      $("setup").hidden = true; $("main").hidden = false; render(j);
+    }).catch(function () { say("Couldn't reach the site.", true); });
+  }
+  function signIn() {
+    if (!window.google || !google.accounts || !google.accounts.oauth2) { say("Google sign-in is still loading. Try again in a moment.", true); return; }
+    if (!cfg.GOOGLE_CLIENT_ID) { say("Google Client ID isn't set in config.js.", true); return; }
+    google.accounts.oauth2.initTokenClient({
+      client_id: cfg.GOOGLE_CLIENT_ID, scope: "openid email",
+      callback: function (t) { if (t && t.access_token) { token = t.access_token; load(); } else say("Google sign-in was cancelled.", true); }
+    }).requestAccessToken({ prompt: "" });
+  }
+  $("go").onclick = signIn;
+  $("refresh").onclick = load;
+})();
+</script>
+</body>
+</html>

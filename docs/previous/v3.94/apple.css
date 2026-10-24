@@ -1,0 +1,50 @@
+/* 3.88 Apple look: clean, light, generous space, one blue accent. It is the default when no other look is chosen,
+   and it can be picked as "Apple" under Colours. Every other look still works exactly as before. */
+:is(:root:not([data-palette]),:root[data-palette="apple"]){
+  --bg:#f5f5f7;--panel:#ffffff;--fg:#1d1d1f;--soft:#6e6e73;--line:#e8e8ed;--navy:#0071e3;--gold:#0071e3;--sky:#f0f6ff;--onnavy:#ffffff;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Helvetica Neue","Segoe UI",system-ui,sans-serif;
+  --hero1:#f5f5f7;--hero2:#f5f5f7}
+@media (prefers-color-scheme:dark){:is(:root:not([data-palette]),:root[data-palette="apple"]):not([data-theme="light"]){
+  --bg:#000000;--panel:#1c1c1e;--fg:#f5f5f7;--soft:#a1a1a6;--line:#2c2c2e;--navy:#2997ff;--gold:#2997ff;--sky:#0a1a2e;--onnavy:#000000;--hero1:#000;--hero2:#000;color-scheme:dark}}
+:is(:root[data-theme="dark"]):is(:root:not([data-palette]),:root[data-palette="apple"]){
+  --bg:#000000;--panel:#1c1c1e;--fg:#f5f5f7;--soft:#a1a1a6;--line:#2c2c2e;--navy:#2997ff;--gold:#2997ff;--sky:#0a1a2e;--onnavy:#000000;--hero1:#000;--hero2:#000;color-scheme:dark}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) body{font-size:16px;line-height:1.47;letter-spacing:-.01em;-webkit-font-smoothing:antialiased;padding-block:28px 80px}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .wrap{max-width:980px;gap:20px}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .hero{background:none;box-shadow:none;border:0;padding:12px 4px 4px;color:var(--fg)}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .hero h1,
+:is(:root:not([data-palette]),:root[data-palette="apple"]) #pageHead h1{color:var(--fg);font-size:44px;font-weight:700;letter-spacing:-.03em;line-height:1.08}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .hero .eyebrow{color:var(--soft);letter-spacing:.04em}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .herouser,
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .herodate,
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .hero .status{color:var(--soft)}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .herosum{color:var(--fg);font-size:21px;font-weight:600;letter-spacing:-.02em}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .hstat{background:var(--panel);border:0;color:var(--fg);border-radius:18px;padding:14px 18px;min-width:110px;box-shadow:0 1px 2px rgba(0,0,0,.04),0 6px 20px rgba(0,0,0,.06)}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .hstat:hover,
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .hstat:focus-visible{background:var(--panel);transform:translateY(-1px)}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .hstat b{font-size:30px;font-weight:700;letter-spacing:-.02em}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .hstat span{color:var(--soft)}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .hero .btn{background:var(--panel);color:var(--navy);border-color:transparent}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .hero .btn:hover{background:var(--sky)}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .tabs{border:0;background:rgba(120,120,128,.12);border-radius:999px;padding:3px;gap:2px;width:fit-content;max-width:100%}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .tab{border:0;border-radius:999px;padding:8px 18px;font-weight:500;color:var(--fg)}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .tab[aria-selected="true"]{background:var(--panel);color:var(--fg);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .card{border:0;border-radius:20px;box-shadow:0 1px 2px rgba(0,0,0,.04),0 8px 28px rgba(0,0,0,.06)}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .pad{padding:22px;gap:14px}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) h2{font-size:21px;font-weight:700;letter-spacing:-.02em}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .btn{border-radius:999px;border:0;background:var(--sky);color:var(--navy);font-weight:600;padding:8px 18px}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .btn.solid{background:var(--navy);color:var(--onnavy)}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .btn.ghost{background:rgba(120,120,128,.12);color:var(--fg)}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .chip{border-radius:999px}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .in,
+:is(:root:not([data-palette]),:root[data-palette="apple"]) input[type=text],
+:is(:root:not([data-palette]),:root[data-palette="apple"]) input[type=search],
+:is(:root:not([data-palette]),:root[data-palette="apple"]) textarea,
+:is(:root:not([data-palette]),:root[data-palette="apple"]) select{border-radius:12px;border:1px solid var(--line);background:var(--panel);padding:10px 14px}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .platmain{border:0;border-radius:18px;box-shadow:0 1px 2px rgba(0,0,0,.04),0 4px 16px rgba(0,0,0,.05);padding:16px 40px 16px 18px}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .platmain:hover{background:var(--sky);transform:translateY(-1px)}
+@media (prefers-reduced-motion:no-preference){:is(:root:not([data-palette]),:root[data-palette="apple"]) :is(.hstat,.platmain,.tab,.btn){transition:transform .18s ease,background .18s ease,box-shadow .18s ease}}
+@media (max-width:560px){:is(:root:not([data-palette]),:root[data-palette="apple"]) .hero h1,:is(:root:not([data-palette]),:root[data-palette="apple"]) #pageHead h1{font-size:32px}:is(:root:not([data-palette]),:root[data-palette="apple"]) .tabs{border-radius:16px}}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .modesw{background:rgba(120,120,128,.12);border:0}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .modesw button{color:var(--fg);font-weight:500}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .modesw button[aria-pressed="true"]{background:var(--panel);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+:is(:root:not([data-palette]),:root[data-palette="apple"]) .eyebrow{color:var(--soft)}

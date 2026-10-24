@@ -1,0 +1,49 @@
+{
+  "framework": null,
+  "buildCommand": null,
+  "installCommand": null,
+  "outputDirectory": "docs",
+  "cleanUrls": true,
+  "headers": [
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        },
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/"
+        }
+      ]
+    },
+    {
+      "source": "/manifest.webmanifest",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/manifest+json"
+        }
+      ]
+    }
+  ],
+  "functions": {
+    "api/fix.js": {
+      "maxDuration": 60
+    },
+    "api/revenue.js": {
+      "maxDuration": 60
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/push?cron=morning",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/push?cron=evening",
+      "schedule": "0 14 * * *"
+    }
+  ]
+}

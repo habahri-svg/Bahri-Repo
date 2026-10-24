@@ -1,0 +1,281 @@
+{
+ "syncedAt": "2026-10-12T13:30:00Z",
+ "note": "Snapshot of your Lovable projects, read from your Lovable account. Ask Claude to refresh it, or connect the live API (needs a Lovable Business plan).",
+ "projects": [
+  {
+   "id": "1fbebaca-ce85-43bb-8906-6d86b7b608b0",
+   "workspace": "Houssam's Lovable",
+   "name": "Houssam Songbook",
+   "description": "Database-backed guitar songbook with live editing and sync of lyrics and chords across devices.",
+   "created": "2026-10-03T05:24:33Z",
+   "edited": "2026-10-11T18:39:58Z",
+   "published": true,
+   "editor": "https://lovable.dev/projects/1fbebaca-ce85-43bb-8906-6d86b7b608b0",
+   "preview": "https://id-preview--1fbebaca-ce85-43bb-8906-6d86b7b608b0.lovable.app"
+  },
+  {
+   "id": "1cc94a7d-8c35-4257-be82-df4aaf0d6def",
+   "workspace": "Houssam's Lovable",
+   "name": "WyzRent Command Center Base",
+   "description": "Foundation for the WyzRent Command Center, a centralised rental management platform (TanStack Start, TypeScript).",
+   "created": "2026-09-29T19:52:21Z",
+   "edited": "2026-10-10T15:35:36Z",
+   "published": false,
+   "editor": "https://lovable.dev/projects/1cc94a7d-8c35-4257-be82-df4aaf0d6def",
+   "preview": "https://id-preview--1cc94a7d-8c35-4257-be82-df4aaf0d6def.lovable.app"
+  },
+  {
+   "id": "0df451d6-14b4-4d2c-b5d6-c4cd8634e1fd",
+   "workspace": "Houssam's Lovable",
+   "name": "My Sync Sphere",
+   "description": "Cross-platform app connecting Claude and personal platforms with real-time sync across devices.",
+   "created": "2026-10-09T13:10:32Z",
+   "edited": "2026-10-10T07:44:41Z",
+   "published": true,
+   "editor": "https://lovable.dev/projects/0df451d6-14b4-4d2c-b5d6-c4cd8634e1fd",
+   "preview": "https://id-preview--0df451d6-14b4-4d2c-b5d6-c4cd8634e1fd.lovable.app"
+  },
+  {
+   "id": "174cb5ef-c946-4c8a-93c8-b50a8944721f",
+   "workspace": "Houssam's Lovable",
+   "name": "My Songbook Viewer",
+   "description": "Shows songs from a local JSON file with chords aligned above lyrics.",
+   "created": "2026-09-13T08:44:12Z",
+   "edited": "2026-10-02T19:12:41Z",
+   "published": false,
+   "editor": "https://lovable.dev/projects/174cb5ef-c946-4c8a-93c8-b50a8944721f",
+   "preview": "https://id-preview--174cb5ef-c946-4c8a-93c8-b50a8944721f.lovable.app"
+  },
+  {
+   "id": "6a2605cd-7f6f-4cb5-aa72-50ed9cf82c75",
+   "workspace": "Houssam's Lovable",
+   "name": "Wyrzent Reimagined",
+   "description": "WyzRent property management site: income estimator, short vs long term comparison, onboarding, stay search.",
+   "created": "2026-09-28T12:35:42Z",
+   "edited": "2026-09-28T13:38:59Z",
+   "published": false,
+   "editor": "https://lovable.dev/projects/6a2605cd-7f6f-4cb5-aa72-50ed9cf82c75",
+   "preview": "https://id-preview--6a2605cd-7f6f-4cb5-aa72-50ed9cf82c75.lovable.app"
+  },
+  {
+   "id": "2b8345db-3555-4127-ae75-8c43f1bb5d07",
+   "workspace": "Houssam's Lovable",
+   "name": "Dubai Pocket Planner",
+   "description": "Personal finance tracker for young professionals in Dubai: income, expenses, savings rate, weekly advice.",
+   "created": "2026-08-29T15:18:47Z",
+   "edited": "2026-09-28T07:23:32Z",
+   "published": true,
+   "editor": "https://lovable.dev/projects/2b8345db-3555-4127-ae75-8c43f1bb5d07",
+   "preview": "https://id-preview--2b8345db-3555-4127-ae75-8c43f1bb5d07.lovable.app"
+  },
+  {
+   "id": "5034a779-cfba-4889-bc32-1bdbab7cb65c",
+   "workspace": "Houssam's Lovable",
+   "name": "Pixel Perfect Replica",
+   "description": "Turns design screenshots into exact web layouts (TanStack Start).",
+   "created": "2026-09-11T12:42:49Z",
+   "edited": "2026-09-14T15:53:40Z",
+   "published": false,
+   "editor": "https://lovable.dev/projects/5034a779-cfba-4889-bc32-1bdbab7cb65c",
+   "preview": "https://id-preview--5034a779-cfba-4889-bc32-1bdbab7cb65c.lovable.app"
+  },
+  {
+   "id": "44613982-09be-44ef-b3b0-be139f9bc0d4",
+   "workspace": "Houssam's Lovable",
+   "name": "Job Hunter HQ",
+   "description": "Personal job search command center: application funnel, job database, CV keyword analysis.",
+   "created": "2026-09-07T06:34:58Z",
+   "edited": "2026-09-10T12:20:36Z",
+   "published": true,
+   "editor": "https://lovable.dev/projects/44613982-09be-44ef-b3b0-be139f9bc0d4",
+   "preview": "https://id-preview--44613982-09be-44ef-b3b0-be139f9bc0d4.lovable.app"
+  },
+  {
+   "id": "7b622416-4167-4f95-958c-41ce5e4e8cb3",
+   "workspace": "Houssam's Lovable",
+   "name": "Voice Note Capture",
+   "description": "Mobile app that records, transcribes and manages voice notes and call audio (Arabic and English).",
+   "created": "2026-09-09T17:03:48Z",
+   "edited": "2026-09-09T18:00:22Z",
+   "published": true,
+   "editor": "https://lovable.dev/projects/7b622416-4167-4f95-958c-41ce5e4e8cb3",
+   "preview": "https://id-preview--7b622416-4167-4f95-958c-41ce5e4e8cb3.lovable.app"
+  },
+  {
+   "id": "eaf3650f-00b3-4087-8ac2-aefac3a86e76",
+   "workspace": "Houssam's Lovable",
+   "name": "Dubai Dream Planner",
+   "description": "Calculates affordable rent and car financing from income and savings goals.",
+   "created": "2026-09-04T06:07:05Z",
+   "edited": "2026-09-04T07:10:52Z",
+   "published": false,
+   "editor": "https://lovable.dev/projects/eaf3650f-00b3-4087-8ac2-aefac3a86e76",
+   "preview": "https://id-preview--eaf3650f-00b3-4087-8ac2-aefac3a86e76.lovable.app"
+  },
+  {
+   "id": "29c1042f-051b-4fcf-b1ce-e2165e3cc729",
+   "workspace": "Houssam's Lovable",
+   "name": "Profit Pulse",
+   "description": "Executive dashboard diagnosing why a company loses money, with break-even scenarios.",
+   "created": "2026-09-01T10:45:42Z",
+   "edited": "2026-09-01T10:49:55Z",
+   "published": true,
+   "editor": "https://lovable.dev/projects/29c1042f-051b-4fcf-b1ce-e2165e3cc729",
+   "preview": "https://id-preview--29c1042f-051b-4fcf-b1ce-e2165e3cc729.lovable.app"
+  },
+  {
+   "id": "20310550-87e0-49f2-b4c6-7b7cbacb1c13",
+   "workspace": "Houssam's Lovable",
+   "name": "Villa Virtual Tour",
+   "description": "Interactive virtual walkthroughs of properties from images.",
+   "created": "2026-07-18T18:18:20Z",
+   "edited": "2026-07-18T18:27:42Z",
+   "published": false,
+   "editor": "https://lovable.dev/projects/20310550-87e0-49f2-b4c6-7b7cbacb1c13",
+   "preview": "https://id-preview--20310550-87e0-49f2-b4c6-7b7cbacb1c13.lovable.app"
+  },
+  {
+   "id": "8f822de7-373c-45ae-a2fa-9f92dc87d260",
+   "workspace": "Houssam's Lovable",
+   "name": "Family Wallet",
+   "description": "Household finance dashboard: spending by member, category, payment method, recurring bills.",
+   "created": "2026-07-05T14:49:06Z",
+   "edited": "2026-07-16T10:42:30Z",
+   "published": false,
+   "editor": "https://lovable.dev/projects/8f822de7-373c-45ae-a2fa-9f92dc87d260",
+   "preview": "https://id-preview--8f822de7-373c-45ae-a2fa-9f92dc87d260.lovable.app"
+  },
+  {
+   "id": "a1517feb-24f2-424f-8d39-fa3112d85fe2",
+   "workspace": "Houssam's Lovable",
+   "name": "Project Compass",
+   "description": "",
+   "created": "2026-07-03T17:24:31Z",
+   "edited": "2026-07-03T17:24:58Z",
+   "published": false,
+   "editor": "https://lovable.dev/projects/a1517feb-24f2-424f-8d39-fa3112d85fe2",
+   "preview": "https://id-preview--a1517feb-24f2-424f-8d39-fa3112d85fe2.lovable.app"
+  },
+  {
+   "id": "e0f62704-fae1-49bd-9605-28ea07cfb0a6",
+   "workspace": "Houssam's Lovable",
+   "name": "Your Code Hub",
+   "description": "Downloads code bases for you.",
+   "created": "2026-07-03T17:21:05Z",
+   "edited": "2026-07-03T17:21:29Z",
+   "published": false,
+   "editor": "https://lovable.dev/projects/e0f62704-fae1-49bd-9605-28ea07cfb0a6",
+   "preview": "https://id-preview--e0f62704-fae1-49bd-9605-28ea07cfb0a6.lovable.app"
+  },
+  {
+   "id": "3e650ae0-2579-4e34-81d6-cc8af0c3d291",
+   "workspace": "Houssam's Lovable",
+   "name": "Code Companion",
+   "description": "Downloads and manages your codebases.",
+   "created": "2026-07-03T17:17:00Z",
+   "edited": "2026-07-03T17:18:52Z",
+   "published": false,
+   "editor": "https://lovable.dev/projects/3e650ae0-2579-4e34-81d6-cc8af0c3d291",
+   "preview": "https://id-preview--3e650ae0-2579-4e34-81d6-cc8af0c3d291.lovable.app"
+  },
+  {
+   "id": "bcb09d21-8c59-455c-819b-237cae292506",
+   "workspace": "Abbas's Lovable",
+   "name": "WyzRent Revenue Hub",
+   "description": "Internal WyzRent Team platform: property management, revenue tracking, cleaning portals and financial workflows.",
+   "created": "2026-05-19T07:43:03Z",
+   "edited": "2026-10-12T12:38:25Z",
+   "published": true,
+   "editor": "https://lovable.dev/projects/bcb09d21-8c59-455c-819b-237cae292506",
+   "preview": "https://id-preview--bcb09d21-8c59-455c-819b-237cae292506.lovable.app"
+  },
+  {
+   "id": "acc5c363-ba39-4ddd-98e2-1feb86c761d6",
+   "workspace": "Abbas's Lovable",
+   "name": "WYZ Rent Website",
+   "description": "Property platform: rental income valuation, searchable listings with map, booking system.",
+   "created": "2026-01-07T06:29:37Z",
+   "edited": "2026-10-01T12:11:22Z",
+   "published": true,
+   "editor": "https://lovable.dev/projects/acc5c363-ba39-4ddd-98e2-1feb86c761d6",
+   "preview": "https://id-preview--acc5c363-ba39-4ddd-98e2-1feb86c761d6.lovable.app"
+  },
+  {
+   "id": "3c31ec19-a893-40e1-922a-abb974c5e375",
+   "workspace": "Abbas's Lovable",
+   "name": "Beirut Rental Insight",
+   "description": "Short-term rental earnings calculator for Beirut neighbourhoods, with user accounts.",
+   "created": "2026-01-29T10:57:38Z",
+   "edited": "2026-09-15T06:30:33Z",
+   "published": true,
+   "editor": "https://lovable.dev/projects/3c31ec19-a893-40e1-922a-abb974c5e375",
+   "preview": "https://id-preview--3c31ec19-a893-40e1-922a-abb974c5e375.lovable.app"
+  },
+  {
+   "id": "be8e7079-d50d-47b3-b1d7-3ea4b3d4e682",
+   "workspace": "Abbas's Lovable",
+   "name": "Evidence Hub",
+   "description": "Mental capacity assessment workflows and court-ready reports for OFH Care professionals.",
+   "created": "2026-09-06T18:31:43Z",
+   "edited": "2026-09-15T05:51:16Z",
+   "published": true,
+   "editor": "https://lovable.dev/projects/be8e7079-d50d-47b3-b1d7-3ea4b3d4e682",
+   "preview": "https://id-preview--be8e7079-d50d-47b3-b1d7-3ea4b3d4e682.lovable.app"
+  },
+  {
+   "id": "5f90806c-f655-4116-82ee-869c3e314d82",
+   "workspace": "Abbas's Lovable",
+   "name": "Agent Finder Pro",
+   "description": "Extracts real estate agent contacts from Property Finder search URLs, export to CSV or XLSX.",
+   "created": "2026-06-09T11:41:26Z",
+   "edited": "2026-09-12T07:21:38Z",
+   "published": false,
+   "editor": "https://lovable.dev/projects/5f90806c-f655-4116-82ee-869c3e314d82",
+   "preview": "https://id-preview--5f90806c-f655-4116-82ee-869c3e314d82.lovable.app"
+  },
+  {
+   "id": "79e5fd8f-6902-4af3-8ed0-f01bafa30bdc",
+   "workspace": "Abbas's Lovable",
+   "name": "WyzRent Stays",
+   "description": "Mobile-first direct booking app for Dubai holiday homes, synced with Hostaway.",
+   "created": "2026-05-07T13:45:36Z",
+   "edited": "2026-09-12T07:21:10Z",
+   "published": false,
+   "editor": "https://lovable.dev/projects/79e5fd8f-6902-4af3-8ed0-f01bafa30bdc",
+   "preview": "https://id-preview--79e5fd8f-6902-4af3-8ed0-f01bafa30bdc.lovable.app"
+  },
+  {
+   "id": "58719bb2-c2f1-4cd4-9dc9-2821b48607e5",
+   "workspace": "Abbas's Lovable",
+   "name": "Shopify Theme Builder",
+   "description": "Designs and deploys custom Shopify themes.",
+   "created": "2026-06-23T15:49:15Z",
+   "edited": "2026-09-12T07:17:08Z",
+   "published": true,
+   "editor": "https://lovable.dev/projects/58719bb2-c2f1-4cd4-9dc9-2821b48607e5",
+   "preview": "https://id-preview--58719bb2-c2f1-4cd4-9dc9-2821b48607e5.lovable.app"
+  },
+  {
+   "id": "6a57e660-9288-49f1-8d96-d73f020b6e5c",
+   "workspace": "Abbas's Lovable",
+   "name": "Property Profit Partners",
+   "description": "Collaboration hub between WyzRent and Better Homes for rental and property operations.",
+   "created": "2026-03-25T09:12:56Z",
+   "edited": "2026-09-12T07:15:52Z",
+   "published": false,
+   "editor": "https://lovable.dev/projects/6a57e660-9288-49f1-8d96-d73f020b6e5c",
+   "preview": "https://id-preview--6a57e660-9288-49f1-8d96-d73f020b6e5c.lovable.app"
+  },
+  {
+   "id": "6e5f9741-c548-4131-bed2-fe19ce02eac3",
+   "workspace": "Abbas's Lovable",
+   "name": "Abbas Fannoush: Digital Brand Authority",
+   "description": "Personal portfolio site for Abbas: AI digital marketing and photography.",
+   "created": "2026-06-01T17:38:06Z",
+   "edited": "2026-09-12T06:48:24Z",
+   "published": true,
+   "editor": "https://lovable.dev/projects/6e5f9741-c548-4131-bed2-fe19ce02eac3",
+   "preview": "https://id-preview--6e5f9741-c548-4131-bed2-fe19ce02eac3.lovable.app"
+  }
+ ]
+}
