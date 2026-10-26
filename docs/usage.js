@@ -139,6 +139,12 @@
     bar.hidden = false; bar.replaceChildren();
     var row = el("div", "urow"); row.append(el("span", "utitle", "AI use this month (estimate):"));
     row.append(chip("claude", d.providers.claude), chip("chatgpt", d.providers.chatgpt));
+    var meter = String((window.WYZ_CONFIG && WYZ_CONFIG.USAGE_METER_URL) || "").trim();
+    if (/^https:\/\/claude\.ai\//.test(meter)) {
+      var ml = el("a", "uchip", "All subscriptions ↗"); ml.id = "usageMeterLink"; ml.href = meter; ml.target = "_blank"; ml.rel = "noopener";
+      ml.title = "Open your usage meter on claude.ai: Claude, Higgsfield, Viewmax and Open Art"; ml.style.textDecoration = "none";
+      row.append(ml);
+    }
     bar.append(row);
     ["claude", "chatgpt"].forEach(function (p) {
       var u = d.providers[p], s = step(u.pct); if (!s) return;
