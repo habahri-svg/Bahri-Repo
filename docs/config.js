@@ -24,6 +24,9 @@ window.WYZ_CONFIG = {
   COLOR_ACCENT: "",      /* empty = WYZ gold. Or a colour like #b8923c */
   /* Command Center: where "Send to Command Center" posts an action item. Empty = the button explains what's needed. */
   COMMAND_CENTER_URL: "",
+  /* The owner's usage meter on claude.ai (Claude, Higgsfield, Viewmax, Open Art). It opens only for the owner's own claude.ai
+     sign-in. Shown as "All subscriptions" next to the AI use chips, and only when the address starts with https://claude.ai/. Empty = hidden. */
+  USAGE_METER_URL: "https://claude.ai/artifact/QbhKBnbo83uZRJsEeMfDAy",
   /* Where "Report a problem" sends people's reports. */
   OWNER_EMAIL: "habahri@gmail.com"
 };
